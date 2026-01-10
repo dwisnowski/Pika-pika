@@ -53,7 +53,7 @@ Password: pikachu
 3. Set up the virtual environment and install dependencies:
 
 ```bash
-make fresh-install
+make sync
 ```
 
 4. Run the app (this starts sampling at 100 Hz and serves the web UI):

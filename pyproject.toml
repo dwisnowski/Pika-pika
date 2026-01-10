@@ -7,7 +7,7 @@ name = "pika-pika"
 version = "0.1.0"
 description = "Python-based Raspberry Pi voltage logger and live web viewer"
 authors = [ { name = "dwisnowski" } ]
-license = { file = "LICENSE" }
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.9,<4.0"
 dependencies = [
@@ -30,5 +30,4 @@ docs = ["mkdocs>=1.4", "mkdocs-material>=9.0"]
 "Home" = "https://github.com/dwisnowski/Pika-pika"
 
 [tool.setuptools]
-package-dir = {"" = ""}
 packages = ["pika"]
