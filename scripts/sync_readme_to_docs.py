@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "README.md"
-DST = ROOT / "docs" / "README.md"
+DST = ROOT / "docs" / "README-synced.md"
 
 if not SRC.exists():
     print("README.md not found at expected location.")

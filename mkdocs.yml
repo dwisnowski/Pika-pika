@@ -5,7 +5,7 @@ repo_name: dwisnowski / Pika-pika
 nav:
   - Home: index.md
   - Demo: demo.md
-  - README: README.md
+  - README: README-synced.md
 
 theme:
   name: material

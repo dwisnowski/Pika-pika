@@ -1,7 +1,3 @@
-# Project README (synced)
+# (Removed)
 
-> This page is automatically generated from the repository README via scripts/sync_readme_to_docs.py
-
-(Initial copy — will be updated by `make docs` / CI deploys)
-
-> See the repository README for full details.
+This placeholder was renamed to `README-synced.md` to avoid a conflict with `index.md`. The actual README is synced to `docs/README-synced.md` by `scripts/sync_readme_to_docs.py`.
