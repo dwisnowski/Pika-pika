@@ -37,6 +37,15 @@ Required hardware:
 
 See the wiring diagram: `docs/wiring.svg` (illustrative). **Do not connect mains directly** — use proper isolation, a fuse, and follow local regulations. ZMPT101B outputs typically need biasing/conditioning before feeding an ADC.
 
+
+## Raspberry Pi Pre-requistites:
+Model: Raspberry pi 2b+ 
+OS: Pi OS 32bit Lite
+Hostname: pika-pika
+Username: pika
+Password: pikachu
+
+
 ## Getting started
 
 1. Flash a microSD card with Raspberry Pi OS (with Python 3).
