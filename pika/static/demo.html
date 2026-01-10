@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pika-pika — Demo (mock data)</title>
+  <link rel="stylesheet" href="/static/material.css">
+  <link rel="icon" href="/static/favicon-32x32.png">
+  <style>
+    body { padding: 1rem; }
+    .header { display:flex;align-items:center;justify-content:space-between }
+    .demo-badge { background:#FFD54A;color:#000;padding:0.2rem 0.6rem;border-radius:4px;font-weight:700 }
+    #chart-wrap { max-width:900px; margin-top:1rem }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div style="display:flex;align-items:center;gap:1rem">
+      <img src="/static/Pika-pika.png" alt="Pika logo" width="48" style="filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">
+      <div>
+        <h1 style="margin:0">Pika-pika — Demo</h1>
+        <small class="demo-badge">Mock data — safe preview</small>
+      </div>
+    </div>
+    <div>
+      <a href="/" class="btn">Live</a>
+      <a href="/demo" class="btn" aria-current="page">Demo</a>
+    </div>
+  </div>
+
+  <p>This demo page shows a simulated voltage feed and anomaly highlights so you can try the UI without hardware.</p>
+
+  <div id="chart-wrap">
+    <canvas id="chart" width="800" height="240"></canvas>
+  </div>
+
+  <div style="margin-top:1rem;max-width:900px">
+    <button id="btn-refresh" class="btn">Refresh</button>
+    <label style="margin-left:1rem"><input type="checkbox" id="cb-shade" checked> Show highlights</label>
+    <div id="highlights-list" style="margin-top:0.5rem"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <script>
+    const ctx = document.getElementById('chart').getContext('2d');
+    let chart = new Chart(ctx, {
+      type: 'line',
+      data: { datasets: [{ label: 'Voltage (V)', data: [], borderColor: '#FFD54A', borderWidth:1, pointRadius:0 }] },
+      options: {
+        animation:false,
+        scales: { x: { type: 'time', time: { unit: 'second' } }, y: { suggestedMin: -0.5, suggestedMax: 3.5 } },
+        plugins: { zoom: { zoom: { wheel: { enabled: true }, mode: 'x' }, pan: { enabled: true, mode: 'x' } } }
+      }
+    });
+
+    async function fetchRecent(seconds=20){
+      const res = await fetch(`/api/demo/recent?seconds=${seconds}`);
+      if(!res.ok) throw new Error('fetch failed');
+      const json = await res.json();
+      return json.points.map(p=>({x:new Date(p[0]*1000), y:p[1]}));
+    }
+
+    async function fetchHighlights(){
+      const res = await fetch('/api/demo/highlights');
+      if(!res.ok) return [];
+      return res.json();
+    }
+
+    async function refresh(){
+      document.getElementById('btn-refresh').disabled = true;
+      try{
+        const pts = await fetchRecent(60);
+        chart.data.datasets[0].data = pts;
+        chart.update();
+        const list = await fetchHighlights();
+        renderHighlights(list);
+      }finally{ document.getElementById('btn-refresh').disabled = false }
+    }
+
+    function renderHighlights(list){
+      const el = document.getElementById('highlights-list');
+      el.innerHTML = '';
+      const showShade = document.getElementById('cb-shade').checked;
+      if(showShade){
+        // add simple vertical shaded boxes by drawing plugin overlay (quick and dirty)
+        // We remove previous plugin overlays by redrawing chart background later.
+      }
+      if(!list.length){ el.innerHTML = '<small>No anomalies in view.</small>'; return }
+      const ul = document.createElement('ul');
+      for(const h of list){
+        const li = document.createElement('li');
+        const start = new Date(h.start_ts*1000).toLocaleString();
+        const end = new Date(h.end_ts*1000).toLocaleString();
+        li.textContent = `${h.duration.toFixed(1)}s anomaly around ${new Date(h.peak_ts*1000).toLocaleTimeString()} (peak≈${h.peak_value.toFixed(2)}V)`;
+        ul.appendChild(li);
+        if(showShade){ addShade(h.start_ts*1000, h.end_ts*1000) }
+      }
+      el.appendChild(ul);
+    }
+
+    function addShade(startMs, endMs){
+      // simple plugin to draw shaded region on top
+      const plugin = {
+        id: 'shadeRegions',
+        afterDraw: (chart)=>{
+          const ctx = chart.ctx; ctx.save();
+          chart.data._shades = chart.data._shades || [];
+          for(const s of chart.data._shades){
+            const x1 = chart.scales.x.getPixelForValue(new Date(s[0]));
+            const x2 = chart.scales.x.getPixelForValue(new Date(s[1]));
+            ctx.fillStyle = 'rgba(255, 213, 74, 0.12)';
+            ctx.fillRect(x1, chart.chartArea.top, x2-x1, chart.chartArea.bottom-chart.chartArea.top);
+          }
+          ctx.restore();
+        }
+      };
+      if(!chart.config.plugins || !chart.config.plugins.some(p=>p.id==='shadeRegions')){
+        Chart.register(plugin);
+      }
+      chart.data._shades = chart.data._shades || [];
+      chart.data._shades.push([startMs, endMs]);
+      chart.update();
+    }
+
+    document.getElementById('btn-refresh').addEventListener('click', ()=>refresh());
+    document.getElementById('cb-shade').addEventListener('change', ()=>refresh());
+
+    // initial
+    refresh();
+  </script>
+</body>
+</html>

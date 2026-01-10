@@ -1,6 +1,6 @@
 # Pika-pika
 
-![Pika-pika logo](docs/logo.svg)  
+![Pika-pika logo](pika/static/Pika-pika.png)  
 A **Python-based** Raspberry Pi voltage logger and live web viewer.
 
 ## Project overview
@@ -77,7 +77,20 @@ You can enable the app to start automatically on boot via the included installer
 ```bash
 # Install and enable the systemd service (requires sudo)
 sudo bash scripts/install_systemd.sh
+```
 
+### Icons & social preview
+
+A project PNG (`pika/static/Pika-pika.png`) is used as the site logo and social preview image. To generate favicons and optimized assets from that PNG run:
+
+```bash
+# generate favicons, webp, and optimized PNG
+make icons
+# or
+python scripts/generate_icons.py
+```
+
+This creates `pika/static/favicon.ico`, `favicon-32x32.png`, `favicon-16x16.png`, `apple-touch-icon.png`, `Pika-pika.webp`, and `Pika-pika-optimized.png` which are linked in the site head for better browser and social previews.
 # Check status and logs
 sudo systemctl status pika-pika
 sudo journalctl -u pika-pika -f
@@ -100,6 +113,8 @@ sudo systemctl restart pika-pika
 (When you run `bash scripts/setup_pi.sh` interactively it will offer to install this systemd service for you and to configure system NTP for accurate timestamps.)
 
 6. Open `http://<pi-ip>:8000/` on a phone or other device on the same network to view live data.
+
+Demo preview: If you don’t have the hardware connected (or you want to try the UI), open `http://<pi-ip>:8000/demo` to view a mocked data demo page that simulates voltage readings and highlights for easy exploration without hardware.
 
 > **Note:** FastAPI + Uvicorn is lightweight and should run fine on a Raspberry Pi 2 for this workload (100 Hz sampling + light web UI). If you plan heavy workloads or more concurrent users, consider tuning worker settings or using a lightweight process supervisor.
 

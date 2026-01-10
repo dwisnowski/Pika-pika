@@ -6,7 +6,10 @@ UVICORN := $(VENV)/bin/uvicorn
 .PHONY: help setup venv install run dev clean
 
 help:
-	@echo "Targets: setup, venv, install, run, dev, clean"
+	@echo "Targets: setup, venv, install, run, dev, icons, clean"
+
+icons:
+	python scripts/generate_icons.py
 
 setup:
 	@bash scripts/setup_pi.sh

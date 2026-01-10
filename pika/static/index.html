@@ -12,6 +12,19 @@
     <!-- Material CSS (we use a simple CSS file with Material-like dark theme) -->
     <link rel="stylesheet" href="/static/material.css">
 
+    <!-- Favicons and manifest -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
+
+    <!-- Open Graph / Social preview (use PNG/WebP if available) -->
+    <meta property="og:title" content="Pika-pika" />
+    <meta property="og:description" content="Python-based Raspberry Pi voltage logger and live web viewer." />
+    <meta property="og:image" content="/static/Pika-pika.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="/static/Pika-pika.png" />
+
     <style>
       /* Ensure the page padding but keep dark theme */
       body { font-family: 'Roboto', 'Noto Sans', sans-serif; margin: 18px; }
@@ -20,11 +33,15 @@
   </head>
   <body>
     <div class="header" style="gap:18px;align-items:center;">
-      <img src="/static/logo.svg" alt="Pika-pika logo" width="72" height="72" style="border-radius:8px;"/>
+      <img src="/static/Pika-pika.png" alt="Pika-pika logo" width="72" height="72" style="border-radius:8px;"/>
       <div>
         <h2 style="margin:0">Pika-pika Live Voltage Monitor</h2>
         <p style="margin:2px 0 0 0; font-size:90%">Shows recent sampled values (live). Data is sampled at 100 Hz and stored on the device.</p>
       </div>
+    </div>
+
+    <div style="margin-top:8px">
+      <a href="/demo" class="btn">Preview Demo (mock data)</a>
     </div>
 
     <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">

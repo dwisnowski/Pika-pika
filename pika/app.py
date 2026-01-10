@@ -4,8 +4,10 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import time
 
 from .datalogger import Datalogger
+from . import demo
 
 app = FastAPI(title="Pika-pika")
 
@@ -138,6 +140,40 @@ def api_range(start: float, end: float, max_points: int = 1000):
         return JSONResponse({"data": []})
     data = logger.get_range(start, end, max_points=max_points)
     return JSONResponse({"data": [[ts, val] for ts, val in data]})
+
+
+# --- Demo endpoints (mocked data for preview without hardware) ---
+@app.get('/demo')
+def demo_page():
+    """Serve the demo static page which pulls mocked data."""
+    return FileResponse(os.path.join(static_dir, 'demo.html'))
+
+
+@app.get('/api/demo/recent')
+def api_demo_recent(seconds: float = 20.0, max_points: int = 2000):
+    pts = demo.recent(seconds=seconds, max_points=max_points)
+    return JSONResponse({'points': [[ts, v] for ts, v in pts]})
+
+
+@app.get('/api/demo/range')
+def api_demo_range(start: float, end: float, max_points: int = 2000):
+    try:
+        start = float(start)
+        end = float(end)
+        max_points = int(max_points)
+    except Exception:
+        return JSONResponse({'points': []})
+    pts = demo.range_query(start, end, max_points=max_points)
+    return JSONResponse({'points': [[ts, v] for ts, v in pts]})
+
+
+@app.get('/api/demo/highlights')
+def api_demo_highlights(start: float = None, end: float = None):
+    now = time.time()
+    if start is None: start = now - 3 * 3600
+    if end is None: end = now
+    h = demo.highlights_for_range(start, end)
+    return JSONResponse(h)
 
 if __name__ == "__main__":
     import uvicorn
