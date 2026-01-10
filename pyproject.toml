@@ -18,12 +18,11 @@ dependencies = [
   "qrcode>=8.1",
   "Pillow>=10.0",
   "sdnotify>=0.3.2",
-  # ADS1115 library is optional for non-Pi testing or when hardware is present
-  "adafruit-circuitpython-ads1x15>=3 ; extra == 'hardware'",
 ]
 
 [project.optional-dependencies]
-hardware = ["adafruit-circuitpython-ads1x15>=3.4.0"]
+# ADS1115 library is optional for non-Pi testing or when hardware is present
+hardware = ["adafruit-circuitpython-ads1x15>=3.0.0"]
 display = ["spidev", "RPi.GPIO"]
 docs = ["mkdocs>=1.4", "mkdocs-material>=9.0"]
 
