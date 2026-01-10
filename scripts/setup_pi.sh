@@ -1,6 +1,59 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ============================================================================
+# Pika-pika Raspberry Pi Setup Script
+# ============================================================================
+#
+# This script performs a complete setup of the Pika-pika application on a
+# Raspberry Pi. It ensures all required system packages, tools, and Python
+# dependencies are installed and configured.
+#
+# What this script does:
+#
+# 1. SYSTEM PACKAGES (installed via apt):
+#    - python3, python3-venv: Python runtime and virtual environment support
+#    - build-essential: C/C++ build tools (required for compiling Python packages)
+#    - git: Version control system
+#    - i2c-tools: Tools for I2C bus communication (required for ADS1115 ADC)
+#    - python3-dev: Python development headers
+#    - curl: Used to download and install uv
+#
+# 2. PACKAGE MANAGER:
+#    - Installs uv (fast Python package installer) if not present
+#    - Configures uv to be available in PATH
+#
+# 3. PYTHON ENVIRONMENT:
+#    - Creates a Python virtual environment (.venv) if it doesn't exist
+#    - Upgrades pip, setuptools, and wheel in the virtual environment
+#    - Installs the Pika-pika package and all required dependencies
+#    - Attempts to install optional hardware dependencies (ADS1115 library)
+#
+# 4. PROJECT SETUP:
+#    - Creates a data/ directory for logging voltage data
+#    - Sets appropriate permissions (775) on the data directory
+#
+# 5. OPTIONAL SERVICES (interactive prompts):
+#    - Offers to install a systemd service for autostart on boot
+#    - Offers to configure system NTP to use pool.ntp.org for accurate timestamps
+#
+# Requirements:
+#    - Must be run on Raspberry Pi OS (or compatible Debian-based system)
+#    - Requires sudo privileges for system package installation
+#    - Requires internet connection for package downloads
+#
+# Usage:
+#    bash scripts/setup_pi.sh
+#    or
+#    make setup
+#
+# After running this script:
+#    1. Enable I2C interface: sudo raspi-config -> Interfacing Options -> I2C
+#    2. Reboot the system
+#    3. Start the application: make run
+#
+# ============================================================================
+
 echo "[pika-pika] Updating apt and installing system packages (requires sudo)..."
 sudo apt update
 sudo apt install -y python3 python3-venv build-essential git i2c-tools python3-dev curl
