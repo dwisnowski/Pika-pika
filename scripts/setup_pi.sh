@@ -3,7 +3,27 @@ set -euo pipefail
 
 echo "[pika-pika] Updating apt and installing system packages (requires sudo)..."
 sudo apt update
-sudo apt install -y python3 python3-venv python3-pip build-essential git i2c-tools python3-dev
+sudo apt install -y python3 python3-venv build-essential git i2c-tools python3-dev curl
+
+# Install uv if not already present and set up uv command
+if ! command -v uv &> /dev/null; then
+  echo "[pika-pika] Installing uv (fast Python package installer)..."
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  # Ensure uv is in PATH for this script session
+  export PATH="$HOME/.cargo/bin:$PATH"
+fi
+
+# Define uv function if still not found (fallback to direct path)
+if ! command -v uv &> /dev/null; then
+  if [ -f "$HOME/.cargo/bin/uv" ]; then
+    uv() {
+      "$HOME/.cargo/bin/uv" "$@"
+    }
+  else
+    echo "[pika-pika] Error: uv is not available. Please install manually: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    exit 1
+  fi
+fi
 
 # Create a virtualenv if needed
 if [ ! -d ".venv" ]; then
@@ -14,12 +34,12 @@ fi
 echo "[pika-pika] Activating venv and installing Python dependencies..."
 # shellcheck disable=SC1091
 . .venv/bin/activate
-pip install --upgrade pip setuptools wheel
-pip install . || { echo "[pika-pika] pip install failed"; exit 1; }
+uv pip install --upgrade pip setuptools wheel
+uv pip install . || { echo "[pika-pika] uv pip install failed"; exit 1; }
 
 # Try installing optional hardware deps, but don't fail if not present
 echo "[pika-pika] Installing optional hardware extras (ADS1115). This may fail on non-Pi or missing wheels; it's optional." 
-pip install .[hardware] || echo "[pika-pika] Optional hardware extras could not be installed (continue)"
+uv pip install .[hardware] || echo "[pika-pika] Optional hardware extras could not be installed (continue)"
 
 mkdir -p data
 chmod 775 data || true

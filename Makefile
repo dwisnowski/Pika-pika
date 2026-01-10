@@ -1,6 +1,6 @@
 VENV := .venv
 PY := $(VENV)/bin/python
-PIP := $(VENV)/bin/pip
+UV := uv
 UVICORN := $(VENV)/bin/uvicorn
 
 .PHONY: help setup venv install run dev clean
@@ -11,9 +11,9 @@ help:
 icons:
 	python scripts/generate_icons.py
 
-# Build the MkDocs site locally (requires mkdocs or use `pip install .[docs]`)
+# Build the MkDocs site locally (requires mkdocs or use `uv pip install .[docs]`)
 docs: venv docs-sync
-	$(PIP) install mkdocs mkdocs-material
+	$(UV) pip install mkdocs mkdocs-material
 	$(VENV)/bin/mkdocs build
 
 # Sync README into docs before building
@@ -22,7 +22,7 @@ docs-sync:
 
 # Serve the docs locally for development
 docs-serve: venv
-	$(PIP) install mkdocs mkdocs-material
+	$(UV) pip install mkdocs mkdocs-material
 	$(VENV)/bin/mkdocs serve
 
 setup:
@@ -30,10 +30,10 @@ setup:
 
 venv:
 	python3 -m venv $(VENV)
-	$(PIP) install --upgrade pip setuptools wheel
+	$(UV) pip install --upgrade pip setuptools wheel
 
 install: venv
-	$(PIP) install .
+	$(UV) pip install .
 
 run:
 	# Single worker is recommended for low-powered devices

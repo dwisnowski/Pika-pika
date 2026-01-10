@@ -14,7 +14,7 @@ This documentation contains quick links and usage for the project. The full READ
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip install .
+uv pip install .
 ```
 
 2. Run the app:

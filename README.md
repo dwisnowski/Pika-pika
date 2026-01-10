@@ -53,7 +53,7 @@ Password: pikachu
 3. Install Python dependencies and install the package:
 
 ```bash
-pip install .
+uv pip install .
 ```
 
 4. Run the app (this starts sampling at 100 Hz and serves the web UI):
@@ -151,7 +151,7 @@ If you have a Waveshare 2" LCD attached to the Pi (SPI), you can render the QR c
 # using the helper script (preferred)
 bash scripts/setup_pi.sh
 # or install the display optional deps directly:
-pip install .[display]
+uv pip install .[display]
 ```
 
 - Generate and show the QR code (auto-detect local IP):
