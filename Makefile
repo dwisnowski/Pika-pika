@@ -11,6 +11,20 @@ help:
 icons:
 	python scripts/generate_icons.py
 
+# Build the MkDocs site locally (requires mkdocs or use `pip install .[docs]`)
+docs: venv docs-sync
+	$(PIP) install mkdocs mkdocs-material
+	$(VENV)/bin/mkdocs build
+
+# Sync README into docs before building
+docs-sync:
+	$(PY) scripts/sync_readme_to_docs.py
+
+# Serve the docs locally for development
+docs-serve: venv
+	$(PIP) install mkdocs mkdocs-material
+	$(VENV)/bin/mkdocs serve
+
 setup:
 	@bash scripts/setup_pi.sh
 

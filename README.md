@@ -1,5 +1,8 @@
 # Pika-pika
 
+[![MkDocs Deploy](https://github.com/dwisnowski/Pika-pika/actions/workflows/mkdocs-deploy.yml/badge.svg)](https://github.com/dwisnowski/Pika-pika/actions/workflows/mkdocs-deploy.yml)
+[![GitHub Pages](https://img.shields.io/website?down_color=red&down_message=down&up_color=blue&up_message=up&url=https://dwisnowski.github.io/Pika-pika/)](https://dwisnowski.github.io/Pika-pika/)
+
 ![Pika-pika logo](pika/static/Pika-pika.png)  
 A **Python-based** Raspberry Pi voltage logger and live web viewer.
 
@@ -80,6 +83,15 @@ sudo bash scripts/install_systemd.sh
 ```
 
 ### Icons & social preview
+
+Documentation site
+
+This project uses **MkDocs** for documentation. The docs are built and published to GitHub Pages when you push to `main` (the workflow builds the site and publishes the `site/` output to the `gh-pages` branch). To preview locally run:
+
+```bash
+make docs-serve
+```
+
 
 A project PNG (`pika/static/Pika-pika.png`) is used as the site logo and social preview image. To generate favicons and optimized assets from that PNG run:
 

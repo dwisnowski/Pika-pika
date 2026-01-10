@@ -25,9 +25,7 @@ dependencies = [
 [project.optional-dependencies]
 hardware = ["adafruit-circuitpython-ads1x15>=3.4.0"]
 display = ["spidev", "RPi.GPIO"]
-
-[project.optional-dependencies]
-hardware = ["adafruit-circuitpython-ads1x15>=3.4.0"]
+docs = ["mkdocs>=1.4", "mkdocs-material>=9.0"]
 
 [project.urls]
 "Home" = "https://github.com/dwisnowski/Pika-pika"

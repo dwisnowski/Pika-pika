@@ -1,0 +1,26 @@
+site_name: Pika-pika
+site_description: Python-based Raspberry Pi voltage logger
+repo_url: https://github.com/dwisnowski/Pika-pika
+repo_name: dwisnowski / Pika-pika
+nav:
+  - Home: index.md
+  - Demo: demo.md
+  - README: README.md
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.instant
+    - navigation.sections
+    - content.code.copy
+  logo: images/logo.svg
+  favicon: images/logo.svg
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.instant
+    - navigation.sections
+    - content.code.copy
