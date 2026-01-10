@@ -11,8 +11,6 @@
       
       
       
-        <link rel="prev" href="../demo/">
-      
       
       
         
@@ -23,7 +21,7 @@
     
     
       
-        <title>README - Pika-pika</title>
+        <title>Raspberry Pi OS Lite 32-bit Setup Guide - Pika-pika</title>
       
     
     
@@ -74,7 +72,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#project-readme-synced" class="md-skip">
+        <a href="#raspberry-pi-os-lite-32-bit-setup-guide" class="md-skip">
           Skip to content
         </a>
       
@@ -109,7 +107,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              README
+              Raspberry Pi OS Lite 32-bit Setup Guide
             
           </span>
         </div>
@@ -420,19 +418,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../README-synced/" class="md-nav__link">
         
   
   
@@ -448,7 +437,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -473,6 +461,147 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#installation-instructions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation Instructions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Installation Instructions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-download-and-install-raspberry-pi-os-lite-32-bit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Download and Install Raspberry Pi OS Lite (32-bit)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-initial-boot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Initial Boot
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bootstrap-commands-for-development-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bootstrap Commands for Development Setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Bootstrap Commands for Development Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#update-system-packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Update System Packages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configure-raspberry-pi-connect" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configure Raspberry Pi Connect
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#install-git" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install Git
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clone-project-repository" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clone Project Repository
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#navigate-to-project-and-run-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Navigate to Project and Run Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -491,157 +620,54 @@
   
 
 
-<h1 id="project-readme-synced">Project README (synced)</h1>
-<blockquote>
-<p>This page is automatically generated from the repository README via scripts/sync_readme_to_docs.py</p>
-</blockquote>
-<h1 id="pika-pika">Pika-pika</h1>
-<p><a href="https://github.com/dwisnowski/Pika-pika/actions/workflows/mkdocs-deploy.yml"><img alt="MkDocs Deploy" src="https://github.com/dwisnowski/Pika-pika/actions/workflows/mkdocs-deploy.yml/badge.svg" /></a>
-<a href="https://dwisnowski.github.io/Pika-pika/"><img alt="GitHub Pages" src="https://img.shields.io/website?down_color=red&amp;down_message=down&amp;up_color=blue&amp;up_message=up&amp;url=https://dwisnowski.github.io/Pika-pika/" /></a></p>
-<p><img alt="Pika-pika logo" src="../images/Pika-pika.png" /><br />
-A <strong>Python-based</strong> Raspberry Pi voltage logger and live web viewer.</p>
-<h2 id="project-overview">Project overview</h2>
-<p>This project is a lightweight, Python-based voltage logger that runs on a <strong>Raspberry Pi 2</strong> and can do all of the following at the same time:</p>
-<ul>
-<li>✔ Sample voltage at <strong>100 Hz</strong></li>
-<li>✔ Log data to disk</li>
-<li>✔ Run a Python-based web server</li>
-<li>✔ View results live on your phone on the same Wi‑Fi network</li>
-</ul>
-<h2 id="features">Features</h2>
-<ul>
-<li>Real-time sampling and logging</li>
-<li>Simple web UI for live monitoring</li>
-<li>Minimal resource requirements — Raspberry Pi 2 is sufficient</li>
-</ul>
-<h2 id="hardware">Hardware</h2>
-<p>Required hardware:</p>
-<ul>
-<li><strong>Raspberry Pi 2</strong></li>
-<li><strong>ADS1115 ADC</strong></li>
-<li><strong>ZMPT101B AC voltage sensor</strong></li>
-<li><strong>5 V power supply</strong></li>
-<li><strong>microSD card</strong></li>
-<li><strong>Jumper wires</strong></li>
-<li><strong>Safe enclosure + fuse</strong></li>
-</ul>
-<h3 id="wiring">Wiring</h3>
-<p>See the wiring diagram: <code>docs/wiring.svg</code> (illustrative). <strong>Do not connect mains directly</strong> — use proper isolation, a fuse, and follow local regulations. ZMPT101B outputs typically need biasing/conditioning before feeding an ADC.</p>
-<h2 id="raspberry-pi-pre-requistites">Raspberry Pi Pre-requistites:</h2>
-<p>Model: Raspberry pi 2b+ 
-OS: Pi OS 32bit Lite
-Hostname: pika-pika
-Username: pika
-Password: pikachu</p>
-<h2 id="getting-started">Getting started</h2>
+<h1 id="raspberry-pi-os-lite-32-bit-setup-guide">Raspberry Pi OS Lite 32-bit Setup Guide</h1>
+<h2 id="installation-instructions">Installation Instructions</h2>
+<h3 id="1-download-and-install-raspberry-pi-os-lite-32-bit">1. Download and Install Raspberry Pi OS Lite (32-bit)</h3>
 <ol>
-<li>Flash a microSD card with Raspberry Pi OS (with Python 3).</li>
-<li>Connect the ADS1115 (I2C) and ZMPT101B sensor to the Pi following <code>docs/wiring.svg</code>.</li>
-<li>Set up the virtual environment and install dependencies:</li>
+<li>Download <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a> for your operating system</li>
+<li>Insert your microSD card into your computer</li>
+<li>Launch Raspberry Pi Imager</li>
+<li>Click <strong>"Choose OS"</strong></li>
+<li>Select <strong>Raspberry Pi OS (other)</strong> → <strong>Raspberry Pi OS Lite (32-bit)</strong></li>
+<li>Click <strong>"Choose Storage"</strong> and select your microSD card</li>
+<li>Click <strong>"Write"</strong> to flash the OS to your card</li>
+<li>Once complete, safely eject the microSD card</li>
 </ol>
-<pre><code class="language-bash">make venv
-make install
-</code></pre>
+<h3 id="2-initial-boot">2. Initial Boot</h3>
 <ol>
-<li>Run the app (this starts sampling at 100 Hz and serves the web UI):</li>
+<li>Insert the microSD card into your Raspberry Pi</li>
+<li>Connect power, keyboard, and monitor</li>
+<li>Complete the initial setup wizard (set username, password, WiFi, etc.)</li>
 </ol>
-<pre><code class="language-bash"># For production use (recommended):
-make run
-
-# For development with auto-reload:
-make dev
+<h2 id="bootstrap-commands-for-development-setup">Bootstrap Commands for Development Setup</h2>
+<p>Run the following commands in order to set up your Raspberry Pi for development:</p>
+<h3 id="update-system-packages">Update System Packages</h3>
+<pre><code class="language-bash">sudo apt update &amp;&amp; sudo apt upgrade -y
 </code></pre>
-<p>Alternatively, you can run manually with uvicorn:</p>
-<pre><code class="language-bash">.venv/bin/uvicorn pika.app:app --host 0.0.0.0 --port 8000
+<h3 id="configure-raspberry-pi-connect">Configure Raspberry Pi Connect</h3>
+<pre><code class="language-bash">rpi-connect signin
+rpi-connect shell on
 </code></pre>
-<ol>
-<li>
-<p>Quick setup on Raspberry Pi</p>
-</li>
-<li>
-<p>Interactive script (recommended):</p>
-</li>
-</ol>
-<pre><code class="language-bash"># Run the helper script which installs system packages, creates a venv, and installs Python deps
-bash scripts/setup_pi.sh
+<h3 id="install-git">Install Git</h3>
+<pre><code class="language-bash">sudo apt install git -y
 </code></pre>
+<h3 id="clone-project-repository">Clone Project Repository</h3>
+<pre><code class="language-bash">git clone https://github.com/dwisnowski/Pika-pika.git
+</code></pre>
+<h3 id="navigate-to-project-and-run-setup">Navigate to Project and Run Setup</h3>
+<pre><code class="language-bash">cd Pika-pika
+make setup
+</code></pre>
+<h2 id="notes">Notes</h2>
 <ul>
-<li>Or use <code>make setup</code> to call the same script:</li>
+<li>Make sure you have a stable internet connection during the setup process</li>
+<li>The <code>make setup</code> command assumes there's a Makefile in the Pika-pika repository with a setup target</li>
+<li>If you encounter any permission issues, you may need to use <code>sudo</code> for certain commands</li>
 </ul>
-<pre><code class="language-bash">make setup
+<h2 id="troubleshooting">Troubleshooting</h2>
+<p>If you experience issues with <code>rpi-connect</code>, ensure you're running the latest version of Raspberry Pi OS and that the service is properly installed:</p>
+<pre><code class="language-bash">sudo apt install rpi-connect
 </code></pre>
-<h3 id="autostart-systemd">Autostart (systemd)</h3>
-<p>You can enable the app to start automatically on boot via the included installer script.</p>
-<pre><code class="language-bash"># Install and enable the systemd service (requires sudo)
-sudo bash scripts/install_systemd.sh
-</code></pre>
-<h3 id="icons-social-preview">Icons &amp; social preview</h3>
-<p>Documentation site</p>
-<p>This project uses <strong>MkDocs</strong> for documentation. The docs are built and published to GitHub Pages when you push to <code>main</code> (the workflow builds the site and publishes the <code>site/</code> output to the <code>gh-pages</code> branch). To preview locally run:</p>
-<pre><code class="language-bash">make docs-serve
-</code></pre>
-<p>A project PNG (<code>images/Pika-pika.png</code>) is used as the site logo and social preview image. To generate favicons and optimized assets from that PNG run:</p>
-<pre><code class="language-bash"># generate favicons, webp, and optimized PNG
-make icons
-# or
-python scripts/generate_icons.py
-</code></pre>
-<p>This creates <code>pika/static/favicon.ico</code>, <code>favicon-32x32.png</code>, <code>favicon-16x16.png</code>, <code>apple-touch-icon.png</code>, <code>Pika-pika.webp</code>, and <code>Pika-pika-optimized.png</code> which are linked in the site head for better browser and social previews.</p>
-<h1 id="check-status-and-logs">Check status and logs</h1>
-<p>sudo systemctl status pika-pika
-sudo journalctl -u pika-pika -f</p>
-<pre><code>
-The systemd service is configured with `Type=notify` and `WatchdogSec=30`. The app uses `sdnotify` if available to:
-
-- send `READY=1` when startup is complete, and
-- periodically send `WATCHDOG=1` while the datalogger is producing fresh samples.
-
-If the datalogger stops producing samples (for example, hardware failure or process hangs), the watchdog helper will stop pinging systemd and systemd will restart the service automatically.
-
-If you want to modify runtime options (port, venv path, user), edit `/etc/systemd/system/pika-pika.service`, then run:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl restart pika-pika
-</code></pre>
-<p>(When you run <code>bash scripts/setup_pi.sh</code> interactively it will offer to install this systemd service for you and to configure system NTP for accurate timestamps.)</p>
-<ol>
-<li>Open <code>http://&lt;pi-ip&gt;:8000/</code> on a phone or other device on the same network to view live data.</li>
-</ol>
-<p>Demo preview: If you don’t have the hardware connected (or you want to try the UI), open <code>http://&lt;pi-ip&gt;:8000/demo</code> to view a mocked data demo page that simulates voltage readings and highlights for easy exploration without hardware.</p>
-<blockquote>
-<p><strong>Note:</strong> FastAPI + Uvicorn is lightweight and should run fine on a Raspberry Pi 2 for this workload (100 Hz sampling + light web UI). If you plan heavy workloads or more concurrent users, consider tuning worker settings or using a lightweight process supervisor.</p>
-</blockquote>
-<hr />
-<h2 id="displaying-the-qr-on-a-waveshare-2-240x320-spi-lcd">Displaying the QR on a Waveshare 2" (240x320) SPI LCD</h2>
-<p>If you have a Waveshare 2" LCD attached to the Pi (SPI), you can render the QR code directly to the screen with the included helper script <code>pika/display_qr.py</code>.</p>
-<ul>
-<li>Install optional display/system packages (on the Pi):</li>
-</ul>
-<pre><code class="language-bash"># using the helper script (preferred)
-bash scripts/setup_pi.sh
-# or install the display optional deps directly:
-uv pip install .[display]
-</code></pre>
-<ul>
-<li>Generate and show the QR code (auto-detect local IP):</li>
-</ul>
-<pre><code class="language-bash"># auto-detect local IP and display QR linking to http://&lt;ip&gt;:8000
-python -m pika.display_qr --auto-ip --port 8000
-</code></pre>
-<ul>
-<li>Or pass a URL directly:</li>
-</ul>
-<pre><code class="language-bash">python -m pika.display_qr --url http://192.168.1.50:8000
-</code></pre>
-<p>Notes
-- The script tries several common Waveshare/ST7789 driver names (<code>LCD_2inch</code>, <code>st7789</code>, <code>LCD</code> from Waveshare Python examples). If no supported driver is found it will save <code>qr_lcd.png</code> in the repo root as a fallback.
-- The app will now render the QR on the attached display when the FastAPI app starts and continuously runs a small original "electric mascot" animation that also overlays the current voltage reading (updated from the datalogger) and the number of detected anomalies in the past 3 hours.
-- See Waveshare's docs for driver installation and wiring: https://www.waveshare.com/wiki/2inch_LCD_Module?amazon#python_2</p>
-<hr />
-<p>If you'd like, I can add a systemd service file, logging rotation, or a sample wiring photo you can include in this repo.</p>
-<hr />
-<p>Contributions and issues are welcome — see <code>CONTRIBUTING.md</code> (when added).</p>
 
 
 

@@ -589,16 +589,19 @@
 </ul>
 <h2 id="quick-start">Quick start</h2>
 <ol>
-<li>Create a Python virtual environment and install dependencies:</li>
+<li>Set up the virtual environment and install dependencies:</li>
 </ol>
-<pre><code class="language-bash">python3 -m venv .venv
-. .venv/bin/activate
-pip install .
+<pre><code class="language-bash">make venv
+make install
 </code></pre>
 <ol>
 <li>Run the app:</li>
 </ol>
-<pre><code class="language-bash">uvicorn pika.app:app --host 0.0.0.0 --port 8000
+<pre><code class="language-bash"># For production use:
+make run
+
+# For development with auto-reload:
+make dev
 </code></pre>
 <ol>
 <li>Open <code>http://&lt;pi-ip&gt;:8000/</code> or the demo at <code>http://&lt;pi-ip&gt;:8000/demo</code>.</li>
