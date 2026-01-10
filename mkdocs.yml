@@ -4,23 +4,32 @@ repo_url: https://github.com/dwisnowski/Pika-pika
 repo_name: dwisnowski / Pika-pika
 nav:
   - Home: index.md
+  - Hardware:
+    - Parts: parts.md
+    - Wiring steps: wiring-steps.md
   - Demo: demo.md
   - README: README-synced.md
 
 theme:
   name: material
   language: en
-  features:
-    - navigation.instant
-    - navigation.sections
-    - content.code.copy
   logo: images/logo.svg
   favicon: images/logo.svg
-
-theme:
-  name: material
-  language: en
   features:
     - navigation.instant
     - navigation.sections
     - content.code.copy
+  palette:
+    - scheme: slate
+      primary: '#FFD54A'
+      accent: '#FF6B6B'
+      toggle:
+        icon: material/weather-night
+        name: Switch to light theme
+    - scheme: default
+      primary: '#FFD54A'
+      accent: '#FF6B6B'
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark theme
+

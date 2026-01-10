@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="360" viewBox="0 0 800 360">
+  <rect width="800" height="360" fill="#fff"/>
+  <text x="40" y="48" font-size="20" font-weight="700">Step 2 — Connect ZMPT101B output to ADS1115 A0 and GND</text>
+  <rect x="48" y="72" width="320" height="120" rx="8" fill="#f2fff0" stroke="#2e7d32"/>
+  <text x="64" y="96" font-size="14">ZMPT101B (Vout → ADS1115 A0, VCC → 5V, GND → GND)</text>
+  <rect x="420" y="72" width="320" height="120" rx="8" fill="#fff7e6" stroke="#ff8c00"/>
+  <text x="436" y="96" font-size="14">ADS1115 A0 → connect to sensor Vout</text>
+  <line x1="420" y1="120" x2="360" y2="160" stroke="#ff5722" stroke-width="3" stroke-linecap="round"/>
+  <text x="300" y="170" font-size="12">Vout → A0</text>
+  <rect x="48" y="212" width="692" height="96" rx="6" fill="#f8f9fb" stroke="#ddd"/>
+  <text x="64" y="246" font-size="12">Important: ZMPT101B typically needs biasing; check the sensor board notes and avoid connecting mains directly.</text>
+</svg>
