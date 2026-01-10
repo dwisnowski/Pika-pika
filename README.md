@@ -132,7 +132,7 @@ python -m pika.display_qr --url http://192.168.1.50:8000
 
 Notes
 - The script tries several common Waveshare/ST7789 driver names (`LCD_2inch`, `st7789`, `LCD` from Waveshare Python examples). If no supported driver is found it will save `qr_lcd.png` in the repo root as a fallback.
-- The app will now render the QR on the attached display when the FastAPI app starts and continuously runs a small original "electric mascot" animation that also overlays the current voltage reading (updated from the datalogger).
+- The app will now render the QR on the attached display when the FastAPI app starts and continuously runs a small original "electric mascot" animation that also overlays the current voltage reading (updated from the datalogger) and the number of detected anomalies in the past 3 hours.
 - See Waveshare's docs for driver installation and wiring: https://www.waveshare.com/wiki/2inch_LCD_Module?amazon#python_2
 
 ---

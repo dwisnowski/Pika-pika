@@ -213,6 +213,86 @@ class Datalogger:
         except Exception:
             logging.exception("Failed to tail from disk.")
 
+    def get_range(self, start_ts: float, end_ts: float, max_points: int = 1000):
+        """Return downsampled data in the range [start_ts, end_ts].
+
+        Performs streaming bucketing to produce at most `max_points` samples by averaging
+        values that fall into the same time bucket. Returns a list of (ts, value) tuples.
+        """
+        try:
+            start_ts = float(start_ts)
+            end_ts = float(end_ts)
+        except Exception:
+            return []
+        if end_ts <= start_ts:
+            return []
+        # determine days to check
+        start_day = time.localtime(start_ts)
+        end_day = time.localtime(end_ts)
+        # build date list inclusive
+        days = []
+        dt = time.mktime(start_day)
+        while dt <= end_ts:
+            days.append(time.localtime(dt))
+            dt += 86400
+        # prepare buckets
+        bucket_count = max(1, int(max_points))
+        interval = (end_ts - start_ts) / bucket_count
+        buckets = [{'sum': 0.0, 'count': 0, 'min': None, 'max': None, 'ts_sum': 0.0} for _ in range(bucket_count)]
+
+        def process_file(path, open_fn):
+            with open_fn(path, 'rt') as f:
+                reader = csv.reader(f)
+                next(reader, None)
+                for row in reader:
+                    if len(row) < 2:
+                        continue
+                    try:
+                        ts = float(row[0])
+                        val = float(row[1])
+                    except Exception:
+                        continue
+                    if ts < start_ts or ts > end_ts:
+                        continue
+                    idx = int((ts - start_ts) / interval)
+                    if idx < 0:
+                        idx = 0
+                    elif idx >= bucket_count:
+                        idx = bucket_count - 1
+                    b = buckets[idx]
+                    b['sum'] += val
+                    b['count'] += 1
+                    b['ts_sum'] += ts
+                    if b['min'] is None or val < b['min']:
+                        b['min'] = val
+                    if b['max'] is None or val > b['max']:
+                        b['max'] = val
+
+        # open files for each day
+        for day in days:
+            path = self._log_filename_for_date(day)
+            if os.path.exists(path):
+                try:
+                    process_file(path, open)
+                except Exception:
+                    logging.exception("Error processing log file %s", path)
+            gz = path + '.gz'
+            if os.path.exists(gz):
+                try:
+                    import gzip
+                    process_file(gz, gzip.open)
+                except Exception:
+                    logging.exception("Error processing gzip log file %s", gz)
+
+        # build result: for buckets with data, use average timestamp and mean value
+        result = []
+        for b in buckets:
+            if b['count'] > 0:
+                avg_ts = b['ts_sum'] / b['count']
+                avg_val = b['sum'] / b['count']
+                result.append((avg_ts, avg_val))
+        return result
+
     def get_recent(self, seconds=5.0):
         cutoff = time.time() - float(seconds)
         return [(ts, val) for ts, val in list(self._buffer) if ts >= cutoff]

@@ -28,36 +28,164 @@
       </div>
     </div>
 
+    <div id="highlightsPanel" style="margin-top:18px; display:flex; gap:16px; align-items:flex-start;">
+      <div style="flex:1;">
+        <h4 style="margin:6px 0">Live Voltage</h4>
+        <div id="chartwrap_small" style="max-width:900px;"></div>
+      </div>
+      <div style="width:320px;flex:0 0 320px;">
+        <h4 style="margin:6px 0">Highlights</h4>
+        <div id="highlightsList" style="font-family:monospace; font-size:13px; max-height:420px; overflow:auto; padding:6px; border:1px solid #eee; border-radius:6px; background:#fafafa"></div>
+        <button id="resetView" style="margin-top:8px;padding:6px 10px;font-size:13px;">Reset View</button>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <script>
       const ctx = document.getElementById('chart').getContext('2d');
+
+      // plugin to draw shaded rectangles for highlight durations
+      const highlightPlugin = {
+        id: 'highlightPlugin',
+        afterDraw: (chart, args, options) => {
+          const highlights = window._highlightsCache || [];
+          if (!highlights.length) return;
+          const xScale = chart.scales['x'];
+          const ctx = chart.ctx;
+          const top = chart.chartArea.top;
+          const bottom = chart.chartArea.bottom;
+          ctx.save();
+          ctx.globalAlpha = 0.08;
+          ctx.fillStyle = 'rgb(220,20,60)';
+          highlights.forEach(h => {
+            const x1 = xScale.getPixelForValue(new Date(h.start_ts * 1000));
+            const x2 = xScale.getPixelForValue(new Date(h.end_ts * 1000));
+            // draw rectangle
+            ctx.fillRect(x1, top, Math.max(1, x2 - x1), bottom - top);
+          });
+          ctx.restore();
+        }
+      };
+
       const chart = new Chart(ctx, {
         type: 'line',
         data: { labels: [], datasets: [
           { label: 'Voltage', data: [], borderColor: 'rgb(75, 192, 192)', tension: 0.1, pointRadius: 0 },
           { label: 'Anomalies', data: [], borderColor: 'rgb(220,20,60)', backgroundColor: 'rgb(220,20,60)', showLine: false, pointRadius: 5 }
         ] },
-        options: { animation: false, scales: { x: { type: 'time', time: { unit: 'second', tooltipFormat: 'HH:mm:ss.SSS' } }, y: { suggestedMin: 0, suggestedMax: 3.3 } } }
+        options: {
+          animation: false,
+          plugins: {
+            zoom: {
+              pan: { enabled: true, mode: 'x', modifierKey: 'ctrl' },
+              zoom: { wheel: { enabled: true }, mode: 'x', pinch: { enabled: true }, onZoomComplete: ({chart}) => onRangeChanged(chart) }
+            }
+          },
+          scales: { x: { type: 'time', time: { unit: 'second', tooltipFormat: 'HH:mm:ss.SSS' } }, y: { suggestedMin: 0, suggestedMax: 3.3 } }
+        },
+        plugins: [highlightPlugin]
       });
 
-      async function fetchRecent() {
+      // helper to render highlights list
+      function renderHighlightsList(highlights) {
+        const container = document.getElementById('highlightsList');
+        container.innerHTML = '';
+        if (!highlights || !highlights.length) {
+          container.innerText = 'No anomalies detected.';
+          return;
+        }
+        highlights.sort((a,b) => b.score - a.score);
+        highlights.forEach((h, idx) => {
+          const el = document.createElement('div');
+          el.style.padding = '6px';
+          el.style.borderBottom = '1px solid #eee';
+          const start = new Date(h.start_ts * 1000).toLocaleString();
+          const end = new Date(h.end_ts * 1000).toLocaleString();
+          el.innerHTML = `<strong>#${idx+1}</strong> <br/>Peak: ${h.peak_value.toFixed(3)} @ ${new Date(h.peak_ts*1000).toLocaleTimeString()}<br/><small>${start} → ${end}</small>`;
+          el.style.cursor = 'pointer';
+          el.addEventListener('click', () => focusOnHighlight(h));
+          container.appendChild(el);
+        });
+      }
+
+      function focusOnHighlight(h) {
+        // zoom x axis to highlight ± window
+        const peak = h.peak_ts * 1000;
+        const width = Math.max((h.end_ts - h.start_ts) * 1000 * 2, 10000); // at least 10s window
+        chart.options.scales.x.min = new Date(peak - width/2);
+        chart.options.scales.x.max = new Date(peak + width/2);
+        // add a temporary vertical marker dataset
+        chart.data.datasets[2] = chart.data.datasets[2] || { type: 'line', label: 'Marker', data: [], borderColor: 'black', borderWidth: 1, pointRadius: 0, fill: false };
+        chart.data.datasets[2].data = [{x: new Date(peak), y: null}, {x: new Date(peak), y: null}];
+        // rely on plugin to draw shaded region; cache highlights for plugin
+        window._highlightsCache = [h];
+        chart.update();
+      }
+
+      document.getElementById('resetView').addEventListener('click', () => {
+        chart.options.scales.x.min = undefined;
+        chart.options.scales.x.max = undefined;
+        window._highlightsCache = window._highlightsCacheAll || [];
+        chart.update();
+      });
+
+      // When zoom/pan changes the visible range, request aggregated data for that range
+      async function fetchRange(startMs, endMs) {
+        const start = Math.floor(startMs / 1000);
+        const end = Math.floor(endMs / 1000);
+        // request up to 3000 points for a responsive view
+        const maxp = 3000;
         try {
-          const res = await fetch('/api/recent?seconds=5');
+          const res = await fetch(`/api/range?start=${start}&end=${end}&max_points=${maxp}`);
           const payload = await res.json();
           const data = payload.data || [];
           chart.data.labels = data.map(d => new Date(d[0]*1000));
           chart.data.datasets[0].data = data.map(d => ({x: new Date(d[0]*1000), y: d[1]}));
-          // also fetch highlights and render anomalies as red points
+          chart.update();
+        } catch (e) {
+          console.error('range fetch error', e);
+        }
+      }
+
+      function onRangeChanged(chartInstance) {
+        const xscale = chartInstance.scales.x;
+        const min = xscale.min; // ms
+        const max = xscale.max; // ms
+        if (min != null && max != null) {
+          // if zoomed to more than a small window, fetch aggregated data
+          fetchRange(min, max);
+        }
+      }
+
+      // Live mode fetch: keep fetching the recent window when not zoomed
+      let liveMode = true;
+      function updateLive() {
+        if (!liveMode) return;
+        fetchRecentLive();
+      }
+
+      async function fetchRecentLive() {
+        try {
+          const seconds = 5;
+          const res = await fetch(`/api/recent?seconds=${seconds}`);
+          const payload = await res.json();
+          const data = payload.data || [];
+          chart.data.labels = data.map(d => new Date(d[0]*1000));
+          chart.data.datasets[0].data = data.map(d => ({x: new Date(d[0]*1000), y: d[1]}));
+          // update anomalies and highlights panel as before
           try {
             const hr = await fetch('/api/highlights');
             const hjson = await hr.json();
             const highlights = hjson.highlights || [];
             const anomalyPoints = [];
             highlights.forEach(h => {
-              // include peak point as annotation
               anomalyPoints.push({ x: new Date(h.peak_ts * 1000), y: h.peak_value });
             });
             chart.data.datasets[1].data = anomalyPoints;
+            window._highlightsCacheAll = highlights;
+            window._highlightsCache = highlights;
+            renderHighlightsList(highlights);
           } catch (e) {
             console.error('highlights fetch error', e);
           }
@@ -68,9 +196,23 @@
         }
       }
 
-      // poll at 10 Hz for UI updates (web UI doesn't need 100 Hz)
-      setInterval(fetchRecent, 100);
-      fetchRecent();
+      // poll live at 10 Hz
+      setInterval(updateLive, 100);
+      updateLive();
+
+      // Double click to toggle live mode and reset zoom
+      document.getElementById('chart').addEventListener('dblclick', () => {
+        liveMode = true;
+        chart.options.scales.x.min = undefined;
+        chart.options.scales.x.max = undefined;
+        window._highlightsCache = window._highlightsCacheAll || [];
+        chart.update();
+      });
+
+      // When user zooms/pans, disable live mode
+      chart.options.plugins.zoom.onZoomComplete = ({chart}) => { liveMode = false; onRangeChanged(chart); };
+      chart.options.plugins.zoom.onPanComplete = ({chart}) => { liveMode = false; onRangeChanged(chart); };
+
 
       // QR code and copy URL
       (function setupQR() {

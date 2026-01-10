@@ -34,7 +34,7 @@ def startup_event():
     try:
         from .display_manager import start_display
         display_port = int(os.environ.get("PIKA_PORT", "8000"))
-        start_display(logger, auto_ip=True, port=display_port, fps=5.0)
+        start_display(logger, auto_ip=True, port=display_port, fps=5.0, data_dir=DATA_DIR)
     except Exception:
         # non-fatal: continue if display is not available
         import logging as _logging
@@ -126,6 +126,18 @@ def api_highlights():
         import logging as _logging
         _logging.getLogger(__name__).exception("Error returning highlights")
     return JSONResponse({"highlights": []})
+
+@app.get("/api/range")
+def api_range(start: float, end: float, max_points: int = 1000):
+    """Return downsampled data for the requested time range (epoch seconds)."""
+    try:
+        start = float(start)
+        end = float(end)
+        max_points = int(max_points)
+    except Exception:
+        return JSONResponse({"data": []})
+    data = logger.get_range(start, end, max_points=max_points)
+    return JSONResponse({"data": [[ts, val] for ts, val in data]})
 
 if __name__ == "__main__":
     import uvicorn

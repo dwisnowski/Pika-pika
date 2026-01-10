@@ -21,10 +21,11 @@ from .display_qr import make_qr_image, show_on_waveshare, get_local_ip, DISPLAY_
 logger = logging.getLogger(__name__)
 
 class DisplayManager:
-    def __init__(self, logger_obj, url: Optional[str] = None, auto_ip: bool = True, port: int = 8000, fps: float = 5.0):
+    def __init__(self, logger_obj, url: Optional[str] = None, auto_ip: bool = True, port: int = 8000, fps: float = 5.0, data_dir: str = "data"):
         self.logger = logger_obj
         self.auto_ip = auto_ip
         self.port = port
+        self.data_dir = data_dir
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self.fps = fps
@@ -114,14 +115,43 @@ class DisplayManager:
         else:
             vtext = f"Voltage: {voltage:.3f} V"
         tw, th = draw.textsize(vtext, font=self.font)
-        draw.rectangle((8, DISPLAY_H - 28, 8 + tw + 12, DISPLAY_H - 6), fill=(240,240,240))
-        draw.text((14, DISPLAY_H - 24), vtext, fill=(0,0,0), font=self.font)
+        draw.rectangle((8, DISPLAY_H - 48, 8 + tw + 12, DISPLAY_H - 26), fill=(240,240,240))
+        draw.text((14, DISPLAY_H - 44), vtext, fill=(0,0,0), font=self.font)
+
+        # Anomaly count (past 3 hours)
+        anom_count = self._get_recent_anomaly_count(hours=3)
+        anom_text = f"Anom(3h): {anom_count}"
+        atw, ath = draw.textsize(anom_text, font=self.font)
+        draw.rectangle((8, DISPLAY_H - 26, 8 + atw + 12, DISPLAY_H - 6), fill=(250,240,240))
+        draw.text((14, DISPLAY_H - 22), anom_text, fill=(120,10,20), font=self.font)
 
         # small timestamp
         ts = time.strftime("%H:%M:%S")
         draw.text((DISPLAY_W - 8 - draw.textsize(ts, font=self.font)[0], DISPLAY_H - 24), ts, fill=(80,80,80), font=self.font)
 
         return im
+
+    def _get_recent_anomaly_count(self, hours: float = 3.0) -> int:
+        """Count highlights in `data/highlights.json` whose end or peak is within the past `hours` hours."""
+        try:
+            path = os.path.join(self.data_dir, 'highlights.json')
+            if not os.path.exists(path):
+                return 0
+            import json
+            with open(path, 'r') as f:
+                data = json.load(f)
+            now = time.time()
+            cutoff = now - (float(hours) * 3600.0)
+            count = 0
+            for h in data:
+                end_ts = h.get('end_ts') or 0
+                peak_ts = h.get('peak_ts') or 0
+                if end_ts >= cutoff or peak_ts >= cutoff:
+                    count += 1
+            return count
+        except Exception:
+            logger.exception("Failed to read highlights.json for anomaly count")
+            return 0
 
     def _run(self):
         # Render initial QR immediately
@@ -152,10 +182,10 @@ class DisplayManager:
 # Simple helper for external use
 _mgr: Optional[DisplayManager] = None
 
-def start_display(logger_obj, url: Optional[str] = None, auto_ip: bool = True, port: int = 8000, fps: float = 5.0):
+def start_display(logger_obj, url: Optional[str] = None, auto_ip: bool = True, port: int = 8000, fps: float = 5.0, data_dir: str = 'data'):
     global _mgr
     if _mgr is None:
-        _mgr = DisplayManager(logger_obj, url=url, auto_ip=auto_ip, port=port, fps=fps)
+        _mgr = DisplayManager(logger_obj, url=url, auto_ip=auto_ip, port=port, fps=fps, data_dir=data_dir)
         _mgr.start()
     return _mgr
 
