@@ -23,7 +23,7 @@ help:
 	@echo "  make docs-sync      - Sync README.md into docs before building"
 	@echo "  make icons          - Generate favicons and optimized image assets from PNG"
 	@echo "  make venv           - Create virtual environment"
-    @echo "  make install        - Install dependencies"
+	@echo "  make install        - Install dependencies"
 	@echo "  make clean          - Remove virtual environment and build artifacts"
 	@echo ""
 	@echo "Quick start (production):"
