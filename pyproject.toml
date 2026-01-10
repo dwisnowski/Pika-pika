@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pika-pika"
+version = "0.1.0"
+description = "Python-based Raspberry Pi voltage logger and live web viewer"
+authors = [ { name = "dwisnowski" } ]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+  "fastapi>=0.95.0",
+  "uvicorn[standard]>=0.22.0",
+  "aiofiles>=23.1.0",
+  "python-dotenv>=1.0.0",
+  # ADS1115 library is optional for non-Pi testing or when hardware is present
+  "adafruit-circuitpython-ads1x15>=3.4.0 ; extra == 'hardware'",
+]
+
+[project.optional-dependencies]
+hardware = ["adafruit-circuitpython-ads1x15>=3.4.0"]
+
+[project.urls]
+"Home" = "https://github.com/dwisnowski/Pika-pika"
+
+[tool.setuptools]
+package-dir = {"" = ""}
+packages = ["pika"]
