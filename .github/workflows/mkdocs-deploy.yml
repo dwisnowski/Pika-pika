@@ -3,6 +3,10 @@ name: Deploy MkDocs site to GitHub Pages
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/mkdocs-deploy.yml'
 
 permissions:
   contents: write
