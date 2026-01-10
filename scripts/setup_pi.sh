@@ -24,10 +24,9 @@ set -euo pipefail
 #    - Configures uv to be available in PATH
 #
 # 3. PYTHON ENVIRONMENT:
-#    - Creates a Python virtual environment (.venv) if it doesn't exist
-#    - Upgrades pip, setuptools, and wheel in the virtual environment
-#    - Installs the Pika-pika package and all required dependencies
-#    - Attempts to install optional hardware dependencies (ADS1115 library)
+#    - Creates a Python virtual environment (.venv) automatically if needed (via uv)
+#    - Syncs and installs the Pika-pika package and all required dependencies using uv
+#    - Attempts to install optional hardware dependencies (ADS1115 library) using uv
 #
 # 4. PROJECT SETUP:
 #    - Creates a data/ directory for logging voltage data
@@ -78,21 +77,13 @@ if ! command -v uv &> /dev/null; then
   fi
 fi
 
-# Create a virtualenv if needed
-if [ ! -d ".venv" ]; then
-  echo "[pika-pika] Creating virtualenv (.venv)"
-  python3 -m venv .venv
-fi
-
-echo "[pika-pika] Activating venv and installing Python dependencies..."
-# shellcheck disable=SC1091
-. .venv/bin/activate
-uv pip install --upgrade pip setuptools wheel
-uv pip install . || { echo "[pika-pika] uv pip install failed"; exit 1; }
+# Sync dependencies and install package (uv will create venv if needed)
+echo "[pika-pika] Syncing dependencies and installing package using uv..."
+uv sync || { echo "[pika-pika] uv sync failed"; exit 1; }
 
 # Try installing optional hardware deps, but don't fail if not present
 echo "[pika-pika] Installing optional hardware extras (ADS1115). This may fail on non-Pi or missing wheels; it's optional." 
-uv pip install .[hardware] || echo "[pika-pika] Optional hardware extras could not be installed (continue)"
+uv sync --extra hardware || echo "[pika-pika] Optional hardware extras could not be installed (continue)"
 
 mkdir -p data
 chmod 775 data || true

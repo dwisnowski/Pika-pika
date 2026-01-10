@@ -3,7 +3,7 @@ PY := $(VENV)/bin/python
 UV := uv
 UVICORN := $(VENV)/bin/uvicorn
 
-.PHONY: help setup venv install fresh-install run dev docs docs-sync docs-serve icons clean
+.PHONY: help setup venv install sync fresh-install run dev docs docs-sync docs-serve icons clean
 
 # Default target
 help:
@@ -11,19 +11,16 @@ help:
 	@echo ""
 	@echo "Production (Raspberry Pi) targets:"
 	@echo "  make setup          - Run initial setup script (installs system packages, creates venv, installs deps)"
-	@echo "  make venv           - Create Python virtual environment (.venv)"
-	@echo "  make install        - Install the package and dependencies (requires venv)"
+	@echo "  make sync           - Sync dependencies and install package using uv (creates venv if needed)"
 	@echo "  make run            - Run the app in production mode (single worker for low-powered devices)"
 	@echo ""
 	@echo "Development targets:"
-	@echo "  make fresh-install  - Fresh install: create venv + install dependencies (one command)"
+	@echo "  make sync           - Sync dependencies and install package (creates venv if needed)"
 	@echo "  make dev            - Run the app in development mode with auto-reload"
-	@echo "  make docs           - Build MkDocs documentation site (requires venv)"
-	@echo "  make docs-serve     - Serve docs locally for development (requires venv)"
+	@echo "  make docs           - Build MkDocs documentation site (syncs docs dependencies)"
+	@echo "  make docs-serve     - Serve docs locally for development (syncs docs dependencies)"
 	@echo "  make docs-sync      - Sync README.md into docs before building"
 	@echo "  make icons          - Generate favicons and optimized image assets from PNG"
-	@echo "  make venv           - Create virtual environment"
-	@echo "  make install        - Install dependencies"
 	@echo "  make clean          - Remove virtual environment and build artifacts"
 	@echo ""
 	@echo "Quick start (production):"
@@ -31,7 +28,7 @@ help:
 	@echo "  make run            # Start the application"
 	@echo ""
 	@echo "Quick start (development):"
-	@echo "  make fresh-install  # Create venv and install dependencies"
+	@echo "  make fresh-install  # Create venv and sync dependencies"
 	@echo "  make dev            # Run with auto-reload"
 
 # ============================================================================
@@ -42,14 +39,16 @@ help:
 setup:
 	@bash scripts/setup_pi.sh
 
-# Create Python virtual environment
+# Create Python virtual environment using uv
 venv:
-	python3 -m venv $(VENV)
-	$(UV) pip install --upgrade pip setuptools wheel
+	$(UV) venv $(VENV)
 
-# Install the package and dependencies (requires venv)
-install: venv
-	$(UV) pip install .
+# Sync dependencies and install the package (creates venv if needed)
+sync:
+	$(UV) sync
+
+# Install the package and dependencies (alias for sync, creates venv if needed)
+install: sync
 
 # Run the app in production mode (single worker for low-powered devices)
 run:
@@ -59,19 +58,13 @@ run:
 # Development targets
 # ============================================================================
 
-# Fresh install: create venv and install all dependencies in one command
-fresh-install: venv install
-	@echo ""
-	@echo "Fresh install complete! Virtual environment created and dependencies installed."
-	@echo "Run 'make dev' to start the development server."
-
 # Run the app in development mode with auto-reload
 dev:
 	$(UVICORN) pika.app:app --reload --host 0.0.0.0 --port 8000
 
 # Build the MkDocs documentation site
-docs: venv docs-sync
-	$(UV) pip install mkdocs mkdocs-material
+docs: docs-sync
+	$(UV) sync --extra docs
 	$(VENV)/bin/mkdocs build
 
 # Sync README.md into docs before building
@@ -79,8 +72,8 @@ docs-sync:
 	$(PY) scripts/sync_readme_to_docs.py
 
 # Serve the docs locally for development
-docs-serve: venv
-	$(UV) pip install mkdocs mkdocs-material
+docs-serve:
+	$(UV) sync --extra docs
 	$(VENV)/bin/mkdocs serve
 
 # Generate favicons and optimized image assets

@@ -155,7 +155,7 @@ If you have a Waveshare 2" LCD attached to the Pi (SPI), you can render the QR c
 # using the helper script (preferred)
 bash scripts/setup_pi.sh
 # or install the display optional deps directly:
-uv pip install .[display]
+uv sync --extra display
 ```
 
 - Generate and show the QR code (auto-detect local IP):
