@@ -9,18 +9,21 @@ This documentation contains quick links and usage for the project. The full READ
 
 ## Quick start
 
-1. Create a Python virtual environment and install dependencies:
+1. Set up the virtual environment and install dependencies:
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-uv pip install .
+make venv
+make install
 ```
 
 2. Run the app:
 
 ```bash
-uvicorn pika.app:app --host 0.0.0.0 --port 8000
+# For production use:
+make run
+
+# For development with auto-reload:
+make dev
 ```
 
 3. Open `http://<pi-ip>:8000/` or the demo at `http://<pi-ip>:8000/demo`.

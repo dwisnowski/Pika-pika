@@ -50,21 +50,26 @@ Password: pikachu
 
 1. Flash a microSD card with Raspberry Pi OS (with Python 3).
 2. Connect the ADS1115 (I2C) and ZMPT101B sensor to the Pi following `docs/wiring.svg`.
-3. Install Python dependencies and install the package:
+3. Set up the virtual environment and install dependencies:
 
 ```bash
-uv pip install .
+make venv
+make install
 ```
 
 4. Run the app (this starts sampling at 100 Hz and serves the web UI):
 
 ```bash
-# Run with uvicorn (ASGI server)
-uvicorn pika.app:app --host 0.0.0.0 --port 8000
-# or use the Makefile (recommended):
-make venv
-make install
+# For production use (recommended):
 make run
+
+# For development with auto-reload:
+make dev
+```
+
+Alternatively, you can run manually with uvicorn:
+```bash
+.venv/bin/uvicorn pika.app:app --host 0.0.0.0 --port 8000
 ```
 
 5. Quick setup on Raspberry Pi
