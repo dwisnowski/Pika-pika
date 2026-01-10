@@ -28,7 +28,7 @@ jobs:
 
       - name: Install mkdocs
         run: |
-          uv pip install mkdocs mkdocs-material
+          uv pip install --system mkdocs mkdocs-material
 
       - name: Sync README into docs
         run: python scripts/sync_readme_to_docs.py
