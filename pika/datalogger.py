@@ -44,21 +44,80 @@ except Exception:
     ADS1115ADC = None
 
 class Datalogger:
-    def __init__(self, data_dir="data", filename="log.csv", sample_hz=100, adc=None):
+    def __init__(self, data_dir="data", filename_prefix="log", sample_hz=100, adc=None, retention_days=5):
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
-        self.filepath = os.path.join(self.data_dir, filename)
+        self.filename_prefix = filename_prefix
         self.sample_hz = sample_hz
         self.interval = 1.0 / float(self.sample_hz)
         self.adc = adc if adc is not None else (ADS1115ADC() if ADS1115ADC else MockADC())
         self._stop = threading.Event()
         self._thread = None
         self._buffer = deque(maxlen=int(self.sample_hz * 60))  # keep last 60s in memory
-        # ensure file exists with header
-        if not os.path.exists(self.filepath):
-            with open(self.filepath, "w", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerow(["timestamp", "value"])
+        self._current_date = None
+        self._file = None
+        self.retention_days = int(retention_days)
+        # open initial file
+        self._open_log_file_for_today()
+
+    def _log_filename_for_date(self, dt):
+        return os.path.join(self.data_dir, f"{self.filename_prefix}-{dt.strftime('%Y%m%d')}.csv")
+
+    def _open_log_file_for_today(self):
+        dt = time.localtime()
+        today = time.strftime("%Y%m%d", dt)
+        if self._current_date == today and self._file:
+            return
+        # close previous file
+        if self._file:
+            try:
+                self._file.close()
+            except Exception:
+                logging.exception("Error closing previous log file")
+            # compress previous day's file
+            try:
+                prev_path = self._log_filename_for_date(time.localtime(time.time() - 86400))
+                if os.path.exists(prev_path) and not os.path.exists(prev_path + ".gz"):
+                    import gzip, shutil
+                    with open(prev_path, 'rb') as f_in, gzip.open(prev_path + '.gz', 'wb') as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                    os.remove(prev_path)
+            except Exception:
+                logging.exception("Error compressing previous log file")
+            # cleanup old logs
+            try:
+                self._cleanup_old_logs()
+            except Exception:
+                logging.exception("Error cleaning up old logs")
+
+        self._current_date = today
+        filepath = self._log_filename_for_date(time.localtime())
+        new_file = not os.path.exists(filepath)
+        self._file = open(filepath, "a", newline="")
+        if new_file:
+            writer = csv.writer(self._file)
+            writer.writerow(["timestamp", "value"])
+            self._file.flush()
+            try:
+                os.fsync(self._file.fileno())
+            except Exception:
+                pass
+
+    def _cleanup_old_logs(self):
+        # remove files older than retention_days (both .csv and .csv.gz)
+        now = time.time()
+        threshold = now - (self.retention_days * 24 * 3600)
+        for fn in os.listdir(self.data_dir):
+            if not (fn.startswith(self.filename_prefix + "-") and (fn.endswith('.csv') or fn.endswith('.csv.gz'))):
+                continue
+            path = os.path.join(self.data_dir, fn)
+            try:
+                mtime = os.path.getmtime(path)
+                if mtime < threshold:
+                    os.remove(path)
+                    logging.info("Removed old log file %s", path)
+            except Exception:
+                logging.exception("Error removing old log file %s", path)
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -66,7 +125,7 @@ class Datalogger:
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
-        logging.info("Datalogger started (%.1f Hz) -> %s", self.sample_hz, self.filepath)
+        logging.info("Datalogger started (%.1f Hz) -> %s-YYYYMMDD.csv", self.sample_hz, self.filename_prefix)
 
     def stop(self):
         self._stop.set()
@@ -75,29 +134,84 @@ class Datalogger:
         logging.info("Datalogger stopped")
 
     def _run(self):
-        # open file once and append
-        with open(self.filepath, "a", newline="") as f:
-            writer = csv.writer(f)
-            next_sample = time.perf_counter()
-            while not self._stop.is_set():
-                ts = time.time()
-                try:
-                    val = float(self.adc.read())
-                except Exception as e:
-                    logging.exception("ADC read failed, using NaN: %s", e)
-                    val = float('nan')
+        next_sample = time.perf_counter()
+        while not self._stop.is_set():
+            # ensure we have today's file
+            try:
+                self._open_log_file_for_today()
+            except Exception:
+                logging.exception("Error ensuring daily log file")
+
+            ts = time.time()
+            try:
+                val = float(self.adc.read())
+            except Exception as e:
+                logging.exception("ADC read failed, using NaN: %s", e)
+                val = float('nan')
+
+            try:
+                writer = csv.writer(self._file)
                 writer.writerow(["{:.6f}".format(ts), "{:.6f}".format(val)])
-                f.flush()
-                os.fsync(f.fileno())
-                self._buffer.append((ts, val))
-                # sleep until next scheduled sample
-                next_sample += self.interval
-                sleep_for = next_sample - time.perf_counter()
-                if sleep_for > 0:
-                    time.sleep(sleep_for)
+                try:
+                    self._file.flush()
+                    os.fsync(self._file.fileno())
+                except Exception:
+                    pass
+            except Exception:
+                logging.exception("Failed to write sample to disk")
+
+            self._buffer.append((ts, val))
+
+            # sleep until next scheduled sample
+            next_sample += self.interval
+            sleep_for = next_sample - time.perf_counter()
+            if sleep_for > 0:
+                time.sleep(sleep_for)
+            else:
+                # we're behind schedule — skip sleeping to catch up
+                next_sample = time.perf_counter()
+
+    def get_recent(self, seconds=5.0):
+        cutoff = time.time() - float(seconds)
+        return [(ts, val) for ts, val in list(self._buffer) if ts >= cutoff]
+
+    def tail_from_disk(self, seconds=10.0, max_lines=10000):
+        """Fill buffer from disk by reading last lines up to `seconds` window (best effort)."""
+        # best-effort: read today's file and previous day's compressed file if needed
+        today_path = self._log_filename_for_date(time.localtime())
+        prev_path = self._log_filename_for_date(time.localtime(time.time() - 86400))
+        paths = []
+        if os.path.exists(today_path):
+            paths.append(today_path)
+        if os.path.exists(prev_path):
+            paths.append(prev_path)
+        if os.path.exists(prev_path + '.gz'):
+            paths.append(prev_path + '.gz')
+
+        lines = []
+        try:
+            for path in paths:
+                if path.endswith('.gz'):
+                    import gzip
+                    with gzip.open(path, 'rt') as f:
+                        reader = csv.reader(f)
+                        next(reader, None)
+                        for row in reader:
+                            if len(row) >= 2:
+                                lines.append((float(row[0]), float(row[1])))
                 else:
-                    # we're behind schedule — skip sleeping to catch up
-                    next_sample = time.perf_counter()
+                    with open(path, 'r') as f:
+                        reader = csv.reader(f)
+                        next(reader, None)
+                        for row in reader:
+                            if len(row) >= 2:
+                                lines.append((float(row[0]), float(row[1])))
+            cutoff = time.time() - seconds
+            for ts, val in lines:
+                if ts >= cutoff:
+                    self._buffer.append((ts, val))
+        except Exception:
+            logging.exception("Failed to tail from disk.")
 
     def get_recent(self, seconds=5.0):
         cutoff = time.time() - float(seconds)

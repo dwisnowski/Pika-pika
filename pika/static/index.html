@@ -13,15 +13,30 @@
   <body>
     <h2>Pika-pika Live Voltage Monitor</h2>
     <p>Shows recent sampled values (live). Data is sampled at 100 Hz and stored on the device.</p>
-    <div id="chartwrap">
-      <canvas id="chart" width="900" height="300"></canvas>
+
+    <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+      <div id="chartwrap" style="flex:1;min-width:320px;max-width:900px;">
+        <canvas id="chart" width="900" height="300"></canvas>
+      </div>
+
+      <div id="qrbox" style="width:200px;flex:0 0 200px;text-align:center;">
+        <h4 style="margin:0 0 8px 0">Scan to open</h4>
+        <div id="qrcode"></div>
+        <div style="margin-top:8px;font-size:12px;word-break:break-all;" id="qurl"></div>
+        <button id="copyBtn" style="margin-top:8px;padding:6px 10px;font-size:13px;">Copy URL</button>
+        <div style="margin-top:6px;font-size:12px;color:#666;">Scan this QR code to open the same UI on another device</div>
+      </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <script>
       const ctx = document.getElementById('chart').getContext('2d');
       const chart = new Chart(ctx, {
         type: 'line',
-        data: { labels: [], datasets: [{ label: 'Voltage', data: [], borderColor: 'rgb(75, 192, 192)', tension: 0.1 }] },
+        data: { labels: [], datasets: [
+          { label: 'Voltage', data: [], borderColor: 'rgb(75, 192, 192)', tension: 0.1, pointRadius: 0 },
+          { label: 'Anomalies', data: [], borderColor: 'rgb(220,20,60)', backgroundColor: 'rgb(220,20,60)', showLine: false, pointRadius: 5 }
+        ] },
         options: { animation: false, scales: { x: { type: 'time', time: { unit: 'second', tooltipFormat: 'HH:mm:ss.SSS' } }, y: { suggestedMin: 0, suggestedMax: 3.3 } } }
       });
 
@@ -32,6 +47,21 @@
           const data = payload.data || [];
           chart.data.labels = data.map(d => new Date(d[0]*1000));
           chart.data.datasets[0].data = data.map(d => ({x: new Date(d[0]*1000), y: d[1]}));
+          // also fetch highlights and render anomalies as red points
+          try {
+            const hr = await fetch('/api/highlights');
+            const hjson = await hr.json();
+            const highlights = hjson.highlights || [];
+            const anomalyPoints = [];
+            highlights.forEach(h => {
+              // include peak point as annotation
+              anomalyPoints.push({ x: new Date(h.peak_ts * 1000), y: h.peak_value });
+            });
+            chart.data.datasets[1].data = anomalyPoints;
+          } catch (e) {
+            console.error('highlights fetch error', e);
+          }
+
           chart.update();
         } catch (e) {
           console.error('fetch error', e);
@@ -41,6 +71,41 @@
       // poll at 10 Hz for UI updates (web UI doesn't need 100 Hz)
       setInterval(fetchRecent, 100);
       fetchRecent();
+
+      // QR code and copy URL
+      (function setupQR() {
+        const origin = window.location.origin;
+        const qurl = document.getElementById('qurl');
+        const qrbox = document.getElementById('qrcode');
+        const copyBtn = document.getElementById('copyBtn');
+
+        qurl.textContent = origin;
+        // create a canvas and render QR
+        const canvas = document.createElement('canvas');
+        qrbox.appendChild(canvas);
+        if (window.QRCode && QRCode.toCanvas) {
+          QRCode.toCanvas(canvas, origin, { width: 160 }, function (err) {
+            if (err) console.error(err);
+          });
+        } else {
+          // fallback to img-based API
+          const img = document.createElement('img');
+          img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent(origin);
+          qrbox.appendChild(img);
+        }
+
+        copyBtn.addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(origin);
+            copyBtn.textContent = 'Copied!';
+            setTimeout(() => copyBtn.textContent = 'Copy URL', 1500);
+          } catch (e) {
+            console.error('copy failed', e);
+            copyBtn.textContent = 'Copy failed';
+            setTimeout(() => copyBtn.textContent = 'Copy URL', 1500);
+          }
+        });
+      })();
     </script>
   </body>
 </html>
