@@ -648,7 +648,7 @@ sudo systemctl restart pika-pika
 <pre><code class="language-bash"># using the helper script (preferred)
 bash scripts/setup_pi.sh
 # or install the display optional deps directly:
-uv pip install .[display]
+uv sync --extra display
 </code></pre>
 <ul>
 <li>Generate and show the QR code (auto-detect local IP):</li>
