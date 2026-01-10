@@ -8,6 +8,8 @@ This module attempts to use the same display drivers as `pika/display_qr.py` and
 """
 from __future__ import annotations
 
+import os
+import platform
 import threading
 import time
 import logging
@@ -114,20 +116,24 @@ class DisplayManager:
             vtext = "Voltage: -- V"
         else:
             vtext = f"Voltage: {voltage:.3f} V"
-        tw, th = draw.textsize(vtext, font=self.font)
+        bbox = draw.textbbox((0, 0), vtext, font=self.font)
+        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
         draw.rectangle((8, DISPLAY_H - 48, 8 + tw + 12, DISPLAY_H - 26), fill=(240,240,240))
         draw.text((14, DISPLAY_H - 44), vtext, fill=(0,0,0), font=self.font)
 
         # Anomaly count (past 3 hours)
         anom_count = self._get_recent_anomaly_count(hours=3)
         anom_text = f"Anom(3h): {anom_count}"
-        atw, ath = draw.textsize(anom_text, font=self.font)
+        abbox = draw.textbbox((0, 0), anom_text, font=self.font)
+        atw, ath = abbox[2] - abbox[0], abbox[3] - abbox[1]
         draw.rectangle((8, DISPLAY_H - 26, 8 + atw + 12, DISPLAY_H - 6), fill=(250,240,240))
         draw.text((14, DISPLAY_H - 22), anom_text, fill=(120,10,20), font=self.font)
 
         # small timestamp
         ts = time.strftime("%H:%M:%S")
-        draw.text((DISPLAY_W - 8 - draw.textsize(ts, font=self.font)[0], DISPLAY_H - 24), ts, fill=(80,80,80), font=self.font)
+        ts_bbox = draw.textbbox((0, 0), ts, font=self.font)
+        ts_width = ts_bbox[2] - ts_bbox[0]
+        draw.text((DISPLAY_W - 8 - ts_width, DISPLAY_H - 24), ts, fill=(80,80,80), font=self.font)
 
         return im
 
@@ -154,6 +160,12 @@ class DisplayManager:
             return 0
 
     def _run(self):
+        # Skip LCD operations entirely if not on Linux (Raspberry Pi)
+        is_linux = platform.system() == "Linux"
+        if not is_linux:
+            logger.info("DisplayManager: skipping LCD operations (not on Linux/Raspberry Pi)")
+            return
+
         # Render initial QR immediately
         try:
             frame = self._draw_frame()

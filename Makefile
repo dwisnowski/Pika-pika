@@ -1,9 +1,6 @@
-VENV := .venv
-PY := $(VENV)/bin/python
 UV := uv
-UVICORN := $(VENV)/bin/uvicorn
 
-.PHONY: help setup venv install sync fresh-install run dev docs docs-sync docs-serve icons clean
+.PHONY: help setup sync fresh-install run dev docs docs-sync docs-serve icons clean
 
 # Default target
 help:
@@ -15,7 +12,6 @@ help:
 	@echo "  make run            - Run the app in production mode (single worker for low-powered devices)"
 	@echo ""
 	@echo "Development targets:"
-	@echo "  make sync           - Sync dependencies and install package (creates venv if needed)"
 	@echo "  make dev            - Run the app in development mode with auto-reload"
 	@echo "  make docs           - Build MkDocs documentation site (syncs docs dependencies)"
 	@echo "  make docs-serve     - Serve docs locally for development (syncs docs dependencies)"
@@ -28,7 +24,7 @@ help:
 	@echo "  make run            # Start the application"
 	@echo ""
 	@echo "Quick start (development):"
-	@echo "  make fresh-install  # Create venv and sync dependencies"
+	@echo "  make sync           # Sync dependencies and install package"
 	@echo "  make dev            # Run with auto-reload"
 
 # ============================================================================
@@ -39,20 +35,13 @@ help:
 setup:
 	@bash scripts/setup_pi.sh
 
-# Create Python virtual environment using uv
-venv:
-	$(UV) venv $(VENV)
-
 # Sync dependencies and install the package (creates venv if needed)
 sync:
 	$(UV) sync
 
-# Install the package and dependencies (alias for sync, creates venv if needed)
-install: sync
-
 # Run the app in production mode (single worker for low-powered devices)
 run:
-	$(UVICORN) pika.app:app --host 0.0.0.0 --port 8000 --workers 1
+	$(UV) run uvicorn pika.app:app --host 0.0.0.0 --port 8000 --workers 1
 
 # ============================================================================
 # Development targets
@@ -60,25 +49,25 @@ run:
 
 # Run the app in development mode with auto-reload
 dev:
-	$(UVICORN) pika.app:app --reload --host 0.0.0.0 --port 8000
+	$(UV) run uvicorn pika.app:app --reload --host 0.0.0.0 --port 8000
 
 # Build the MkDocs documentation site
 docs: docs-sync
 	$(UV) sync --extra docs
-	$(VENV)/bin/mkdocs build
+	$(UV) run mkdocs build
 
 # Sync README.md into docs before building
 docs-sync:
-	$(PY) scripts/sync_readme_to_docs.py
+	$(UV) run python scripts/sync_readme_to_docs.py
 
 # Serve the docs locally for development
 docs-serve:
 	$(UV) sync --extra docs
-	$(VENV)/bin/mkdocs serve
+	$(UV) run mkdocs serve
 
 # Generate favicons and optimized image assets
 icons:
-	python scripts/generate_icons.py
+	$(UV) run python scripts/generate_icons.py
 
 # Clean up virtual environment and build artifacts
 clean:

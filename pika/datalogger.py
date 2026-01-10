@@ -61,7 +61,10 @@ class Datalogger:
         self._open_log_file_for_today()
 
     def _log_filename_for_date(self, dt):
-        return os.path.join(self.data_dir, f"{self.filename_prefix}-{dt.strftime('%Y%m%d')}.csv")
+        if hasattr(dt, 'strftime'):  # datetime object
+            return os.path.join(self.data_dir, f"{self.filename_prefix}-{dt.strftime('%Y%m%d')}.csv")
+        else:  # time.struct_time object
+            return os.path.join(self.data_dir, f"{self.filename_prefix}-{time.strftime('%Y%m%d', dt)}.csv")
 
     def _open_log_file_for_today(self):
         dt = time.localtime()
@@ -299,11 +302,12 @@ class Datalogger:
 
     def tail_from_disk(self, seconds=10.0, max_lines=10000):
         """Fill buffer from disk by reading last lines up to `seconds` window (best effort)."""
-        if not os.path.exists(self.filepath):
+        filepath = self._log_filename_for_date(time.localtime())
+        if not os.path.exists(filepath):
             return
         lines = []
         try:
-            with open(self.filepath, "r") as f:
+            with open(filepath, "r") as f:
                 # naive approach: read all but skip header if large files not expected
                 reader = csv.reader(f)
                 next(reader, None)
