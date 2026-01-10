@@ -19,7 +19,7 @@ dependencies = [
   "Pillow>=10.0",
   "sdnotify>=0.3.2",
   # ADS1115 library is optional for non-Pi testing or when hardware is present
-  "adafruit-circuitpython-ads1x15>=3.4.0 ; extra == 'hardware'",
+  "adafruit-circuitpython-ads1x15>=3.0.2 ; extra == 'hardware'",
 ]
 
 [project.optional-dependencies]
