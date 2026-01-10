@@ -16,9 +16,8 @@ Use the following guide to install and run this code on your pi:
 
 ### Run the demo on your local machine:
 ```bash
-make venv
-make install
-make run
+make fresh-install
+make dev
 ```
 
 3. Open `http://<pi-ip>:8000/` or the demo at `http://<pi-ip>:8000/demo`.

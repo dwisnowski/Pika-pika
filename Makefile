@@ -3,7 +3,7 @@ PY := $(VENV)/bin/python
 UV := uv
 UVICORN := $(VENV)/bin/uvicorn
 
-.PHONY: help setup venv install run dev docs docs-sync docs-serve icons clean
+.PHONY: help setup venv install fresh-install run dev docs docs-sync docs-serve icons clean
 
 # Default target
 help:
@@ -16,11 +16,14 @@ help:
 	@echo "  make run            - Run the app in production mode (single worker for low-powered devices)"
 	@echo ""
 	@echo "Development targets:"
+	@echo "  make fresh-install  - Fresh install: create venv + install dependencies (one command)"
 	@echo "  make dev            - Run the app in development mode with auto-reload"
 	@echo "  make docs           - Build MkDocs documentation site (requires venv)"
 	@echo "  make docs-serve     - Serve docs locally for development (requires venv)"
 	@echo "  make docs-sync      - Sync README.md into docs before building"
 	@echo "  make icons          - Generate favicons and optimized image assets from PNG"
+	@echo "  make venv           - Create virtual environment"
+    @echo "  make install        - Install dependencies"
 	@echo "  make clean          - Remove virtual environment and build artifacts"
 	@echo ""
 	@echo "Quick start (production):"
@@ -28,8 +31,7 @@ help:
 	@echo "  make run            # Start the application"
 	@echo ""
 	@echo "Quick start (development):"
-	@echo "  make venv           # Create virtual environment"
-	@echo "  make install        # Install dependencies"
+	@echo "  make fresh-install  # Create venv and install dependencies"
 	@echo "  make dev            # Run with auto-reload"
 
 # ============================================================================
@@ -56,6 +58,12 @@ run:
 # ============================================================================
 # Development targets
 # ============================================================================
+
+# Fresh install: create venv and install all dependencies in one command
+fresh-install: venv install
+	@echo ""
+	@echo "Fresh install complete! Virtual environment created and dependencies installed."
+	@echo "Run 'make dev' to start the development server."
 
 # Run the app in development mode with auto-reload
 dev:
