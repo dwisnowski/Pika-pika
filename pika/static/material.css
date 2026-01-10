@@ -1,0 +1,65 @@
+/* Dark Material-like theme for Pika-pika UI
+   Primary (pikachu yellow): #FFD54A
+   Buttons use black text on yellow for contrast.
+*/
+:root {
+  --bg: #121212;
+  --surface: #1e1e1e;
+  --muted: #9e9e9e;
+  --text: #eaeaea;
+  --primary: #FFD54A;
+  --primary-contrast: #000000; /* black text on yellow */
+  --danger: #ff5252;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+a { color: var(--primary); }
+
+.header { display:flex; align-items:center; gap:12px; }
+.header h2 { margin: 0; color: var(--text); }
+.header p { margin:0; color: var(--muted); }
+
+/* Buttons */
+.btn {
+  display:inline-block;
+  padding:8px 12px;
+  border-radius:4px;
+  text-decoration:none;
+  cursor:pointer;
+  user-select:none;
+  border: none;
+}
+
+.btn.primary {
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-weight: 600;
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.card { background: var(--surface); border-radius:8px; padding:12px; box-shadow: 0 1px 3px rgba(0,0,0,0.6); }
+
+#chartwrap { background: transparent; }
+#chart { background: transparent; }
+
+#highlightsList { background: transparent; color: var(--text); }
+
+/* QR box */
+#qrbox { background: var(--surface); padding:10px; border-radius:8px; }
+
+/* Logo */
+img[alt="Pika-pika logo"] { box-shadow: none; }
+
+/* small responsive tweaks */
+@media (max-width: 720px) {
+  #highlightsPanel { flex-direction: column; }
+}

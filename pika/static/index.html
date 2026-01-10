@@ -4,15 +4,28 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Pika-pika Live Monitor</title>
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart zoom plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
+    <!-- Material CSS (we use a simple CSS file with Material-like dark theme) -->
+    <link rel="stylesheet" href="/static/material.css">
+
     <style>
-      body { font-family: sans-serif; margin: 20px; }
+      /* Ensure the page padding but keep dark theme */
+      body { font-family: 'Roboto', 'Noto Sans', sans-serif; margin: 18px; }
       #chartwrap { max-width: 900px; }
     </style>
   </head>
   <body>
-    <h2>Pika-pika Live Voltage Monitor</h2>
-    <p>Shows recent sampled values (live). Data is sampled at 100 Hz and stored on the device.</p>
+    <div class="header" style="gap:18px;align-items:center;">
+      <img src="/static/logo.svg" alt="Pika-pika logo" width="72" height="72" style="border-radius:8px;"/>
+      <div>
+        <h2 style="margin:0">Pika-pika Live Voltage Monitor</h2>
+        <p style="margin:2px 0 0 0; font-size:90%">Shows recent sampled values (live). Data is sampled at 100 Hz and stored on the device.</p>
+      </div>
+    </div>
 
     <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
       <div id="chartwrap" style="flex:1;min-width:320px;max-width:900px;">
@@ -22,21 +35,21 @@
       <div id="qrbox" style="width:200px;flex:0 0 200px;text-align:center;">
         <h4 style="margin:0 0 8px 0">Scan to open</h4>
         <div id="qrcode"></div>
-        <div style="margin-top:8px;font-size:12px;word-break:break-all;" id="qurl"></div>
-        <button id="copyBtn" style="margin-top:8px;padding:6px 10px;font-size:13px;">Copy URL</button>
-        <div style="margin-top:6px;font-size:12px;color:#666;">Scan this QR code to open the same UI on another device</div>
+        <div style="margin-top:8px;font-size:12px;word-break:break-all; color: var(--muted);" id="qurl"></div>
+        <button id="copyBtn" class="btn primary" style="margin-top:8px;">Copy URL</button>
+        <div style="margin-top:6px;font-size:12px;color:var(--muted);">Scan this QR code to open the same UI on another device</div>
       </div>
     </div>
 
     <div id="highlightsPanel" style="margin-top:18px; display:flex; gap:16px; align-items:flex-start;">
       <div style="flex:1;">
         <h4 style="margin:6px 0">Live Voltage</h4>
-        <div id="chartwrap_small" style="max-width:900px;"></div>
+        <div id="chartwrap_small" style="max-width:900px;" class="card"></div>
       </div>
       <div style="width:320px;flex:0 0 320px;">
         <h4 style="margin:6px 0">Highlights</h4>
-        <div id="highlightsList" style="font-family:monospace; font-size:13px; max-height:420px; overflow:auto; padding:6px; border:1px solid #eee; border-radius:6px; background:#fafafa"></div>
-        <button id="resetView" style="margin-top:8px;padding:6px 10px;font-size:13px;">Reset View</button>
+        <div id="highlightsList" class="card" style="font-family:monospace; font-size:13px; max-height:420px; overflow:auto; padding:6px;"></div>
+        <button id="resetView" class="btn primary" style="margin-top:8px;">Reset View</button>
       </div>
     </div>
 
@@ -68,11 +81,15 @@
         }
       };
 
+      // Apply Chart.js dark colors
+      Chart.defaults.color = '#eaeaea';
+      Chart.defaults.backgroundColor = 'transparent';
+
       const chart = new Chart(ctx, {
         type: 'line',
         data: { labels: [], datasets: [
-          { label: 'Voltage', data: [], borderColor: 'rgb(75, 192, 192)', tension: 0.1, pointRadius: 0 },
-          { label: 'Anomalies', data: [], borderColor: 'rgb(220,20,60)', backgroundColor: 'rgb(220,20,60)', showLine: false, pointRadius: 5 }
+          { label: 'Voltage', data: [], borderColor: '#90CAF9', backgroundColor: 'rgba(144,202,249,0.06)', tension: 0.1, pointRadius: 0 },
+          { label: 'Anomalies', data: [], borderColor: '#FF6B6B', backgroundColor: '#FF6B6B', showLine: false, pointRadius: 5 }
         ] },
         options: {
           animation: false,
@@ -82,7 +99,7 @@
               zoom: { wheel: { enabled: true }, mode: 'x', pinch: { enabled: true }, onZoomComplete: ({chart}) => onRangeChanged(chart) }
             }
           },
-          scales: { x: { type: 'time', time: { unit: 'second', tooltipFormat: 'HH:mm:ss.SSS' } }, y: { suggestedMin: 0, suggestedMax: 3.3 } }
+          scales: { x: { type: 'time', time: { unit: 'second', tooltipFormat: 'HH:mm:ss.SSS' }, ticks: { color: '#d0d0d0' }, grid: { color: 'rgba(255,255,255,0.04)' } }, y: { suggestedMin: 0, suggestedMax: 3.3, ticks: { color: '#d0d0d0' }, grid: { color: 'rgba(255,255,255,0.04)' } } }
         },
         plugins: [highlightPlugin]
       });

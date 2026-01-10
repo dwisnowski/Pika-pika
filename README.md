@@ -1,5 +1,6 @@
 # Pika-pika
 
+![Pika-pika logo](docs/logo.svg)  
 A **Python-based** Raspberry Pi voltage logger and live web viewer.
 
 ## Project overview
