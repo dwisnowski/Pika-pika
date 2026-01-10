@@ -9,36 +9,16 @@ This documentation contains quick links and usage for the project. The full READ
 
 ## Quick start
 
-1. Set up the virtual environment and install dependencies:
+### Raspberry Pi instructions:
+Use the following guide to install and run this code on your pi:
+[rpi start guide](./rpi-setup-guide.md)
 
+
+### Run the demo on your local machine:
 ```bash
 make venv
 make install
-```
-
-2. Run the app:
-
-```bash
-# For production use:
 make run
-
-# For development with auto-reload:
-make dev
 ```
 
 3. Open `http://<pi-ip>:8000/` or the demo at `http://<pi-ip>:8000/demo`.
-
-
-## Documentation contribution
-
-Docs are built with MkDocs and the Material theme. To build locally:
-
-```bash
-make docs
-```
-
-To serve locally and iterate:
-
-```bash
-make docs-serve
-```

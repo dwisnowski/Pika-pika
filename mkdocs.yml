@@ -7,6 +7,7 @@ nav:
   - Hardware:
     - Parts: parts.md
     - Wiring steps: wiring-steps.md
+    - Raspberry Pi Setup Guide: rpi-setup-guide.md
   - Demo: demo.md
   - README: README-synced.md
 
