@@ -4,7 +4,7 @@ This page provides step-by-step wiring photos and guidance so you can assemble t
 
 ## Step 1 — Connect ADS1115
 
-![Step 1 — Connect ADS1115](/images/wiring-step-1.svg)
+![Step 1 — Connect ADS1115](./images/wiring-step-1.svg)
 
 - Connect ADS1115 VCC → Pi 3.3 V (Pin 1)
 - Connect ADS1115 GND → Pi GND (Pin 6)
@@ -13,7 +13,7 @@ This page provides step-by-step wiring photos and guidance so you can assemble t
 
 ## Step 2 — Connect ZMPT101B output to A0
 
-![Step 2 — Connect ZMPT101B](/images/wiring-step-2.svg)
+![Step 2 — Connect ZMPT101B](./images/wiring-step-2.svg)
 
 - Connect ZMPT101B Vout → ADS1115 A0
 - Connect ZMPT101B GND → Pi GND
@@ -23,7 +23,7 @@ This page provides step-by-step wiring photos and guidance so you can assemble t
 
 ## Step 3 — Verify and test
 
-![Step 3 — Verify and test](/images/wiring-step-3.svg)
+![Step 3 — Verify and test](./images/wiring-step-3.svg)
 
 - Power the Pi and run a low-rate read script to confirm values on A0.
 - Use the demo page (`/demo`) to confirm the UI and highlight detection before applying mains voltages.

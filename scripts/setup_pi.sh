@@ -18,6 +18,10 @@ set -euo pipefail
 #    - i2c-tools: Tools for I2C bus communication (required for ADS1115 ADC)
 #    - python3-dev: Python development headers
 #    - curl: Used to download and install uv
+#    - libjpeg-dev: JPEG image format support (required for Pillow)
+#    - zlib1g-dev: PNG compression support (required for Pillow)
+#    - libfreetype6-dev: Font rendering support (required for Pillow)
+#    - liblcms2-dev: Color management support (required for Pillow)
 #
 # 2. PACKAGE MANAGER:
 #    - Installs uv (fast Python package installer) if not present
@@ -55,7 +59,7 @@ set -euo pipefail
 
 echo "[pika-pika] Updating apt and installing system packages (requires sudo)..."
 sudo apt update
-sudo apt install -y python3 python3-venv build-essential git i2c-tools python3-dev curl
+sudo apt install -y python3 python3-venv build-essential git i2c-tools python3-dev curl libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev
 
 # Install uv if not already present and set up uv command
 if ! command -v uv &> /dev/null; then

@@ -35,7 +35,7 @@ This page lists the hardware used in the Pika‑pika project and provides exampl
 
 Below is an illustrative wiring diagram showing the Raspberry Pi, ADS1115 and ZMPT101B connections. This diagram is **illustrative only** and does not replace proper safety practices.
 
-![Wiring diagram](/wiring.svg)
+![Wiring diagram](./wiring.svg)
 
 ### Quick wiring summary
 
