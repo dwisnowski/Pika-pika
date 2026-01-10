@@ -322,16 +322,33 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#documentation-contribution" class="md-nav__link">
+    <nav class="md-nav" aria-label="Quick start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#raspberry-pi-instructions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Documentation contribution
+        Raspberry Pi instructions:
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#run-the-demo-on-your-local-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run the demo on your local machine:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -451,6 +468,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="rpi-setup-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Raspberry Pi Setup Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -547,16 +592,33 @@
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#documentation-contribution" class="md-nav__link">
+    <nav class="md-nav" aria-label="Quick start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#raspberry-pi-instructions" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Documentation contribution
+        Raspberry Pi instructions:
       
     </span>
   </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#run-the-demo-on-your-local-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run the demo on your local machine:
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -588,31 +650,17 @@
 <li>Demo UI: <code>/demo</code> (mock data — no hardware required)</li>
 </ul>
 <h2 id="quick-start">Quick start</h2>
-<ol>
-<li>Set up the virtual environment and install dependencies:</li>
-</ol>
+<h3 id="raspberry-pi-instructions">Raspberry Pi instructions:</h3>
+<p>Use the following guide to install and run this code on your pi:
+<a href="rpi-setup-guide/">rpi start guide</a></p>
+<h3 id="run-the-demo-on-your-local-machine">Run the demo on your local machine:</h3>
 <pre><code class="language-bash">make venv
 make install
-</code></pre>
-<ol>
-<li>Run the app:</li>
-</ol>
-<pre><code class="language-bash"># For production use:
 make run
-
-# For development with auto-reload:
-make dev
 </code></pre>
 <ol>
 <li>Open <code>http://&lt;pi-ip&gt;:8000/</code> or the demo at <code>http://&lt;pi-ip&gt;:8000/demo</code>.</li>
 </ol>
-<h2 id="documentation-contribution">Documentation contribution</h2>
-<p>Docs are built with MkDocs and the Material theme. To build locally:</p>
-<pre><code class="language-bash">make docs
-</code></pre>
-<p>To serve locally and iterate:</p>
-<pre><code class="language-bash">make docs-serve
-</code></pre>
 
 
 
