@@ -24,7 +24,7 @@ dependencies = [
 [project.optional-dependencies]
 # ADS1115 library is optional for non-Pi testing or when hardware is present
 hardware = ["adafruit-circuitpython-ads1x15>=3.0.0"]
-display = ["spidev", "RPi.GPIO", "Pillow>=10.0"]
+display = ["spidev", "RPi.GPIO", "Pillow>=10.0", "st7789"]
 docs = ["mkdocs>=1.4", "mkdocs-material>=9.0", "mkdocs-glightbox>=0.4.0"]
 
 [project.urls]
