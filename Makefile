@@ -47,6 +47,12 @@ sync:
 
 # Run the app in production mode (single worker for low-powered devices)
 run: check-running
+	@if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then \
+		echo "[pika-pika] Detected Raspberry Pi, installing hardware extras..."; \
+		$(UV) sync --extra hardware || echo "[pika-pika] Warning: hardware extras could not be installed"; \
+		echo "[pika-pika] Detected Raspberry Pi, installing display extras..."; \
+		$(UV) sync --extra display || echo "[pika-pika] Warning: display extras could not be installed"; \
+	fi
 	$(UV) run uvicorn pika.app:app --host 0.0.0.0 --port 8000 --workers 1
 
 # ============================================================================
