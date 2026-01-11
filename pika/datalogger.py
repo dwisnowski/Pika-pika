@@ -57,8 +57,30 @@ class Datalogger:
         self._current_date = None
         self._file = None
         self.retention_days = int(retention_days)
+        self._sample_callbacks = []  # Callbacks to call when new samples are added
         # open initial file
         self._open_log_file_for_today()
+
+    def add_sample_callback(self, callback):
+        """Add a callback function that gets called with (timestamp, value) when a new sample is added."""
+        self._sample_callbacks.append(callback)
+
+    def remove_sample_callback(self, callback):
+        """Remove a sample callback function."""
+        if callback in self._sample_callbacks:
+            self._sample_callbacks.remove(callback)
+
+    def set_sample_rate(self, sample_hz):
+        """Change the sample rate dynamically (1-100 Hz)."""
+        sample_hz = max(1, min(100, int(sample_hz)))  # Clamp to 1-100
+        if sample_hz != self.sample_hz:
+            self.sample_hz = sample_hz
+            self.interval = 1.0 / float(self.sample_hz)
+            # Update buffer size to maintain 60s of data
+            self._buffer = deque(self._buffer, maxlen=int(self.sample_hz * 60))
+            logging.info(f"Sample rate changed to {self.sample_hz} Hz")
+            return True
+        return False
 
     def _log_filename_for_date(self, dt):
         if hasattr(dt, 'strftime'):  # datetime object
@@ -164,6 +186,13 @@ class Datalogger:
                 logging.exception("Failed to write sample to disk")
 
             self._buffer.append((ts, val))
+
+            # Notify callbacks of new sample
+            for callback in self._sample_callbacks:
+                try:
+                    callback(ts, val)
+                except Exception:
+                    logging.exception("Error in sample callback")
 
             # sleep until next scheduled sample
             next_sample += self.interval

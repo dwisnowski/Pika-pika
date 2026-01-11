@@ -12,18 +12,19 @@ from typing import List, Tuple, Dict
 SAMPLE_HZ = 100
 
 # Define a few demo anomalies relative to current time (seconds ago)
-# Each entry: (seconds_ago_center, duration_sec, magnitude)
+# Each entry: (seconds_ago_center, duration_sec, magnitude, type)
+# type: 'spike' for positive magnitude, 'drop' for negative magnitude
 DEMO_ANOMALIES = [
-    (30 * 60, 6, 1.2),    # 30 minutes ago, 6s spike
-    (90 * 60, 10, -1.0),  # 90 minutes ago, 10s dip
-    (10 * 60, 3, 0.8),    # 10 minutes ago, 3s spike
+    (30 * 60, 6, 1.2, 'spike'),    # 30 minutes ago, 6s spike
+    (90 * 60, 10, -1.0, 'drop'),   # 90 minutes ago, 10s drop
+    (10 * 60, 3, 0.8, 'spike'),    # 10 minutes ago, 3s spike
+    (5 * 60, 4, -0.6, 'drop'),     # 5 minutes ago, 4s drop
 ]
 
 
 def _base_signal(ts: float) -> float:
-    # base AC-ish waveform around 1.5V with small 1Hz sine and random noise
-    t = ts
-    return 1.5 + math.sin(2.0 * math.pi * 1.0 * t) * 0.7 + (random.random() - 0.5) * 0.03
+    # Consistent voltage around 1.5V with small random noise (no sine wave)
+    return 1.5 + (random.random() - 0.5) * 0.01  # Very small noise, ~1.5V ± 0.005V
 
 
 def generate_samples(start_ts: float, end_ts: float, sample_hz: int = SAMPLE_HZ, inject_anomalies: bool = True) -> List[Tuple[float, float]]:
@@ -40,9 +41,14 @@ def generate_samples(start_ts: float, end_ts: float, sample_hz: int = SAMPLE_HZ,
     now = time.time()
     anomalies: List[Dict] = []
     if inject_anomalies:
-        for sec_ago_center, dur, mag in DEMO_ANOMALIES:
+        for sec_ago_center, dur, mag, anom_type in DEMO_ANOMALIES:
             center = now - sec_ago_center
-            anomalies.append({'start': center - dur / 2.0, 'end': center + dur / 2.0, 'mag': mag})
+            anomalies.append({
+                'start': center - dur / 2.0, 
+                'end': center + dur / 2.0, 
+                'mag': mag,
+                'type': anom_type
+            })
     while t <= end_ts:
         v = _base_signal(t)
         # apply anomalies
@@ -92,7 +98,7 @@ def highlights_for_range(start_ts: float, end_ts: float) -> List[Dict]:
     """Return highlight summaries for anomalies that intersect the requested range."""
     now = time.time()
     anomalies: List[Dict] = []
-    for sec_ago_center, dur, mag in DEMO_ANOMALIES:
+    for sec_ago_center, dur, mag, anom_type in DEMO_ANOMALIES:
         center = now - sec_ago_center
         a_start = center - dur / 2.0
         a_end = center + dur / 2.0
@@ -104,7 +110,8 @@ def highlights_for_range(start_ts: float, end_ts: float) -> List[Dict]:
                 'peak_ts': peak_ts,
                 'peak_value': 1.5 + mag,  # approximate
                 'duration': dur,
-                'score': abs(mag) * dur
+                'score': abs(mag) * dur,
+                'type': anom_type  # 'spike' or 'drop'
             })
     return anomalies
 
@@ -138,7 +145,7 @@ def range_query(start: float, end: float, max_points: int = 1000):
         v = _base_signal(t)
         now = time.time()
         # apply anomalies as in generate_samples
-        for sec_ago_center, dur, mag in DEMO_ANOMALIES:
+        for sec_ago_center, dur, mag, anom_type in DEMO_ANOMALIES:
             center = now - sec_ago_center
             a_start = center - dur / 2.0
             a_end = center + dur / 2.0

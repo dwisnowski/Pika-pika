@@ -1,0 +1,292 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Pika-pika — History</title>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js date adapter (required for time scales) -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <!-- Chart zoom plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
+    <!-- Material CSS (we use a simple CSS file with Material-like dark theme) -->
+    <link rel="stylesheet" href="/static/material.css">
+
+    <!-- Favicons and manifest -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon" />
+
+    <style>
+      body { font-family: 'Roboto', 'Noto Sans', sans-serif; margin: 18px; }
+      #chartwrap { max-width: 1200px; }
+    </style>
+  </head>
+  <body>
+    <div class="header" style="gap:18px;align-items:center;">
+      <img src="/static/Pika-pika.png" alt="Pika-pika logo" width="72" height="72" style="border-radius:8px;"/>
+      <div>
+        <h2 style="margin:0">Pika-pika Historical Data</h2>
+        <p style="margin:2px 0 0 0; font-size:90%">View downsampled historical data and highlights for extended time periods.</p>
+      </div>
+    </div>
+
+    <div style="margin-top:8px;display:flex;gap:8px;">
+      <a href="/" class="btn">Live</a>
+      <a href="/demo" class="btn">Demo</a>
+      <a href="/history" class="btn" aria-current="page">History</a>
+    </div>
+
+    <div style="margin-top:18px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+        <label style="font-size:14px;font-weight:bold;">Time Period:</label>
+        <button id="btn-1h" class="btn" style="font-size:12px;padding:6px 12px;">1 Hour</button>
+        <button id="btn-6h" class="btn" style="font-size:12px;padding:6px 12px;">6 Hours</button>
+        <button id="btn-1d" class="btn" style="font-size:12px;padding:6px 12px;">1 Day</button>
+        <button id="btn-3d" class="btn" style="font-size:12px;padding:6px 12px;">3 Days</button>
+        <button id="btn-5d" class="btn" style="font-size:12px;padding:6px 12px;">5 Days</button>
+        <span id="period-status" style="font-size:12px;color:#666;margin-left:16px;"></span>
+      </div>
+      <div id="chartwrap" style="flex:1;min-width:320px;max-width:1200px;">
+        <canvas id="chart" width="1200" height="400"></canvas>
+      </div>
+    </div>
+
+    <div id="highlightsPanel" style="margin-top:18px; display:flex; gap:16px; align-items:flex-start;">
+      <div style="flex:1;">
+        <h4 style="margin:6px 0">Historical Voltage Data</h4>
+        <p style="font-size:12px;color:#999;margin:4px 0;">Data is downsampled for performance. Use zoom/pan to explore details.</p>
+      </div>
+      <div style="width:320px;flex:0 0 320px;">
+        <h4 style="margin:6px 0">Highlights</h4>
+        <div id="highlightsList" class="card" style="font-family:monospace; font-size:13px; max-height:420px; overflow:auto; padding:6px;"></div>
+        <button id="resetView" class="btn primary" style="margin-top:8px;">Reset View</button>
+      </div>
+    </div>
+
+    <script>
+      const ctx = document.getElementById('chart').getContext('2d');
+
+      // plugin to draw shaded rectangles for highlight durations
+      const highlightPlugin = {
+        id: 'highlightPlugin',
+        afterDraw: (chart, args, options) => {
+          const highlights = window._highlightsCache || [];
+          if (!highlights.length) return;
+          const xScale = chart.scales['x'];
+          const ctx = chart.ctx;
+          const top = chart.chartArea.top;
+          const bottom = chart.chartArea.bottom;
+          ctx.save();
+          ctx.globalAlpha = 0.08;
+          ctx.fillStyle = 'rgb(220,20,60)';
+          highlights.forEach(h => {
+            const x1 = xScale.getPixelForValue(new Date(h.start_ts * 1000));
+            const x2 = xScale.getPixelForValue(new Date(h.end_ts * 1000));
+            // draw rectangle
+            ctx.fillRect(x1, top, Math.max(1, x2 - x1), bottom - top);
+          });
+          ctx.restore();
+        }
+      };
+
+      // Apply Chart.js dark colors
+      Chart.defaults.color = '#eaeaea';
+      Chart.defaults.backgroundColor = 'transparent';
+
+      const chart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: [], datasets: [
+          { label: 'Voltage', data: [], borderColor: '#90CAF9', backgroundColor: 'rgba(144,202,249,0.06)', tension: 0.1, pointRadius: 0 },
+          { label: 'Anomalies', data: [], borderColor: '#FF6B6B', backgroundColor: '#FF6B6B', showLine: false, pointRadius: 5 }
+        ] },
+        options: {
+          animation: false,
+          plugins: {
+            zoom: {
+              pan: { enabled: true, mode: 'x', modifierKey: 'ctrl' },
+              zoom: { wheel: { enabled: true }, mode: 'x', pinch: { enabled: true }, onZoomComplete: ({chart}) => onRangeChanged(chart) }
+            }
+          },
+          scales: { 
+            x: { 
+              type: 'time', 
+              time: { unit: 'hour', tooltipFormat: 'MMM dd, yyyy HH:mm:ss' }, 
+              ticks: { color: '#d0d0d0' }, 
+              grid: { color: 'rgba(255,255,255,0.04)' } 
+            }, 
+            y: { 
+              suggestedMin: 0, 
+              suggestedMax: 3.3, 
+              ticks: { color: '#d0d0d0' }, 
+              grid: { color: 'rgba(255,255,255,0.04)' } 
+            } 
+          }
+        },
+        plugins: [highlightPlugin]
+      });
+
+      let currentPeriod = null; // Store current period in seconds
+
+      // Time period definitions
+      const periods = {
+        '1h': 3600,
+        '6h': 21600,
+        '1d': 86400,
+        '3d': 259200,
+        '5d': 432000
+      };
+
+      // Load historical data for a specific time period
+      async function loadHistoryPeriod(periodKey) {
+        const periodSeconds = periods[periodKey];
+        if (!periodSeconds) return;
+
+        currentPeriod = periodSeconds;
+        const now = Date.now() / 1000;
+        const start = now - periodSeconds;
+        const end = now;
+
+        // Update button states
+        document.querySelectorAll('[id^="btn-"]').forEach(btn => {
+          btn.classList.remove('primary');
+        });
+        document.getElementById(`btn-${periodKey}`).classList.add('primary');
+
+        // Update status
+        const periodNames = {
+          '1h': '1 Hour',
+          '6h': '6 Hours',
+          '1d': '1 Day',
+          '3d': '3 Days',
+          '5d': '5 Days'
+        };
+        document.getElementById('period-status').textContent = `Loading ${periodNames[periodKey]}...`;
+
+        try {
+          // Fetch downsampled data
+          const dataRes = await fetch(`/api/range?start=${start}&end=${end}&max_points=3000`);
+          const dataPayload = await dataRes.json();
+          const data = dataPayload.data || [];
+
+          // Update chart with data
+          chart.data.labels = data.map(d => new Date(d[0]*1000));
+          chart.data.datasets[0].data = data.map(d => ({x: new Date(d[0]*1000), y: d[1]}));
+
+          // Fetch highlights for the time period
+          const highlightsRes = await fetch(`/api/highlights?start=${start}&end=${end}`);
+          const highlightsPayload = await highlightsRes.json();
+          const highlights = highlightsPayload.highlights || [];
+
+          // Update highlights
+          window._highlightsCacheAll = highlights;
+          window._highlightsCache = highlights;
+          renderHighlightsList(highlights);
+
+          // Update anomaly points
+          const anomalyPoints = [];
+          highlights.forEach(h => {
+            anomalyPoints.push({ x: new Date(h.peak_ts * 1000), y: h.peak_value });
+          });
+          chart.data.datasets[1].data = anomalyPoints;
+
+          // Set chart x-axis to show the full period
+          chart.options.scales.x.min = new Date(start * 1000);
+          chart.options.scales.x.max = new Date(end * 1000);
+
+          chart.update();
+
+          // Update status
+          document.getElementById('period-status').textContent = `${periodNames[periodKey]} loaded (${data.length} points, ${highlights.length} highlights)`;
+        } catch (e) {
+          console.error('Failed to load history:', e);
+          document.getElementById('period-status').textContent = `Error loading ${periodNames[periodKey]}`;
+        }
+      }
+
+      // When zoom/pan changes the visible range, request aggregated data for that range
+      async function onRangeChanged(chartInstance) {
+        const xscale = chartInstance.scales.x;
+        const min = xscale.min; // ms
+        const max = xscale.max; // ms
+        if (min != null && max != null) {
+          // if zoomed to more than a small window, fetch aggregated data
+          const start = Math.floor(min / 1000);
+          const end = Math.floor(max / 1000);
+          const maxp = 3000;
+          try {
+            const res = await fetch(`/api/range?start=${start}&end=${end}&max_points=${maxp}`);
+            const payload = await res.json();
+            const data = payload.data || [];
+            chart.data.labels = data.map(d => new Date(d[0]*1000));
+            chart.data.datasets[0].data = data.map(d => ({x: new Date(d[0]*1000), y: d[1]}));
+            chart.update();
+          } catch (e) {
+            console.error('range fetch error', e);
+          }
+        }
+      }
+
+      // helper to render highlights list
+      function renderHighlightsList(highlights) {
+        const container = document.getElementById('highlightsList');
+        container.innerHTML = '';
+        if (!highlights || !highlights.length) {
+          container.innerText = 'No anomalies detected in this period.';
+          return;
+        }
+        highlights.sort((a,b) => b.score - a.score);
+        highlights.forEach((h, idx) => {
+          const el = document.createElement('div');
+          el.style.padding = '6px';
+          el.style.borderBottom = '1px solid #eee';
+          const start = new Date(h.start_ts * 1000).toLocaleString();
+          const end = new Date(h.end_ts * 1000).toLocaleString();
+          el.innerHTML = `<strong>#${idx+1}</strong> <br/>Peak: ${h.peak_value.toFixed(3)} @ ${new Date(h.peak_ts*1000).toLocaleTimeString()}<br/><small>${start} → ${end}</small>`;
+          el.style.cursor = 'pointer';
+          el.addEventListener('click', () => focusOnHighlight(h));
+          container.appendChild(el);
+        });
+      }
+
+      function focusOnHighlight(h) {
+        // zoom x axis to highlight ± window
+        const peak = h.peak_ts * 1000;
+        const width = Math.max((h.end_ts - h.start_ts) * 1000 * 2, 60000); // at least 1 minute window
+        chart.options.scales.x.min = new Date(peak - width/2);
+        chart.options.scales.x.max = new Date(peak + width/2);
+        // add a temporary vertical marker dataset
+        chart.data.datasets[2] = chart.data.datasets[2] || { type: 'line', label: 'Marker', data: [], borderColor: 'black', borderWidth: 1, pointRadius: 0, fill: false };
+        chart.data.datasets[2].data = [{x: new Date(peak), y: null}, {x: new Date(peak), y: null}];
+        // rely on plugin to draw shaded region; cache highlights for plugin
+        window._highlightsCache = [h];
+        chart.update();
+      }
+
+      // Set up time period button listeners
+      document.getElementById('btn-1h').addEventListener('click', () => loadHistoryPeriod('1h'));
+      document.getElementById('btn-6h').addEventListener('click', () => loadHistoryPeriod('6h'));
+      document.getElementById('btn-1d').addEventListener('click', () => loadHistoryPeriod('1d'));
+      document.getElementById('btn-3d').addEventListener('click', () => loadHistoryPeriod('3d'));
+      document.getElementById('btn-5d').addEventListener('click', () => loadHistoryPeriod('5d'));
+
+      document.getElementById('resetView').addEventListener('click', () => {
+        if (currentPeriod) {
+          const now = Date.now() / 1000;
+          const start = now - currentPeriod;
+          const end = now;
+          chart.options.scales.x.min = new Date(start * 1000);
+          chart.options.scales.x.max = new Date(end * 1000);
+          window._highlightsCache = window._highlightsCacheAll || [];
+          chart.update();
+        }
+      });
+
+      // Load 1 day by default
+      loadHistoryPeriod('1d');
+    </script>
+  </body>
+</html>

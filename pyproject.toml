@@ -18,6 +18,8 @@ dependencies = [
   "qrcode>=8.1",
   "Pillow>=10.0",
   "sdnotify>=0.3.2",
+  "tomli>=1.2.0; python_version < '3.11'",
+  "tomli-w>=1.0.0",
 ]
 
 [project.optional-dependencies]

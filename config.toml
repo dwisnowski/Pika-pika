@@ -1,0 +1,13 @@
+[pika]
+# Sample rate in Hz (1-100)
+sample_hz = 100
+
+# Data directory for logs
+data_dir = "data"
+
+# Web server port
+port = 8000
+
+# Display settings
+display_fps = 5.0
+display_auto_ip = true
