@@ -105,7 +105,7 @@ EOF
   # Configure uv to use piwheels as default index
   mkdir -p ~/.config/uv
   cat > ~/.config/uv/uv.toml << 'EOF'
-[[tool.uv.index]]
+[[index]]
 name = "piwheels"
 url = "https://www.piwheels.org/simple/"
 default = true

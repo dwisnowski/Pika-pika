@@ -183,27 +183,3 @@ If you'd like, I can add a systemd service file, logging rotation, or a sample w
 ---
 
 Contributions and issues are welcome — see `CONTRIBUTING.md` (when added).
-
-
-
-Things i had to do on the pi to get the packages to install
-```
-rm uv.lock
-uv pip install watchfiles --index-url https://www.piwheels.org/simple
-uv pip install pillow --index-url https://www.piwheels.org/simple
-uv pip install uvloop --index-url https://www.piwheels.org/simple
-uv pip install pydantic-core==2.41.5
-[tool.uv]
-override-dependencies = [
-    "pillow ; sys_platform == 'never'",
-    "pydantic-core ; sys_platform == 'never'",
-    "watchfiles ; sys_platform == 'never'",
-    "uvloop ; sys_platform == 'never'"
-]
-uv sync --inexact
-uv run --no-sync uvicorn pika.app:app --host 0.0.0.0 --port 8000 --workers 1
-uv add "pydantic-core==2.41.5"
-uv add httptools==0.7.1
-uv cache clean
-uv add "pydantic-core==2.41.5" --reinstall
-```
