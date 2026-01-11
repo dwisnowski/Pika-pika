@@ -16,7 +16,6 @@ dependencies = [
   "aiofiles>=23.1.0",
   "python-dotenv>=1.0.0",
   "qrcode>=8.1",
-  "Pillow>=10.0",
   "sdnotify>=0.3.2",
   "tomli>=1.2.0; python_version < '3.11'",
   "tomli-w>=1.0.0",
@@ -25,7 +24,7 @@ dependencies = [
 [project.optional-dependencies]
 # ADS1115 library is optional for non-Pi testing or when hardware is present
 hardware = ["adafruit-circuitpython-ads1x15>=3.0.0"]
-display = ["spidev", "RPi.GPIO"]
+display = ["spidev", "RPi.GPIO", "Pillow>=10.0"]
 docs = ["mkdocs>=1.4", "mkdocs-material>=9.0"]
 
 [project.urls]

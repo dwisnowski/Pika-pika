@@ -70,70 +70,87 @@ class DisplayManager:
         return None
 
     def _draw_frame(self) -> Image.Image:
-        # Build a display frame with QR (if available), mascot animation, and current voltage
-        im = Image.new("RGB", (DISPLAY_W, DISPLAY_H), color=(255, 255, 255))
+        # Build a display frame matching the demo page LCD preview layout
+        im = Image.new("RGB", (DISPLAY_W, DISPLAY_H), color=(0, 0, 0))  # Black background
         draw = ImageDraw.Draw(im)
 
-        # QR: generate a small QR (square), place near top center
+        # Try to use monospace font, fallback to default
+        try:
+            font = ImageFont.truetype("DejaVuSansMono-Bold.ttf", 10)
+        except Exception:
+            try:
+                font = ImageFont.truetype("Courier New", 10)
+            except Exception:
+                font = ImageFont.load_default()
+
+        # QR code at top right
         if self.url:
-            qr = qrcode.QRCode(border=1, box_size=4)
+            qr = qrcode.QRCode(border=1, box_size=3)
             qr.add_data(self.url)
             qr.make(fit=True)
-            qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-            qr_size = min(140, DISPLAY_W - 16)
+            qr_img = qr.make_image(fill_color="white", back_color="black").convert("RGB")
+            qr_size = 60  # Small QR for LCD
             qr_img = ImageOps.contain(qr_img, (qr_size, qr_size))
-            qx = (DISPLAY_W - qr_img.width) // 2
+            qx = DISPLAY_W - qr_size - 8  # Top right
             qy = 8
             im.paste(qr_img, (qx, qy))
-            # small label under QR
-            draw.text((8, qy + qr_img.height + 6), self.url, fill=(0,0,0), font=self.font)
 
-        # Mascot animation area: simple original "electric mascot"
-        # Draw a circular yellow mascot with ears and a flashing tail. Use frame_idx to animate.
-        cx = DISPLAY_W // 2
-        cy = int(DISPLAY_H * 0.65)
-        r = 40
-        # base body
-        draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(255, 210, 30), outline=(150, 100, 0))
-        # eyes
-        draw.ellipse((cx - 18, cy - 8, cx - 12, cy - 2), fill=(0,0,0))
-        draw.ellipse((cx + 12, cy - 8, cx + 18, cy - 2), fill=(0,0,0))
-        # cheeks (small circles)
-        draw.ellipse((cx - 30, cy + 6, cx - 22, cy + 14), fill=(240,100,120))
-        draw.ellipse((cx + 22, cy + 6, cx + 30, cy + 14), fill=(240,100,120))
-        # ears (animated slight tilt)
-        tilt = (self.frame_idx % 10) - 5
-        draw.polygon([(cx - 20, cy - 38), (cx - 20 - 12 - tilt, cy - 78 - tilt), (cx - 4, cy - 38)], fill=(255,210,30), outline=(150,100,0))
-        draw.polygon([(cx + 20, cy - 38), (cx + 20 + 12 + tilt, cy - 78 + tilt), (cx + 4, cy - 38)], fill=(255,210,30), outline=(150,100,0))
-        # tail (lightning) — flash on alternating frames
-        tail_color = (255, 230, 60) if (self.frame_idx // 3) % 2 == 0 else (220, 220, 40)
-        tail = [(cx + r - 4, cy + 10), (cx + r + 18, cy - 6), (cx + r - 6, cy - 2), (cx + r + 8, cy - 28), (cx + r - 10, cy - 18)]
-        draw.polygon(tail, fill=tail_color, outline=(150,100,0))
+        # Title at top
+        title = "PIKA-PIKA MONITOR"
+        draw.text((8, 8), title, fill=(0, 255, 0), font=font)
 
-        # Voltage readout at bottom
+        # Voltage display in center
         voltage = self._get_current_voltage()
         if voltage is None or (isinstance(voltage, float) and (voltage != voltage)):
-            vtext = "Voltage: -- V"
+            vtext = "--.- V"
         else:
-            vtext = f"Voltage: {voltage:.3f} V"
-        bbox = draw.textbbox((0, 0), vtext, font=self.font)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        draw.rectangle((8, DISPLAY_H - 48, 8 + tw + 12, DISPLAY_H - 26), fill=(240,240,240))
-        draw.text((14, DISPLAY_H - 44), vtext, fill=(0,0,0), font=self.font)
+            vtext = f"{voltage:.1f} V"
 
-        # Anomaly count (past 3 hours)
-        anom_count = self._get_recent_anomaly_count(hours=3)
-        anom_text = f"Anom(3h): {anom_count}"
-        abbox = draw.textbbox((0, 0), anom_text, font=self.font)
-        atw, ath = abbox[2] - abbox[0], abbox[3] - abbox[1]
-        draw.rectangle((8, DISPLAY_H - 26, 8 + atw + 12, DISPLAY_H - 6), fill=(250,240,240))
-        draw.text((14, DISPLAY_H - 22), anom_text, fill=(120,10,20), font=self.font)
+        # Use larger font for voltage
+        try:
+            large_font = ImageFont.truetype("DejaVuSansMono-Bold.ttf", 14)
+        except Exception:
+            try:
+                large_font = ImageFont.truetype("Courier New", 14)
+            except Exception:
+                large_font = ImageFont.load_default()
 
-        # small timestamp
+        vbbox = draw.textbbox((0, 0), vtext, font=large_font)
+        vwidth = vbbox[2] - vbbox[0]
+        vx = (DISPLAY_W - vwidth) // 2  # Center horizontally
+        vy = DISPLAY_H // 2 - 20  # Center vertically, slightly up
+        draw.text((vx, vy), vtext, fill=(0, 255, 0), font=large_font)
+
+        # Anomaly status below voltage
+        anom_count = self._get_recent_anomaly_count(hours=1)  # Check past hour
+        if anom_count > 0:
+            anom_text = f"{anom_count} anomalies"
+            anom_color = (255, 107, 107)  # Red tint for anomalies
+        else:
+            anom_text = "No anomalies"
+            anom_color = (0, 255, 0)  # Green for no anomalies
+
+        abbox = draw.textbbox((0, 0), anom_text, font=font)
+        awidth = abbox[2] - abbox[0]
+        ax = (DISPLAY_W - awidth) // 2  # Center horizontally
+        ay = vy + 24  # Below voltage
+        draw.text((ax, ay), anom_text, fill=anom_color, font=font)
+
+        # Time at bottom center
         ts = time.strftime("%H:%M:%S")
-        ts_bbox = draw.textbbox((0, 0), ts, font=self.font)
+        ts_bbox = draw.textbbox((0, 0), ts, font=font)
         ts_width = ts_bbox[2] - ts_bbox[0]
-        draw.text((DISPLAY_W - 8 - ts_width, DISPLAY_H - 24), ts, fill=(80,80,80), font=self.font)
+        tx = (DISPLAY_W - ts_width) // 2  # Center horizontally
+        ty = DISPLAY_H - 24  # Near bottom
+        draw.text((tx, ty), ts, fill=(0, 255, 0), font=font)
+
+        # Mascot tagline at very bottom
+        mascot = "⚡ Electric Mascot ⚡"
+        mbbox = draw.textbbox((0, 0), mascot, font=font)
+        mwidth = mbbox[2] - mbbox[0]
+        mx = (DISPLAY_W - mwidth) // 2  # Center horizontally
+        my = DISPLAY_H - 12  # Very bottom
+        draw.text((mx, my), mascot, fill=(0, 255, 0), font=font)
 
         return im
 
