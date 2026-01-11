@@ -30,7 +30,9 @@ set -euo pipefail
 #
 # 3. PYTHON ENVIRONMENT:
 #    - Creates a Python virtual environment (.venv) automatically if needed (via uv)
+#    - Configures uv to use piwheels for faster package installation on Raspberry Pi
 #    - Syncs and installs the Pika-pika package and all required dependencies using uv
+#    - Platform-specific dependencies (uvloop, watchfiles, Pillow) are handled via pyproject.toml
 #    - Attempts to install optional hardware dependencies (ADS1115 library) using uv
 #
 # 4. PROJECT SETUP:
@@ -82,10 +84,11 @@ if ! command -v uv &> /dev/null; then
   fi
 fi
 
-# Configure pip to use piwheels as extra index URL on Raspberry Pi
+# Configure pip and uv to use piwheels as extra index URL on Raspberry Pi
 if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
-  echo "[pika-pika] Detected Raspberry Pi, configuring pip to use piwheels..."
-  # Create pip.conf if it doesn't exist, or add piwheels to existing config
+  echo "[pika-pika] Detected Raspberry Pi, configuring pip and uv to use piwheels..."
+
+  # Configure pip
   mkdir -p ~/.pip
   if [ ! -f ~/.pip/pip.conf ]; then
     cat > ~/.pip/pip.conf << 'EOF'
@@ -98,18 +101,19 @@ EOF
       echo "extra-index-url=https://www.piwheels.org/simple" >> ~/.pip/pip.conf
     fi
   fi
-  echo "[pika-pika] Pip configured to use piwheels as extra index URL"
+
+  # Configure uv to use piwheels as default index
+  mkdir -p ~/.config/uv
+  cat > ~/.config/uv/uv.toml << 'EOF'
+[[tool.uv.index]]
+name = "piwheels"
+url = "https://www.piwheels.org/simple/"
+default = true
+EOF
+
+  echo "[pika-pika] Pip and uv configured to use piwheels as extra/default index URL"
 fi
 
-# Install packages from appropriate source based on platform
-if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
-  echo "[pika-pika] Detected Raspberry Pi, installing packages from piwheels..."
-  echo "[pika-pika] Installing Pillow, uvloop, and watchfiles from piwheels..."
-  uv pip install pillow uvloop watchfiles --index-url https://www.piwheels.org/simple || { echo "[pika-pika] Package installation from piwheels failed"; exit 1; }
-else
-  echo "[pika-pika] Installing packages from PyPI..."
-  uv pip install pillow uvloop watchfiles || { echo "[pika-pika] Package installation from PyPI failed"; exit 1; }
-fi
 
 # Sync dependencies and install package (uv will create venv if needed)
 echo "[pika-pika] Syncing dependencies and installing package using uv..."
