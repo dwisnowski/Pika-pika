@@ -21,3 +21,19 @@ make dev
 ```
 
 3. Open `http://<pi-ip>:8000/` or the demo at `http://<pi-ip>:8000/demo`.
+
+
+### Screenshots of the Application
+
+<div class="grid cards" markdown>
+
+-   **Live Monitor**
+    ![Live Monitor](./images/live-screenshot.PNG){ .glightbox data-title="Live Voltage Monitor - Real-time data with anomaly highlighting" data-description="The main live monitoring interface showing real-time voltage readings with highlighted anomalies and zoom/pan controls." }
+
+-   **Demo Mode**
+    ![Demo Mode](./images/demo-screenshot.PNG){ .glightbox data-title="Demo Mode - Simulated data for testing" data-description="Demo interface with simulated voltage data, LCD preview, and anomaly detection for safe testing without hardware." }
+
+-   **History View**
+    ![History View](./images/history-screenshot.PNG){ .glightbox data-title="Historical Data Browser" data-description="Historical data viewer with downsampled charts, time period selection, and detailed anomaly analysis." }
+
+</div>

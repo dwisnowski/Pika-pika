@@ -20,6 +20,7 @@ theme:
     - navigation.instant
     - navigation.sections
     - content.code.copy
+    - content.tooltips
   palette:
     - scheme: slate
       primary: '#FFD54A'
@@ -34,3 +35,12 @@ theme:
         icon: material/weather-sunny
         name: Switch to dark theme
 
+plugins:
+  - glightbox:
+      touchNavigation: true
+      loop: true
+      effect: zoom
+      width: 100%
+      height: auto
+      zoomable: true
+      draggable: true
