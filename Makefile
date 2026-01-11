@@ -1,6 +1,6 @@
 UV := uv
 
-.PHONY: help setup sync fresh-install run dev docs docs-sync docs-serve icons clean
+.PHONY: help setup sync fresh-install run dev check-running docs docs-sync docs-serve icons clean
 
 # Default target
 help:
@@ -10,9 +10,11 @@ help:
 	@echo "  make setup          - Run initial setup script (installs system packages, creates venv, installs deps)"
 	@echo "  make sync           - Sync dependencies and install package using uv (creates venv if needed)"
 	@echo "  make run            - Run the app in production mode (single worker for low-powered devices)"
+	@echo "                      - Prevents starting if another instance is already running on port 8000"
 	@echo ""
 	@echo "Development targets:"
 	@echo "  make dev            - Run the app in development mode with auto-reload"
+	@echo "                      - Prevents starting if another instance is already running on port 8000"
 	@echo "  make docs           - Build MkDocs documentation site (syncs docs dependencies)"
 	@echo "  make docs-serve     - Serve docs locally for development (syncs docs dependencies)"
 	@echo "  make docs-sync      - Sync README.md into docs before building"
@@ -31,6 +33,10 @@ help:
 # Production targets (for Raspberry Pi)
 # ============================================================================
 
+# Check if app is already running on port 8000
+check-running:
+	@python scripts/check_port.py 8000
+
 # Run initial setup script on Raspberry Pi
 setup:
 	@bash scripts/setup_pi.sh
@@ -40,7 +46,7 @@ sync:
 	$(UV) sync
 
 # Run the app in production mode (single worker for low-powered devices)
-run:
+run: check-running
 	$(UV) run uvicorn pika.app:app --host 0.0.0.0 --port 8000 --workers 1
 
 # ============================================================================
@@ -48,7 +54,7 @@ run:
 # ============================================================================
 
 # Run the app in development mode with auto-reload
-dev:
+dev: check-running
 	$(UV) run uvicorn pika.app:app --reload --host 0.0.0.0 --port 8000
 
 # Build the MkDocs documentation site
