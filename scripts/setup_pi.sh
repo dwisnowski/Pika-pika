@@ -22,6 +22,7 @@ set -euo pipefail
 #    - zlib1g-dev: PNG compression support (required for Pillow)
 #    - libfreetype6-dev: Font rendering support (required for Pillow)
 #    - liblcms2-dev: Color management support (required for Pillow)
+#    - tmux: Terminal multiplexer for managing multiple sessions
 #
 # 2. PACKAGE MANAGER:
 #    - Installs uv (fast Python package installer) if not present
@@ -59,7 +60,7 @@ set -euo pipefail
 
 echo "[pika-pika] Updating apt and installing system packages (requires sudo)..."
 sudo apt update
-sudo apt install -y python3 python3-venv build-essential git i2c-tools python3-dev curl libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev
+sudo apt install -y python3 python3-venv build-essential git i2c-tools python3-dev curl libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev tmux
 
 # Install uv if not already present and set up uv command
 if ! command -v uv &> /dev/null; then
@@ -79,6 +80,25 @@ if ! command -v uv &> /dev/null; then
     echo "[pika-pika] Error: uv is not available. Please install manually: curl -LsSf https://astral.sh/uv/install.sh | sh"
     exit 1
   fi
+fi
+
+# Configure pip to use piwheels as extra index URL on Raspberry Pi
+if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
+  echo "[pika-pika] Detected Raspberry Pi, configuring pip to use piwheels..."
+  # Create pip.conf if it doesn't exist, or add piwheels to existing config
+  mkdir -p ~/.pip
+  if [ ! -f ~/.pip/pip.conf ]; then
+    cat > ~/.pip/pip.conf << 'EOF'
+[global]
+extra-index-url=https://www.piwheels.org/simple
+EOF
+  else
+    # Check if piwheels is already configured
+    if ! grep -q "https://www.piwheels.org/simple" ~/.pip/pip.conf; then
+      echo "extra-index-url=https://www.piwheels.org/simple" >> ~/.pip/pip.conf
+    fi
+  fi
+  echo "[pika-pika] Pip configured to use piwheels as extra index URL"
 fi
 
 # Install packages from appropriate source based on platform
