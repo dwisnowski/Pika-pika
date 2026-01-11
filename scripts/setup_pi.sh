@@ -81,14 +81,14 @@ if ! command -v uv &> /dev/null; then
   fi
 fi
 
-# Install Pillow from appropriate source based on platform
-echo "[pika-pika] Installing Pillow..."
+# Install packages from appropriate source based on platform
 if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
-  echo "[pika-pika] Detected Raspberry Pi, installing Pillow from piwheels..."
-  uv pip install pillow --index-url https://www.piwheels.org/simple || { echo "[pika-pika] Pillow installation from piwheels failed"; exit 1; }
+  echo "[pika-pika] Detected Raspberry Pi, installing packages from piwheels..."
+  echo "[pika-pika] Installing Pillow, uvloop, and watchfiles from piwheels..."
+  uv pip install pillow uvloop watchfiles --index-url https://www.piwheels.org/simple || { echo "[pika-pika] Package installation from piwheels failed"; exit 1; }
 else
-  echo "[pika-pika] Installing Pillow from PyPI..."
-  uv pip install pillow || { echo "[pika-pika] Pillow installation from PyPI failed"; exit 1; }
+  echo "[pika-pika] Installing packages from PyPI..."
+  uv pip install pillow uvloop watchfiles || { echo "[pika-pika] Package installation from PyPI failed"; exit 1; }
 fi
 
 # Sync dependencies and install package (uv will create venv if needed)
@@ -99,7 +99,7 @@ uv sync || { echo "[pika-pika] uv sync failed"; exit 1; }
 echo "[pika-pika] Installing optional hardware extras (ADS1115). This may fail on non-Pi or missing wheels; it's optional."
 uv sync --extra hardware || echo "[pika-pika] Optional hardware extras could not be installed (continue)"
 
-echo "[pika-pika] Installing optional display extras (Pillow, spidev, RPi.GPIO). This may fail on non-Pi; it's optional."
+echo "[pika-pika] Installing optional display extras (spidev, RPi.GPIO). This may fail on non-Pi; it's optional."
 uv sync --extra display || echo "[pika-pika] Optional display extras could not be installed (continue)"
 
 mkdir -p data
