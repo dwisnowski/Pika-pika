@@ -33,12 +33,13 @@ try:
     import busio
     import adafruit_ads1x15.ads1115 as ADS
     from adafruit_ads1x15.analog_in import AnalogIn
+    from adafruit_ads1x15 import ads1x15
     class ADS1115ADC(ADCInterface):
         def __init__(self, address=0x48, channel=0):
             logging.info("Using ADS1115 ADC at address 0x%02X, channel %d", address, channel)
             i2c = busio.I2C(board.SCL, board.SDA)
             self.ads = ADS.ADS1115(i2c, address=address)
-            self.chan = AnalogIn(self.ads, getattr(ADS, f"P{channel}"))
+            self.chan = AnalogIn(self.ads, getattr(ads1x15.Pin, f"A{channel}"))
         def read(self):
             # return raw ADC voltage (or scaled value)
             return self.chan.voltage
