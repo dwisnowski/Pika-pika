@@ -131,15 +131,15 @@ def startup_event():
         """Thread-safe callback to add samples to broadcast queue."""
         manager.add_sample(ts, val)
 
-    logger.add_sample_callback(sync_callback)
-    # start the display manager (renders QR and animation if display available)
-    try:
-        from .display_manager import start_display
-        start_display(logger, auto_ip=DISPLAY_AUTO_IP, port=config.get("port", 8000), fps=DISPLAY_FPS, data_dir=DATA_DIR)
-    except Exception:
-        # non-fatal: continue if display is not available
-        import logging as _logging
-        _logging.getLogger(__name__).exception("Could not start display manager")
+    # logger.add_sample_callback(sync_callback)
+    # # start the display manager (renders QR and animation if display available)
+    # try:
+    #     from .display_manager import start_display
+    #     start_display(logger, auto_ip=DISPLAY_AUTO_IP, port=config.get("port", 8000), fps=DISPLAY_FPS, data_dir=DATA_DIR)
+    # except Exception:
+    #     # non-fatal: continue if display is not available
+    #     import logging as _logging
+    #     _logging.getLogger(__name__).exception("Could not start display manager")
 
     # start systemd watchdog notifier (if available)
     try:

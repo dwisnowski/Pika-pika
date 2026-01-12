@@ -20,11 +20,12 @@ class ADCInterface:
 
 class MockADC(ADCInterface):
     def __init__(self):
+        logging.info("Using MockADC (simulated data)")
         self._t0 = time.time()
     def read(self):
         t = time.time() - self._t0
         # simulated AC-ish signal + noise
-        return 1.5 + math.sin(2.0 * math.pi * 1.0 * t) * 0.8 + random.uniform(-0.02, 0.02)
+        return 10 #1.5 + math.sin(2.0 * math.pi * 1.0 * t) * 0.8 + random.uniform(-0.02, 0.02)
 
 try:
     # Try to import Adafruit ADS1115 library (CircuitPython)
@@ -34,6 +35,7 @@ try:
     from adafruit_ads1x15.analog_in import AnalogIn
     class ADS1115ADC(ADCInterface):
         def __init__(self, address=0x48, channel=0):
+            logging.info("Using ADS1115 ADC at address 0x%02X, channel %d", address, channel)
             i2c = busio.I2C(board.SCL, board.SDA)
             self.ads = ADS.ADS1115(i2c, address=address)
             self.chan = AnalogIn(self.ads, getattr(ADS, f"P{channel}"))
