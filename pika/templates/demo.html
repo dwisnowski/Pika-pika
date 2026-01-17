@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Pika-pika Demo{% endblock %}
+
+{% block content %}
+{% include 'components/header.html' %}
+
+<!-- Demo Chart Component -->
+<div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+    <div id="chartwrap" style="flex:1;min-width:320px;max-width:900px;">
+        <!-- Controls -->
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+            <div style="display:flex;gap:12px;align-items:center;">
+                <label style="font-size:14px;">Time Window:</label>
+                <label style="font-size:12px;cursor:pointer;"><input type="radio" name="timeWindow" value="10" style="margin-right:4px;">10s</label>
+                <label style="font-size:12px;cursor:pointer;"><input type="radio" name="timeWindow" value="30" style="margin-right:4px;">30s</label>
+                <label style="font-size:12px;cursor:pointer;"><input type="radio" name="timeWindow" value="60" checked style="margin-right:4px;">60s</label>
+                <label style="font-size:12px;cursor:pointer;"><input type="radio" name="timeWindow" value="300" style="margin-right:4px;">5min</label>
+                <label style="font-size:12px;cursor:pointer;"><input type="radio" name="timeWindow" value="600" style="margin-right:4px;">10min</label>
+            </div>
+        </div>
+        
+        <!-- Chart Canvas -->
+        <canvas id="chart" width="900" height="300"></canvas>
+    </div>
+
+    <!-- QR Code Component -->
+    <div id="qrbox" style="width:200px;flex:0 0 200px;text-align:center;">
+        <h4 style="margin:0 0 8px 0">Scan to open</h4>
+        <div id="qrcode"></div>
+        <div style="margin-top:8px;font-size:12px;word-break:break-all; color: var(--muted);" id="qurl"></div>
+        <button id="copyBtn" class="btn primary" style="margin-top:8px;">Copy URL</button>
+        <div style="margin-top:6px;font-size:12px;color:var(--muted);">Scan this QR code to open the same UI on another device</div>
+    </div>
+</div>
+
+<!-- Highlights Component -->
+<div id="highlightsPanel" style="margin-top:18px; display:flex; gap:16px; align-items:flex-start;">
+    <div style="flex:1;">
+        <h4 style="margin:6px 0">Demo Voltage</h4>
+        <div id="chartwrap_small" style="max-width:900px;" class="card"></div>
+    </div>
+    <div style="width:320px;flex:0 0 320px;">
+        <h4 style="margin:6px 0">Demo Highlights</h4>
+        <div id="highlightsList" class="card" style="font-family:monospace; font-size:13px; max-height:420px; overflow:auto; padding:6px;"></div>
+        <button id="resetView" class="btn primary" style="margin-top:8px;">Reset View</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<script src="{{ url_for('static', path='/js/demo_chart.js') }}"></script>
+{% endblock %}

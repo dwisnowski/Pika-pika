@@ -27,7 +27,7 @@ import qrcode
 import os
 import logging
 
-from .qr_generator import make_qr_image
+from .qr_generator import QRCodeGenerator
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -130,7 +130,8 @@ def main(argv=None):
         sys.exit(2)
 
     logger.info("Rendering QR for %s", url)
-    img = make_qr_image(url, DISPLAY_W, DISPLAY_H)
+    qr_generator = QRCodeGenerator()
+    img = qr_generator.make_qr_image(url, DISPLAY_W, DISPLAY_H)
 
     ok = show_on_waveshare(img)
     if not ok:

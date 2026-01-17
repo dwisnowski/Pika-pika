@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Pika-pika History{% endblock %}
+
+{% block content %}
+{% include 'components/header.html' %}
+
+<!-- History Page Content -->
+<div style="max-width:1200px; margin:0 auto;">
+    <div class="card" style="padding:20px; margin-bottom:20px;">
+        <h3 style="margin-top:0;">Historical Data Browser</h3>
+        <p style="color:var(--muted); margin-bottom:20px;">
+            Browse and analyze historical voltage measurements. Select date ranges and view detailed statistics and anomaly detection results.
+        </p>
+        
+        <!-- Date Range Selector -->
+        <div style="display:flex; gap:16px; align-items:center; margin-bottom:20px; flex-wrap:wrap;">
+            <div>
+                <label style="display:block; margin-bottom:4px; font-weight:bold;">Start Date:</label>
+                <input type="date" id="startDate" style="padding:8px; border:1px solid #ccc; border-radius:4px;">
+            </div>
+            <div>
+                <label style="display:block; margin-bottom:4px; font-weight:bold;">End Date:</label>
+                <input type="date" id="endDate" style="padding:8px; border:1px solid #ccc; border-radius:4px;">
+            </div>
+            <div>
+                <button id="loadData" class="btn primary">Load Data</button>
+                <button id="exportData" class="btn">Export CSV</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Panel -->
+    <div style="display:flex; gap:20px; margin-bottom:20px;">
+        <div class="card" style="flex:1; padding:20px;">
+            <h4 style="margin-top:0;">Statistics</h4>
+            <div id="statistics" style="font-family:monospace; font-size:14px;">
+                <div>Mean Voltage: <span id="meanVoltage">--</span> V</div>
+                <div>Min Voltage: <span id="minVoltage">--</span> V</div>
+                <div>Max Voltage: <span id="maxVoltage">--</span> V</div>
+                <div>Std Deviation: <span id="stdVoltage">--</span> V</div>
+                <div>Total Samples: <span id="totalSamples">--</span></div>
+            </div>
+        </div>
+        
+        <div class="card" style="flex:1; padding:20px;">
+            <h4 style="margin-top:0;">Anomalies Detected</h4>
+            <div id="anomalyCount" style="font-size:24px; font-weight:bold; color:#FF6B6B; margin-bottom:10px;">
+                <span id="anomalyTotal">0</span> anomalies
+            </div>
+            <div id="anomalyList" style="max-height:200px; overflow:auto; font-family:monospace; font-size:12px;">
+                <p style="color:var(--muted);">Select date range to view anomalies...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Historical Chart -->
+    <div class="card" style="padding:20px;">
+        <h4 style="margin-top:0;">Historical Voltage Chart</h4>
+        <div style="margin-bottom:10px;">
+            <label>
+                <input type="checkbox" id="showAnomalies" checked>
+                Show Anomaly Markers
+            </label>
+            <label style="margin-left:20px;">
+                <input type="checkbox" id="smoothData">
+                Smooth Data (1s average)
+            </label>
+        </div>
+        <canvas id="historyChart" width="1200" height="400"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="{{ url_for('static', path='/js/history_chart.js') }}"></script>
+{% endblock %}
