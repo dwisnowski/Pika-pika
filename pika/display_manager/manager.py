@@ -32,7 +32,8 @@ class DisplayManager:
         auto_ip: bool = True,
         port: int = DisplaySettings.DEFAULT_PORT,
         fps: float = DisplaySettings.DEFAULT_FPS,
-        data_dir: str = DisplaySettings.DEFAULT_DATA_DIR
+        data_dir: str = DisplaySettings.DEFAULT_DATA_DIR,
+        lcd_config: Optional[dict] = None
     ):
         """Initialize display manager.
         
@@ -43,6 +44,7 @@ class DisplayManager:
             port: Port for auto-generated URL
             fps: Display refresh rate
             data_dir: Directory for data files
+            lcd_config: Dictionary of LCD pin settings
         """
         self.logger = logger_obj
         self.auto_ip = auto_ip
@@ -50,6 +52,7 @@ class DisplayManager:
         self.data_dir = data_dir
         self.url = url
         self.fps = fps
+        self.lcd_config = lcd_config
         self.interval = 1.0 / float(self.fps)
         self.frame_idx = 0
         
@@ -111,7 +114,7 @@ class DisplayManager:
             )
             
             # Display frame
-            if not show_on_waveshare(frame):
+            if not show_on_waveshare(frame, lcd_config=self.lcd_config):
                 frame.save(DisplaySettings.FALLBACK_IMAGE_NAME)
                 
         except Exception as e:

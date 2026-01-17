@@ -48,7 +48,7 @@ def get_local_ip() -> Optional[str]:
         return None
 
 
-def show_on_waveshare(img: Image.Image) -> bool:
+def show_on_waveshare(img: Image.Image, lcd_config: Optional[dict] = None) -> bool:
     """Attempt several Waveshare/ST7789 display drivers. Returns True if successful."""
     # Try common Waveshare python example modules
     tried = []
@@ -78,7 +78,16 @@ def show_on_waveshare(img: Image.Image) -> bool:
         import st7789 as st
 
         logger.info("Using st7789 driver")
-        disp = st.ST7789()
+        if lcd_config:
+            disp = st.ST7789(
+                port=lcd_config.get("lcd_port", 0),
+                cs=lcd_config.get("lcd_cs", 8),
+                dc=lcd_config.get("lcd_dc", 25),
+                backlight=lcd_config.get("lcd_bl", 24),
+                rst=lcd_config.get("lcd_rst", 27)
+            )
+        else:
+            disp = st.ST7789()
         # The st7789 library commonly offers a display(image) method
         try:
             disp.display(img)
@@ -133,7 +142,22 @@ def main(argv=None):
     qr_generator = QRCodeGenerator()
     img = qr_generator.make_qr_image(url, DISPLAY_W, DISPLAY_H)
 
-    ok = show_on_waveshare(img)
+    # Try to load config for pins
+    lcd_config = None
+    try:
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib
+        config_path = os.path.join(os.path.dirname(__file__), "..", "config.toml")
+        if os.path.exists(config_path):
+            with open(config_path, "rb") as f:
+                full_config = tomllib.load(f)
+                lcd_config = full_config.get("pins")
+    except Exception:
+        pass
+
+    ok = show_on_waveshare(img, lcd_config=lcd_config)
     if not ok:
         out_path = args.save
         img.save(out_path)

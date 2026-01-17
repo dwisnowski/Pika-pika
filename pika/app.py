@@ -38,29 +38,45 @@ def load_config():
     config_path = os.path.join(os.path.dirname(__file__), "..", "config.toml")
     if not os.path.exists(config_path):
         # Create default config if it doesn't exist
-        default_config = {
+        return {
             "pika": {
                 "sample_hz": 100,
                 "data_dir": "data",
                 "port": 8000,
                 "display_fps": 5.0,
                 "display_auto_ip": True
+            },
+            "pins": {
+                "adc_address": 0x48,
+                "adc_channel": 0,
+                "lcd_port": 0,
+                "lcd_device": 0,
+                "lcd_cs": 8,
+                "lcd_dc": 25,
+                "lcd_rst": 27,
+                "lcd_bl": 24
             }
         }
-        return default_config["pika"]
 
     with open(config_path, "rb") as f:
-        config = tomllib.load(f)
-    return config.get("pika", {})
+        return tomllib.load(f)
 
 # Load configuration
-config = load_config()
+full_config = load_config()
+config = full_config.get("pika", {})
+pins = full_config.get("pins", {})
+
 DATA_DIR = config.get("data_dir", "data")
 SAMPLE_HZ = config.get("sample_hz", 100)
 DISPLAY_FPS = config.get("display_fps", 5.0)
 DISPLAY_AUTO_IP = config.get("display_auto_ip", True)
 
-logger = Datalogger(data_dir=DATA_DIR, sample_hz=SAMPLE_HZ)
+logger = Datalogger(
+    data_dir=DATA_DIR, 
+    sample_hz=SAMPLE_HZ,
+    adc_address=pins.get("adc_address", 0x48),
+    adc_channel=pins.get("adc_channel", 0)
+)
 
 manager = ConnectionManager()
 demo_manager = DemoConnectionManager()
@@ -93,7 +109,14 @@ def startup_event():
     # start the display manager (renders QR and animation if display available)
     try:
         from .display_manager import start_display
-        start_display(logger, auto_ip=DISPLAY_AUTO_IP, port=config.get("port", 8000), fps=DISPLAY_FPS, data_dir=DATA_DIR)
+        start_display(
+            logger, 
+            auto_ip=DISPLAY_AUTO_IP, 
+            port=config.get("port", 8000), 
+            fps=DISPLAY_FPS, 
+            data_dir=DATA_DIR,
+            lcd_config=pins
+        )
     except Exception:
         # non-fatal: continue if display is not available
         import logging as _logging

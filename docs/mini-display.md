@@ -39,5 +39,27 @@ python -m pika.mini_display --url http://192.168.1.50:8000
 ### Integration
 The main application starts the display automatically if the hardware is detected and dependencies are installed.
 
+## Configuration & Customization
+
+You can customize the project settings and GPIO pins by editing `config.toml` in the project root.
+
+### Pin Definitions
+The `[pins]` section allows you to customize the hardware setup:
+
+```toml
+[pins]
+# ADC Settings (ADS1115)
+adc_address = 0x48
+adc_channel = 0
+
+# LCD Settings (ST7789)
+lcd_port = 0
+lcd_device = 0
+lcd_cs = 8
+lcd_dc = 25
+lcd_rst = 27
+lcd_bl = 24
+```
+
 ## Technical Details
 The script tries several driver names (`LCD_2inch`, `st7789`, `LCD`). If no hardware is found, it fallbacks to saving `qr_lcd.png` in the repository root for debugging.

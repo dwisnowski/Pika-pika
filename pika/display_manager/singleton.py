@@ -24,7 +24,8 @@ class DisplayManagerSingleton:
         auto_ip: bool = True,
         port: int = DisplaySettings.DEFAULT_PORT,
         fps: float = DisplaySettings.DEFAULT_FPS,
-        data_dir: str = DisplaySettings.DEFAULT_DATA_DIR
+        data_dir: str = DisplaySettings.DEFAULT_DATA_DIR,
+        lcd_config: Optional[dict] = None
     ) -> DisplayManager:
         """Start the display manager if not already running.
         
@@ -35,6 +36,7 @@ class DisplayManagerSingleton:
             port: Port for auto-generated URL
             fps: Display refresh rate
             data_dir: Directory for data files
+            lcd_config: Dictionary of LCD pin settings
             
         Returns:
             DisplayManager instance
@@ -42,7 +44,8 @@ class DisplayManagerSingleton:
         if self._instance is None:
             self._instance = DisplayManager(
                 logger_obj, url=url, auto_ip=auto_ip,
-                port=port, fps=fps, data_dir=data_dir
+                port=port, fps=fps, data_dir=data_dir,
+                lcd_config=lcd_config
             )
             self._instance.start()
         return self._instance
@@ -74,7 +77,8 @@ def start_display(
     auto_ip: bool = True,
     port: int = DisplaySettings.DEFAULT_PORT,
     fps: float = DisplaySettings.DEFAULT_FPS,
-    data_dir: str = DisplaySettings.DEFAULT_DATA_DIR
+    data_dir: str = DisplaySettings.DEFAULT_DATA_DIR,
+    lcd_config: Optional[dict] = None
 ) -> DisplayManager:
     """Start the display manager singleton.
     
@@ -85,13 +89,15 @@ def start_display(
         port: Port for auto-generated URL
         fps: Display refresh rate
         data_dir: Directory for data files
+        lcd_config: Dictionary of LCD pin settings
         
     Returns:
         DisplayManager instance
     """
     return _display_singleton.start_display(
         logger_obj, url=url, auto_ip=auto_ip,
-        port=port, fps=fps, data_dir=data_dir
+        port=port, fps=fps, data_dir=data_dir,
+        lcd_config=lcd_config
     )
 
 

@@ -2,6 +2,27 @@
 
 This page provides step-by-step wiring photos and guidance so you can assemble the project safely. If you have real photos you'd like to include, replace the SVG placeholders in `docs/images/` with your own images (e.g., `wiring-step-1.jpg`).
 
+## GPIO Pinout
+
+![GPIO Pinout](./images/gpio-pins-raspberry-pi.png)
+
+## Wiring diagram
+
+Below is an illustrative wiring diagram showing the Raspberry Pi, ADS1115 and ZMPT101B connections. This diagram is **illustrative only** and does not replace proper safety practices.
+
+![Wiring diagram](./wiring.svg)
+
+### Quick wiring summary
+
+- ADS1115 VCC → Pi 3.3 V (Pin 1)
+- ADS1115 GND → Pi GND (Pin 6)
+- ADS1115 SDA → Pi SDA (Pin 3)
+- ADS1115 SCL → Pi SCL (Pin 5)
+- ADS1115 A0 → ZMPT101B Vout
+- ZMPT101B VCC → 5 V (use board 5 V or external supply, per sensor recommendation)
+- ZMPT101B GND → Pi GND
+
+
 ## Step 1 — Connect ADS1115
 
 ![Step 1 — Connect ADS1115](./images/wiring-step-1.svg)

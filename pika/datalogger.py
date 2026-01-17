@@ -47,13 +47,13 @@ except Exception:
     ADS1115ADC = None
 
 class Datalogger:
-    def __init__(self, data_dir="data", filename_prefix="log", sample_hz=100, adc=None, retention_days=5):
+    def __init__(self, data_dir="data", filename_prefix="log", sample_hz=100, adc=None, retention_days=5, adc_address=0x48, adc_channel=0):
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
         self.filename_prefix = filename_prefix
         self.sample_hz = sample_hz
         self.interval = 1.0 / float(self.sample_hz)
-        self.adc = adc if adc is not None else (ADS1115ADC() if ADS1115ADC else MockADC())
+        self.adc = adc if adc is not None else (ADS1115ADC(address=adc_address, channel=adc_channel) if ADS1115ADC else MockADC())
         self._stop = threading.Event()
         self._thread = None
         self._buffer = deque(maxlen=int(self.sample_hz * 60))  # keep last 60s in memory

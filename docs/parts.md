@@ -22,21 +22,7 @@ This page lists the hardware used in the Pika‑pika project and provides exampl
 
 - [Enclosure and inline fuse for mains safety](https://www.amazon.com/dp/B07QX4Q9G5) (if you are building a mains-connected measurement device)
 
-
-## Wiring diagram
-
-Below is an illustrative wiring diagram showing the Raspberry Pi, ADS1115 and ZMPT101B connections. This diagram is **illustrative only** and does not replace proper safety practices.
-
-![Wiring diagram](./wiring.svg)
-
-### Quick wiring summary
-
-- ADS1115 VCC → Pi 3.3 V (Pin 1)
-- ADS1115 GND → Pi GND (Pin 6)
-- ADS1115 SDA → Pi SDA (Pin 3)
-- ADS1115 SCL → Pi SCL (Pin 5)
-- ADS1115 A0 → ZMPT101B Vout
-- ZMPT101B VCC → 5 V (use board 5 V or external supply, per sensor recommendation)
-- ZMPT101B GND → Pi GND
+## Wiring steps:
+Continue to [Wiring steps](./wiring-steps.md)
 
 ---

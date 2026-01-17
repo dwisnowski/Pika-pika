@@ -11,3 +11,16 @@ port = 8000
 # Display settings
 display_fps = 5.0
 display_auto_ip = true
+
+[pins]
+# ADC Settings (ADS1115)
+adc_address = 0x48
+adc_channel = 0
+
+# LCD Settings (ST7789)
+lcd_port = 0
+lcd_device = 0
+lcd_cs = 8
+lcd_dc = 25
+lcd_rst = 27
+lcd_bl = 24
