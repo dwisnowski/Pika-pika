@@ -8,7 +8,7 @@ class HistoryChartManager {
         this.anomalies = [];
         this.showAnomalies = true;
         this.smoothData = false;
-        
+
         this.init();
     }
 
@@ -27,18 +27,18 @@ class HistoryChartManager {
 
         this.chart = new Chart(ctx, {
             type: 'line',
-            data: { 
-                labels: [], 
+            data: {
+                labels: [],
                 datasets: [
-                    { 
-                        label: 'Voltage', 
-                        data: [], 
-                        borderColor: '#90CAF9', 
-                        backgroundColor: 'rgba(144,202,249,0.1)', 
-                        tension: 0.1, 
-                        pointRadius: 1 
+                    {
+                        label: 'Voltage',
+                        data: [],
+                        borderColor: '#90CAF9',
+                        backgroundColor: 'rgba(144,202,249,0.1)',
+                        tension: 0.1,
+                        pointRadius: 1
                     }
-                ] 
+                ]
             },
             options: {
                 animation: false,
@@ -48,19 +48,19 @@ class HistoryChartManager {
                         zoom: { wheel: { enabled: true }, mode: 'x', pinch: { enabled: true } }
                     }
                 },
-                scales: { 
-                    x: { 
-                        type: 'time', 
-                        time: { unit: 'minute', tooltipFormat: 'HH:mm:ss' }, 
-                        ticks: { color: '#d0d0d0' }, 
-                        grid: { color: 'rgba(255,255,255,0.04)' } 
-                    }, 
-                    y: { 
-                        suggestedMin: 0, 
-                        suggestedMax: 3.3, 
-                        ticks: { color: '#d0d0d0' }, 
-                        grid: { color: 'rgba(255,255,255,0.04)' } 
-                    } 
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'minute', tooltipFormat: 'HH:mm:ss' },
+                        ticks: { color: '#d0d0d0' },
+                        grid: { color: 'rgba(255,255,255,0.04)' }
+                    },
+                    y: {
+                        suggestedMin: 0,
+                        suggestedMax: 3.3,
+                        ticks: { color: '#d0d0d0' },
+                        grid: { color: 'rgba(255,255,255,0.04)' }
+                    }
                 }
             }
         });
@@ -70,6 +70,11 @@ class HistoryChartManager {
         // Load data button
         document.getElementById('loadData').addEventListener('click', () => {
             this.loadDataRange();
+        });
+
+        // Load demo data button
+        document.getElementById('loadDemoData').addEventListener('click', () => {
+            this.loadDemoData();
         });
 
         // Export data button
@@ -103,10 +108,10 @@ class HistoryChartManager {
         // Set default date range (last 24 hours)
         const now = new Date();
         const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        
+
         document.getElementById('endDate').value = now.toISOString().split('T')[0];
         document.getElementById('startDate').value = yesterday.toISOString().split('T')[0];
-        
+
         // Load initial data
         this.loadDataRange();
     }
@@ -115,7 +120,7 @@ class HistoryChartManager {
         const startDate = new Date(document.getElementById('startDate').value);
         const endDate = new Date(document.getElementById('endDate').value);
         const loadBtn = document.getElementById('loadData');
-        
+
         if (startDate >= endDate) {
             loadBtn.disabled = true;
             loadBtn.textContent = 'Invalid Date Range';
@@ -128,7 +133,7 @@ class HistoryChartManager {
     async loadDataRange() {
         const startDate = new Date(document.getElementById('startDate').value);
         const endDate = new Date(document.getElementById('endDate').value);
-        
+
         if (startDate >= endDate) {
             alert('Start date must be before end date');
             return;
@@ -145,7 +150,7 @@ class HistoryChartManager {
             // Fetch historical data
             const response = await fetch(`/api/range?start=${startTs}&end=${endTs}&max_points=5000`);
             const data = await response.json();
-            
+
             if (data.data) {
                 this.currentData = data.data;
                 this.updateChart();
@@ -155,7 +160,7 @@ class HistoryChartManager {
             // Fetch anomalies for the same range
             const highlightsResponse = await fetch(`/api/highlights?start=${startTs}&end=${endTs}`);
             const highlightsData = await highlightsResponse.json();
-            
+
             if (highlightsData.highlights) {
                 this.anomalies = highlightsData.highlights;
                 this.updateAnomalyDisplay();
@@ -171,19 +176,70 @@ class HistoryChartManager {
         }
     }
 
+    async loadDemoData() {
+        try {
+            // Show loading state
+            const demoBtn = document.getElementById('loadDemoData');
+            const originalText = demoBtn.textContent;
+            demoBtn.textContent = 'Loading Demo...';
+            demoBtn.disabled = true;
+
+            // Define a range that would capture most of the demo data
+            // Since demo data is generated with current timestamps, we use a wide range relative to now
+            const now = Math.floor(Date.now() / 1000);
+            const startTs = now - 3600 * 24; // last 24 hours
+            const endTs = now + 60; // a bit into the future to catch latest
+
+            // Fetch historical demo data from demo.csv
+            const response = await fetch(`/api/range?start=${startTs}&end=${endTs}&max_points=5000&source=demo`);
+            const data = await response.json();
+
+            if (data.data) {
+                this.currentData = data.data;
+                this.updateChart();
+                this.calculateStatistics();
+            }
+
+            // Fetch anomalies from demo_highlights.json
+            const highlightsResponse = await fetch(`/api/highlights?start=${startTs}&end=${endTs}&source=demo`);
+            const highlightsData = await highlightsResponse.json();
+
+            if (highlightsData.highlights) {
+                this.anomalies = highlightsData.highlights;
+                this.updateAnomalyDisplay();
+            }
+
+            // Update date inputs to reflect what we just loaded (approximate)
+            const startDateObj = new Date(startTs * 1000);
+            const endDateObj = new Date(endTs * 1000);
+            document.getElementById('startDate').value = startDateObj.toISOString().split('T')[0];
+            document.getElementById('endDate').value = endDateObj.toISOString().split('T')[0];
+            this.validateDateRange();
+
+        } catch (error) {
+            console.error('Error loading demo data:', error);
+            alert('Failed to load demo data. Make sure demo is active and generating data.');
+        } finally {
+            // Reset loading state
+            const demoBtn = document.getElementById('loadDemoData');
+            demoBtn.textContent = 'Load Demo Data';
+            demoBtn.disabled = false;
+        }
+    }
+
     updateChart() {
         if (!this.currentData || !this.currentData.length) return;
 
         let processedData = this.currentData;
-        
+
         // Apply smoothing if enabled
         if (this.smoothData) {
             processedData = this.applyDataSmoothing(this.currentData);
         }
 
         this.chart.data.labels = processedData.map(d => new Date(d[0] * 1000));
-        this.chart.data.datasets[0].data = processedData.map(d => ({x: new Date(d[0] * 1000), y: d[1]}));
-        
+        this.chart.data.datasets[0].data = processedData.map(d => ({ x: new Date(d[0] * 1000), y: d[1] }));
+
         this.updateAnomalyMarkers();
         this.chart.update();
     }
@@ -192,18 +248,18 @@ class HistoryChartManager {
         // Simple 1-second moving average
         const smoothed = [];
         const windowSize = 100; // Assuming 100Hz sampling, 1 second = 100 samples
-        
+
         for (let i = 0; i < data.length; i++) {
             const start = Math.max(0, i - Math.floor(windowSize / 2));
             const end = Math.min(data.length, i + Math.ceil(windowSize / 2));
             const window = data.slice(start, end);
-            
+
             const sum = window.reduce((acc, point) => acc + point[1], 0);
             const avg = sum / window.length;
-            
+
             smoothed.push([data[i][0], avg]);
         }
-        
+
         return smoothed;
     }
 
@@ -219,7 +275,7 @@ class HistoryChartManager {
                 x: new Date(a.peak_ts * 1000),
                 y: a.peak_value
             }));
-            
+
             if (this.chart.data.datasets.length === 1) {
                 this.chart.data.datasets.push({
                     label: 'Anomalies',
@@ -234,29 +290,29 @@ class HistoryChartManager {
                 this.chart.data.datasets[1].data = anomalyData;
             }
         }
-        
+
         this.chart.update();
     }
 
     updateAnomalyDisplay() {
         const anomalyCount = document.getElementById('anomalyTotal');
         const anomalyList = document.getElementById('anomalyList');
-        
+
         anomalyCount.textContent = this.anomalies.length;
-        
+
         if (!this.anomalies || !this.anomalies.length) {
             anomalyList.innerHTML = '<p style="color:var(--muted);">No anomalies detected in selected date range.</p>';
             return;
         }
-        
+
         // Sort by severity (score)
         const sortedAnomalies = [...this.anomalies].sort((a, b) => b.score - a.score);
-        
+
         anomalyList.innerHTML = sortedAnomalies.map((a, idx) => {
             const start = new Date(a.start_ts * 1000).toLocaleString();
             const end = new Date(a.end_ts * 1000).toLocaleString();
             const type = a.type || 'unknown';
-            
+
             return `
                 <div style="padding:8px; border-bottom:1px solid #eee;">
                     <strong>#${idx + 1}</strong> - ${type.toUpperCase()}<br/>
@@ -277,7 +333,7 @@ class HistoryChartManager {
         const mean = voltages.reduce((sum, v) => sum + v, 0) / voltages.length;
         const min = Math.min(...voltages);
         const max = Math.max(...voltages);
-        
+
         // Calculate standard deviation
         const variance = voltages.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / voltages.length;
         const std = Math.sqrt(variance);
@@ -321,7 +377,7 @@ class HistoryChartManager {
             d[1].toFixed(6),
             new Date(d[0] * 1000).toLocaleString()
         ]);
-        
+
         const csvContent = [headers, ...rows]
             .map(row => row.join(','))
             .join('\n');

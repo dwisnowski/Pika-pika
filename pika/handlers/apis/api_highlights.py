@@ -12,10 +12,10 @@ from ... import demo as _demo
 
 def register_api_highlights_routes(app: FastAPI, app_state, data_dir):
     """Register highlights API routes with the FastAPI app."""
-    app.get("/api/highlights")(lambda start=None, end=None, demo=False: api_highlights(app_state, data_dir, start, end, demo))
+    app.get("/api/highlights")(lambda start=None, end=None, demo=False, source=None: api_highlights(app_state, data_dir, start, end, demo, source))
 
 
-def api_highlights(app_state, data_dir, start: float = None, end: float = None, demo: bool = False):
+def api_highlights(app_state, data_dir, start: float = None, end: float = None, demo: bool = False, source: str = None):
     """Get highlights, optionally filtered by time range.
     
     Args:
@@ -23,12 +23,21 @@ def api_highlights(app_state, data_dir, start: float = None, end: float = None, 
         data_dir: Data directory path
         start: Optional start timestamp (epoch seconds) to filter highlights
         end: Optional end timestamp (epoch seconds) to filter highlights
+        demo: Whether to return fake real-time demo highlights
+        source: Optional source (e.g. 'demo' to read from data/demo_highlights.json)
         
     Returns:
         JSON response with highlights data
     """
     try:
-        if demo:
+        if source == 'demo':
+            path = os.path.join(data_dir, 'demo_highlights.json')
+            if os.path.exists(path):
+                with open(path, 'r') as f:
+                    highlights = json.load(f)
+            else:
+                highlights = []
+        elif demo:
             import time
             now = time.time()
             if start is None:
@@ -36,19 +45,18 @@ def api_highlights(app_state, data_dir, start: float = None, end: float = None, 
             if end is None:
                 end = now
             highlights = _demo.highlights_for_range(float(start), float(end))
-            return JSONResponse({"highlights": highlights})
-
-        hl = getattr(app_state, '_highlights', None)
-        if hl is not None:
-            highlights = hl.get_highlights()
         else:
-            # fallback: try reading from disk
-            path = os.path.join(data_dir, 'highlights.json')
-            if os.path.exists(path):
-                with open(path, 'r') as f:
-                    highlights = json.load(f)
+            hl = getattr(app_state, '_highlights', None)
+            if hl is not None:
+                highlights = hl.get_highlights()
             else:
-                highlights = []
+                # fallback: try reading from disk
+                path = os.path.join(data_dir, 'highlights.json')
+                if os.path.exists(path):
+                    with open(path, 'r') as f:
+                        highlights = json.load(f)
+                else:
+                    highlights = []
 
         # Filter by time range if provided
         if start is not None or end is not None:

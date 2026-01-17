@@ -25,16 +25,18 @@ class ConnectionManager:
 
     def disconnect(self, websocket: WebSocket):
         """Remove WebSocket connection from active connections."""
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
 
     async def broadcast(self, message: str):
         """Broadcast message to all connected WebSocket clients."""
-        for connection in self.active_connections:
+        for connection in list(self.active_connections):
             try:
                 await connection.send_text(message)
             except Exception:
                 # Remove dead connections
-                self.active_connections.remove(connection)
+                if connection in self.active_connections:
+                    self.active_connections.remove(connection)
 
     def add_sample(self, ts: float, val: float):
         """Add a sample to the queue for broadcasting (thread-safe)."""

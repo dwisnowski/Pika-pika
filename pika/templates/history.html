@@ -10,9 +10,10 @@
     <div class="card" style="padding:20px; margin-bottom:20px;">
         <h3 style="margin-top:0;">Historical Data Browser</h3>
         <p style="color:var(--muted); margin-bottom:20px;">
-            Browse and analyze historical voltage measurements. Select date ranges and view detailed statistics and anomaly detection results.
+            Browse and analyze historical voltage measurements. Select date ranges and view detailed statistics and
+            anomaly detection results.
         </p>
-        
+
         <!-- Date Range Selector -->
         <div style="display:flex; gap:16px; align-items:center; margin-bottom:20px; flex-wrap:wrap;">
             <div>
@@ -25,6 +26,7 @@
             </div>
             <div>
                 <button id="loadData" class="btn primary">Load Data</button>
+                <button id="loadDemoData" class="btn secondary">Load Demo Data</button>
                 <button id="exportData" class="btn">Export CSV</button>
             </div>
         </div>
@@ -42,7 +44,7 @@
                 <div>Total Samples: <span id="totalSamples">--</span></div>
             </div>
         </div>
-        
+
         <div class="card" style="flex:1; padding:20px;">
             <h4 style="margin-top:0;">Anomalies Detected</h4>
             <div id="anomalyCount" style="font-size:24px; font-weight:bold; color:#FF6B6B; margin-bottom:10px;">
@@ -74,6 +76,7 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script
+    src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="{{ url_for('static', path='/js/history_chart.js') }}"></script>
 {% endblock %}

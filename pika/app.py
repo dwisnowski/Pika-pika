@@ -79,7 +79,7 @@ logger = Datalogger(
 )
 
 manager = ConnectionManager()
-demo_manager = DemoConnectionManager()
+demo_manager = DemoConnectionManager(data_dir=DATA_DIR)
 
 # static files
 static_dir = os.path.join(os.path.dirname(__file__), "static")
@@ -93,6 +93,17 @@ register_websocket_demo_routes(app, demo_manager)
 
 @app.on_event("startup")
 def startup_event():
+    # Clear demo files to ensure each run starts fresh
+    demo_csv = os.path.join(DATA_DIR, "demo.csv")
+    demo_highlights = os.path.join(DATA_DIR, "demo_highlights.json")
+    for f in [demo_csv, demo_highlights]:
+        if os.path.exists(f):
+            try:
+                os.remove(f)
+            except Exception:
+                import logging as _logging
+                _logging.getLogger(__name__).exception(f"Failed to remove {f}")
+
     # Restore recent samples from disk and start sampling
     logger.tail_from_disk(seconds=30)
     logger.start()

@@ -6,6 +6,8 @@ Handles real-time demo data streaming for testing without hardware.
 import asyncio
 import json
 import time
+import os
+import csv
 from fastapi import WebSocket
 from typing import List
 
@@ -13,10 +15,13 @@ from typing import List
 class DemoConnectionManager:
     """Manages WebSocket connections for demo data streaming and simulation."""
     
-    def __init__(self):
+    def __init__(self, data_dir: str = "data"):
         self.active_connections: List[WebSocket] = []
         self._demo_task = None
         self._pending_anomalies = asyncio.Queue()
+        self.data_dir = data_dir
+        self.demo_csv_path = os.path.join(data_dir, "demo.csv")
+        self.demo_highlights_path = os.path.join(data_dir, "demo_highlights.json")
 
     async def connect(self, websocket: WebSocket):
         """Accept and store new WebSocket connection."""
@@ -27,7 +32,8 @@ class DemoConnectionManager:
 
     def disconnect(self, websocket: WebSocket):
         """Remove WebSocket connection from active connections."""
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
         if not self.active_connections:
             if self._demo_task:
                 self._demo_task.cancel()
@@ -35,12 +41,13 @@ class DemoConnectionManager:
 
     async def broadcast(self, message: str):
         """Broadcast message to all connected WebSocket clients."""
-        for connection in self.active_connections:
+        for connection in list(self.active_connections):
             try:
                 await connection.send_text(message)
             except Exception:
                 # Remove dead connections
-                self.active_connections.remove(connection)
+                if connection in self.active_connections:
+                    self.active_connections.remove(connection)
 
     async def _run_demo_simulation(self):
         """Simulate real-time demo data by generating consistent voltage with occasional anomalies."""
@@ -49,6 +56,13 @@ class DemoConnectionManager:
         # Import demo module for data generation
         from .. import demo
         
+        # Ensure demo.csv has a header if it's new
+        if not os.path.exists(self.demo_csv_path):
+            os.makedirs(os.path.dirname(self.demo_csv_path), exist_ok=True)
+            with open(self.demo_csv_path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["timestamp", "value"])
+
         # Track active anomalies for real-time generation
         active_anomalies = []  # List of (end_time, magnitude, type, start_time, center)
         next_anomaly_time = None
@@ -71,6 +85,10 @@ class DemoConnectionManager:
             "highlights": highlights
         }
         await self.broadcast(json.dumps(highlights_msg))
+        
+        # Save initial highlights to file
+        with open(self.demo_highlights_path, 'w') as f:
+            json.dump(highlights, f)
 
         # Simulate real-time data
         sample_count = 0
@@ -133,6 +151,11 @@ class DemoConnectionManager:
                         env = 1.0 - abs((t - center) / (span / 2.0))
                         voltage += magnitude * env
 
+                # Save to demo.csv
+                with open(self.demo_csv_path, 'a', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["{:.6f}".format(t), "{:.6f}".format(voltage)])
+
                 # Send new sample
                 sample_msg = {
                     "type": "new_sample",
@@ -158,6 +181,10 @@ class DemoConnectionManager:
                                 'type': anom_type
                             })
                     
+                    # Save highlights to file
+                    with open(self.demo_highlights_path, 'w') as f:
+                        json.dump(highlights, f)
+
                     highlights_msg = {
                         "type": "highlights",
                         "highlights": highlights

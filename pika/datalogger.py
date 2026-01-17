@@ -328,6 +328,55 @@ class Datalogger:
                 result.append((avg_ts, avg_val))
         return result
 
+    def get_range_from_file(self, filepath: str, start_ts: float, end_ts: float, max_points: int = 1000):
+        """Return downsampled data from a specific CSV file in the range [start_ts, end_ts]."""
+        if not os.path.exists(filepath):
+            return []
+        try:
+            start_ts = float(start_ts)
+            end_ts = float(end_ts)
+        except Exception:
+            return []
+            
+        bucket_count = max(1, int(max_points))
+        interval = (end_ts - start_ts) / bucket_count
+        buckets = [{'sum': 0.0, 'count': 0, 'min': None, 'max': None, 'ts_sum': 0.0} for _ in range(bucket_count)]
+
+        try:
+            with open(filepath, 'rt') as f:
+                reader = csv.reader(f)
+                next(reader, None) # skip header
+                for row in reader:
+                    if len(row) < 2:
+                        continue
+                    try:
+                        ts = float(row[0])
+                        val = float(row[1])
+                    except Exception:
+                        continue
+                    if ts < start_ts or ts > end_ts:
+                        continue
+                    idx = int((ts - start_ts) / interval)
+                    if idx < 0: idx = 0
+                    elif idx >= bucket_count: idx = bucket_count - 1
+                    b = buckets[idx]
+                    b['sum'] += val
+                    b['count'] += 1
+                    b['ts_sum'] += ts
+                    if b['min'] is None or val < b['min']: b['min'] = val
+                    if b['max'] is None or val > b['max']: b['max'] = val
+        except Exception:
+            logging.exception(f"Error processing CSV file {filepath}")
+            return []
+
+        result = []
+        for b in buckets:
+            if b['count'] > 0:
+                avg_ts = b['ts_sum'] / b['count']
+                avg_val = b['sum'] / b['count']
+                result.append((avg_ts, avg_val))
+        return result
+
     def get_recent(self, seconds=5.0):
         cutoff = time.time() - float(seconds)
         return [(ts, val) for ts, val in list(self._buffer) if ts >= cutoff]
