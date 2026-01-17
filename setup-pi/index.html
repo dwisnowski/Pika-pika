@@ -516,20 +516,15 @@
     
     
     
-      
-        
-        
-      
     
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3">
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
   
@@ -636,6 +631,33 @@
     
   
     Mini-Display &amp; QR
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../3d-printing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enclosure
   
 
     
@@ -958,43 +980,43 @@
 <h2 id="2-project-setup">2. Project Setup</h2>
 <p>Once your Pi is booted and you have SSH access:</p>
 <h3 id="update-and-install-git">Update and Install Git</h3>
-<pre><code class="language-bash">sudo apt update &amp;&amp; sudo apt upgrade -y
-sudo apt install git -y
-</code></pre>
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>apt<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sudo<span class="w"> </span>apt<span class="w"> </span>upgrade<span class="w"> </span>-y
+sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>git<span class="w"> </span>-y
+</code></pre></div>
 <h3 id="clone-and-setup">Clone and Setup</h3>
-<pre><code class="language-bash">git clone https://github.com/dwisnowski/Pika-pika.git
-cd Pika-pika
-bash scripts/setup_pi.sh
-</code></pre>
-<p>The <code>setup_pi.sh</code> script will:
+<p></p><div class="highlight"><pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/dwisnowski/Pika-pika.git
+<span class="nb">cd</span><span class="w"> </span>Pika-pika
+bash<span class="w"> </span>scripts/setup_pi.sh
+</code></pre></div>
+The <code>setup_pi.sh</code> script will:
 - Install system dependencies.
 - Create a virtual environment.
 - Install Python packages.
 - Ask to enable I2C.
-- Offer to install the systemd service.</p>
+- Offer to install the systemd service.<p></p>
 <h2 id="3-running-the-app">3. Running the App</h2>
 <h3 id="manual-run">Manual Run</h3>
-<pre><code class="language-bash">make run
-</code></pre>
+<div class="highlight"><pre><span></span><code>make<span class="w"> </span>run
+</code></pre></div>
 <h3 id="development-mode">Development Mode</h3>
-<pre><code class="language-bash">make dev
-</code></pre>
+<div class="highlight"><pre><span></span><code>make<span class="w"> </span>dev
+</code></pre></div>
 <h2 id="4-system-integration">4. System Integration</h2>
 <h3 id="systemd-service">Systemd Service</h3>
-<p>If you didn't install it during <code>setup_pi.sh</code>, you can do so manually:</p>
-<pre><code class="language-bash">sudo bash scripts/install_systemd.sh
-</code></pre>
+<p>If you didn't install it during <code>setup_pi.sh</code>, you can do so manually:
+</p><div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>bash<span class="w"> </span>scripts/install_systemd.sh
+</code></pre></div><p></p>
 <h3 id="monitoring-logs">Monitoring Logs</h3>
-<pre><code class="language-bash">sudo systemctl status pika-pika
-sudo journalctl -u pika-pika -f
-</code></pre>
+<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>systemctl<span class="w"> </span>status<span class="w"> </span>pika-pika
+sudo<span class="w"> </span>journalctl<span class="w"> </span>-u<span class="w"> </span>pika-pika<span class="w"> </span>-f
+</code></pre></div>
 <h3 id="watchdog">Watchdog</h3>
 <p>The application includes a systemd watchdog helper. If the datalogger stops sampling, systemd will automatically restart the service.</p>
 <h2 id="5-hardware-configuration">5. Hardware Configuration</h2>
 <h3 id="enable-i2c">Enable I2C</h3>
-<p>If not already enabled:</p>
-<pre><code class="language-bash">sudo raspi-config nonint do_i2c 0
-</code></pre>
+<p>If not already enabled:
+</p><div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>raspi-config<span class="w"> </span>nonint<span class="w"> </span>do_i2c<span class="w"> </span><span class="m">0</span>
+</code></pre></div><p></p>
 <h3 id="wiring">Wiring</h3>
 <p>Refer to the <a href="../wiring-steps/">Wiring Guide</a> for detailed schematics.</p>
 
@@ -1046,7 +1068,7 @@ sudo journalctl -u pika-pika -f
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "content.code.copy", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections.collapsible", "content.code.copy", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>

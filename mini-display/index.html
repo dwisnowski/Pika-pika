@@ -11,7 +11,7 @@
         <link rel="prev" href="../wiring-steps/">
       
       
-        <link rel="next" href="../demo/">
+        <link rel="next" href="../3d-printing/">
       
       
         
@@ -280,20 +280,15 @@
     
     
     
-      
-        
-        
-      
     
-    
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
         <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3">
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
   
@@ -555,6 +550,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../3d-printing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enclosure
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../demo/" class="md-nav__link">
         
   
@@ -750,20 +772,20 @@
 <p>Designed for the <strong>Waveshare 2" LCD Module</strong>. It uses the ST7789 driver.</p>
 <h2 id="setup">Setup</h2>
 <h3 id="optional-dependencies">Optional Dependencies</h3>
-<p>Install the display-specific dependencies:</p>
-<pre><code class="language-bash">uv sync --extra display
-</code></pre>
-<p>Or via the setup script:</p>
-<pre><code class="language-bash">bash scripts/setup_pi.sh
-</code></pre>
+<p>Install the display-specific dependencies:
+</p><div class="highlight"><pre><span></span><code>uv<span class="w"> </span>sync<span class="w"> </span>--extra<span class="w"> </span>display
+</code></pre></div>
+Or via the setup script:
+<div class="highlight"><pre><span></span><code>bash<span class="w"> </span>scripts/setup_pi.sh
+</code></pre></div><p></p>
 <h2 id="usage">Usage</h2>
-<p>Run the display script:</p>
-<pre><code class="language-bash"># Auto-detect IP and display QR
-python -m pika.mini_display --auto-ip --port 8000
+<p>Run the display script:
+</p><div class="highlight"><pre><span></span><code><span class="c1"># Auto-detect IP and display QR</span>
+python<span class="w"> </span>-m<span class="w"> </span>pika.mini_display<span class="w"> </span>--auto-ip<span class="w"> </span>--port<span class="w"> </span><span class="m">8000</span>
 
-# Specify a URL manually
-python -m pika.mini_display --url http://192.168.1.50:8000
-</code></pre>
+<span class="c1"># Specify a URL manually</span>
+python<span class="w"> </span>-m<span class="w"> </span>pika.mini_display<span class="w"> </span>--url<span class="w"> </span>http://192.168.1.50:8000
+</code></pre></div><p></p>
 <h3 id="integration">Integration</h3>
 <p>The main application starts the display automatically if the hardware is detected and dependencies are installed.</p>
 <h2 id="technical-details">Technical Details</h2>
@@ -817,7 +839,7 @@ python -m pika.mini_display --url http://192.168.1.50:8000
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "content.code.copy", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections.collapsible", "content.code.copy", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
       <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
