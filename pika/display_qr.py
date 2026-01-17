@@ -27,6 +27,8 @@ import qrcode
 import os
 import logging
 
+from .qr_generator import make_qr_image
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -44,28 +46,6 @@ def get_local_ip() -> Optional[str]:
         return ip
     except Exception:
         return None
-
-
-def make_qr_image(url: str, out_w: int = DISPLAY_W, out_h: int = DISPLAY_H) -> Image.Image:
-    # Create QR image (square) and place it centered on a background matching the LCD dimension
-    qr = qrcode.QRCode(border=2, box_size=8)
-    qr.add_data(url)
-    qr.make(fit=True)
-    qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-
-    # Scale QR to fit inside the display width with margins
-    max_q_size = min(out_w, out_h) - 24
-    qr_img = ImageOps.contain(qr_img, (max_q_size, max_q_size))
-
-    # Create display image and paste QR in center
-    bg = Image.new("RGB", (out_w, out_h), color=(255, 255, 255))
-    x = (out_w - qr_img.width) // 2
-    y = (out_h - qr_img.height) // 2 - 12
-    bg.paste(qr_img, (x, y))
-
-    # Optionally add a small text area (monochrome) under the QR — keep it simple: draw as a small black bar
-    # For best results on tiny LCDs add text rendering if fonts available.
-    return bg
 
 
 def show_on_waveshare(img: Image.Image) -> bool:
