@@ -8,26 +8,28 @@
       
       
       
+        <link rel="prev" href="..">
       
-        <link rel="next" href="setup-pi/">
+      
+        <link rel="next" href="../parts/">
       
       
         
       
       
-      <link rel="icon" href="images/logo.svg">
+      <link rel="icon" href="../images/logo.svg">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
     
     
       
-        <title>Pika-pika</title>
+        <title>Raspberry Pi Setup - Pika-pika</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -46,13 +48,13 @@
       
     
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
     
     
-  <link href="assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+  <link href="../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
             html.glightbox-open { overflow: initial; height: 100%; }
             .gslide-title { margin-top: 0px; user-select: text; }
             .gslide-desc { color: #666; user-select: text; }
@@ -81,7 +83,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#pika-pika-documentation" class="md-skip">
+        <a href="#raspberry-pi-setup-guide" class="md-skip">
           Skip to content
         </a>
       
@@ -97,9 +99,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="Pika-pika" class="md-header__button md-logo" aria-label="Pika-pika" data-md-component="logo">
+    <a href=".." title="Pika-pika" class="md-header__button md-logo" aria-label="Pika-pika" data-md-component="logo">
       
-  <img src="images/logo.svg" alt="logo">
+  <img src="../images/logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -116,7 +118,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              Raspberry Pi Setup
             
           </span>
         </div>
@@ -192,9 +194,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="Pika-pika" class="md-nav__button md-logo" aria-label="Pika-pika" data-md-component="logo">
+    <a href=".." title="Pika-pika" class="md-nav__button md-logo" aria-label="Pika-pika" data-md-component="logo">
       
-  <img src="images/logo.svg" alt="logo">
+  <img src="../images/logo.svg" alt="logo">
 
     </a>
     Pika-pika
@@ -213,6 +215,33 @@
     </div>
   
   <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
     
       
       
@@ -237,7 +266,7 @@
   <span class="md-ellipsis">
     
   
-    Home
+    Raspberry Pi Setup
   
 
     
@@ -248,14 +277,14 @@
           <span class="md-nav__icon md-icon"></span>
         </label>
       
-      <a href="." class="md-nav__link md-nav__link--active">
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
   <span class="md-ellipsis">
     
   
-    Home
+    Raspberry Pi Setup
   
 
     
@@ -281,10 +310,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#key-features" class="md-nav__link">
+  <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Key Features
+        Prerequisites
       
     </span>
   </a>
@@ -292,22 +321,44 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#getting-started" class="md-nav__link">
+  <a href="#1-os-installation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Getting Started
+        1. OS Installation
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Getting Started">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-project-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Project Setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Project Setup">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#quick-links" class="md-nav__link">
+  <a href="#update-and-install-git" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Links
+        Update and Install Git
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clone-and-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clone and Setup
       
     </span>
   </a>
@@ -320,13 +371,130 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#screenshots" class="md-nav__link">
+  <a href="#3-running-the-app" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Screenshots
+        3. Running the App
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="3. Running the App">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#manual-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manual Run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#development-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-system-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. System Integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. System Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#systemd-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Systemd Service
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitoring-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring Logs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#watchdog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Watchdog
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-hardware-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Hardware Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Hardware Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enable-i2c" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enable I2C
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -334,33 +502,6 @@
   
 </nav>
       
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="setup-pi/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Raspberry Pi Setup
-  
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -424,7 +565,7 @@
   
   
     <li class="md-nav__item">
-      <a href="parts/" class="md-nav__link">
+      <a href="../parts/" class="md-nav__link">
         
   
   
@@ -452,7 +593,7 @@
   
   
     <li class="md-nav__item">
-      <a href="wiring-steps/" class="md-nav__link">
+      <a href="../wiring-steps/" class="md-nav__link">
         
   
   
@@ -487,7 +628,7 @@
   
   
     <li class="md-nav__item">
-      <a href="mini-display/" class="md-nav__link">
+      <a href="../mini-display/" class="md-nav__link">
         
   
   
@@ -514,7 +655,7 @@
   
   
     <li class="md-nav__item">
-      <a href="demo/" class="md-nav__link">
+      <a href="../demo/" class="md-nav__link">
         
   
   
@@ -541,7 +682,7 @@
   
   
     <li class="md-nav__item">
-      <a href="contributing/" class="md-nav__link">
+      <a href="../contributing/" class="md-nav__link">
         
   
   
@@ -588,10 +729,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#key-features" class="md-nav__link">
+  <a href="#prerequisites" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Key Features
+        Prerequisites
       
     </span>
   </a>
@@ -599,22 +740,44 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#getting-started" class="md-nav__link">
+  <a href="#1-os-installation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Getting Started
+        1. OS Installation
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Getting Started">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-project-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Project Setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Project Setup">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#quick-links" class="md-nav__link">
+  <a href="#update-and-install-git" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Quick Links
+        Update and Install Git
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clone-and-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clone and Setup
       
     </span>
   </a>
@@ -627,13 +790,130 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#screenshots" class="md-nav__link">
+  <a href="#3-running-the-app" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Screenshots
+        3. Running the App
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="3. Running the App">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#manual-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manual Run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#development-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-system-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. System Integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. System Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#systemd-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Systemd Service
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitoring-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitoring Logs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#watchdog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Watchdog
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-hardware-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Hardware Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Hardware Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enable-i2c" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enable I2C
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -657,50 +937,66 @@
   
 
 
-<h1 id="pika-pika-documentation">Pika-pika Documentation</h1>
-<p>Welcome to the Pika-pika documentation. Pika-pika is a lightweight, Python-based voltage logger designed for the Raspberry Pi.</p>
-<h2 id="key-features">Key Features</h2>
+<h1 id="raspberry-pi-setup-guide">Raspberry Pi Setup Guide</h1>
+<p>This guide covers everything from flashing the OS to running Pika-pika as a system service.</p>
+<h2 id="prerequisites">Prerequisites</h2>
 <ul>
-<li><strong>High-frequency Sampling</strong>: Sample voltage at 100 Hz using the ADS1115.</li>
-<li><strong>Live Monitoring</strong>: View real-time data and anomalies via a web interface.</li>
-<li><strong>Resource Efficient</strong>: Designed to run smoothly on legacy hardware like the Raspberry Pi 2.</li>
-<li><strong>System Integration</strong>: Includes systemd support with an automated watchdog for reliability.</li>
+<li><strong>Raspberry Pi</strong>: Raspberry Pi 2B+ or later (tested on Pi 2B).</li>
+<li><strong>OS</strong>: Raspberry Pi OS Lite (32-bit) is recommended for performance.</li>
+<li><strong>Hardware</strong>: ADS1115 ADC and ZMPT101B voltage sensor.</li>
 </ul>
-<h2 id="getting-started">Getting Started</h2>
-<div class="grid cards" markdown>
-
--   **[Raspberry Pi Setup](setup-pi.md)**
-    Step-by-step guide for OS installation, project setup, and system integration.
-
--   **[Hardware &amp; Wiring](wiring-steps.md)**
-    Detailed parts list and wiring diagrams for the voltage sensor and ADC.
-
--   **[Mini-Display &amp; QR](mini-display.md)**
-    Setup and usage for the Waveshare 2" LCD status display.
-
--   **[Contributing Guide](contributing.md)**
-    Information for developers wanting to improve the project.
-
-</div>
-
-<h3 id="quick-links">Quick Links</h3>
-<ul>
-<li><a href="/">Live UI</a> (served by the running app)</li>
-<li><a href="/demo">Demo UI</a> (mock data — no hardware required)</li>
-</ul>
-<h2 id="screenshots">Screenshots</h2>
-<div class="grid cards" markdown>
-
--   **Live Monitor**
-    ![Live Monitor](images/live-screenshot.PNG){ .glightbox data-title="Live Voltage Monitor" }
-
--   **Demo Mode**
-    ![Demo Mode](images/demo-screenshot.PNG){ .glightbox data-title="Demo Mode" }
-
--   **History View**
-    ![History View](images/history-screenshot.PNG){ .glightbox data-title="Historical Data Browser" }
-
-</div>
+<h2 id="1-os-installation">1. OS Installation</h2>
+<ol>
+<li>Download <a href="https://www.raspberrypi.com/software/">Raspberry Pi Imager</a>.</li>
+<li>Insert your microSD card.</li>
+<li>Launch Imager and click <strong>Choose OS</strong>.</li>
+<li>Select <strong>Raspberry Pi OS (other)</strong> → <strong>Raspberry Pi OS Lite (32-bit)</strong>.</li>
+<li>Click <strong>Choose Storage</strong> and select your microSD card.</li>
+<li>(Optional) Use the settings icon to pre-configure WiFi, SSH, and hostname (<code>pika-pika</code>).</li>
+<li>Click <strong>Write</strong>.</li>
+</ol>
+<h2 id="2-project-setup">2. Project Setup</h2>
+<p>Once your Pi is booted and you have SSH access:</p>
+<h3 id="update-and-install-git">Update and Install Git</h3>
+<pre><code class="language-bash">sudo apt update &amp;&amp; sudo apt upgrade -y
+sudo apt install git -y
+</code></pre>
+<h3 id="clone-and-setup">Clone and Setup</h3>
+<pre><code class="language-bash">git clone https://github.com/dwisnowski/Pika-pika.git
+cd Pika-pika
+bash scripts/setup_pi.sh
+</code></pre>
+<p>The <code>setup_pi.sh</code> script will:
+- Install system dependencies.
+- Create a virtual environment.
+- Install Python packages.
+- Ask to enable I2C.
+- Offer to install the systemd service.</p>
+<h2 id="3-running-the-app">3. Running the App</h2>
+<h3 id="manual-run">Manual Run</h3>
+<pre><code class="language-bash">make run
+</code></pre>
+<h3 id="development-mode">Development Mode</h3>
+<pre><code class="language-bash">make dev
+</code></pre>
+<h2 id="4-system-integration">4. System Integration</h2>
+<h3 id="systemd-service">Systemd Service</h3>
+<p>If you didn't install it during <code>setup_pi.sh</code>, you can do so manually:</p>
+<pre><code class="language-bash">sudo bash scripts/install_systemd.sh
+</code></pre>
+<h3 id="monitoring-logs">Monitoring Logs</h3>
+<pre><code class="language-bash">sudo systemctl status pika-pika
+sudo journalctl -u pika-pika -f
+</code></pre>
+<h3 id="watchdog">Watchdog</h3>
+<p>The application includes a systemd watchdog helper. If the datalogger stops sampling, systemd will automatically restart the service.</p>
+<h2 id="5-hardware-configuration">5. Hardware Configuration</h2>
+<h3 id="enable-i2c">Enable I2C</h3>
+<p>If not already enabled:</p>
+<pre><code class="language-bash">sudo raspi-config nonint do_i2c 0
+</code></pre>
+<h3 id="wiring">Wiring</h3>
+<p>Refer to the <a href="../wiring-steps/">Wiring Guide</a> for detailed schematics.</p>
 
 
 
@@ -750,10 +1046,10 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.instant", "navigation.sections", "content.code.copy", "content.tooltips"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.sections", "content.code.copy", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
     
   
