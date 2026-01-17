@@ -8,16 +8,19 @@ This package contains individual modules for each route handler in the Pika-pika
 handlers/
 ├── __init__.py          # Package exports and automatic registration
 ├── router.py            # Centralized automatic route registration
-├── health.py            # Health check endpoint
-├── index.py             # Main index page
-├── api_recent.py        # Recent data API endpoint
-├── api_highlights.py    # Highlights API endpoint
-├── api_range.py         # Range data API endpoint
-├── api_config.py        # Configuration API endpoints
-├── websocket_live.py    # Live WebSocket endpoint
-├── websocket_demo.py    # Demo WebSocket endpoint
-├── demo_pages.py        # Demo page endpoints
-├── api_demo.py          # Demo API endpoints
+├── apis/
+│   ├── api_recent.py     # Recent data API endpoint (supports demo flag)
+│   ├── api_highlights.py # Highlights API endpoint (supports demo flag)
+│   ├── api_range.py      # Range data API endpoint (supports demo flag)
+│   └── api_config.py     # Configuration API endpoints
+├── pages/
+│   ├── health.py         # Health check endpoint
+│   ├── index.py          # Main index page
+│   ├── demo_pages.py     # Demo page endpoints
+│   └── history_pages.py  # History page endpoints
+└── websockets/
+    ├── websocket_live.py  # Live WebSocket endpoint
+    └── websocket_demo.py  # Demo WebSocket endpoint
 └── README.md           # This file
 ```
 
@@ -41,11 +44,9 @@ register_websocket_demo_routes(app, demo_manager)
 
 ### Core API Endpoints
 
-- **`health.py`**: Health check for monitoring and systemd
-- **`index.py`**: Main application index page
-- **`api_recent.py`**: Recent voltage measurements
-- **`api_highlights.py`**: Anomaly highlights with filtering
-- **`api_range.py`**: Downsampled data for time ranges
+- **`api_recent.py`**: Recent voltage measurements (supports demo flag)
+- **`api_highlights.py`**: Anomaly highlights with filtering (supports demo flag)
+- **`api_range.py`**: Downsampled data for time ranges (supports demo flag)
 - **`api_config.py`**: Configuration management
 
 ### WebSocket Endpoints
@@ -56,7 +57,7 @@ register_websocket_demo_routes(app, demo_manager)
 ### Demo Endpoints
 
 - **`demo_pages.py`**: Demo and history pages
-- **`api_demo.py`**: Mocked data endpoints for testing
+- Demo REST data uses the normal API endpoints with a `demo` flag
 
 ## Handler Function Patterns
 

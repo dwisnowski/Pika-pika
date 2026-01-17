@@ -8,7 +8,7 @@ from . import (
     register_health_routes, register_index_routes, register_api_recent_routes,
     register_api_highlights_routes, register_api_range_routes, register_api_config_routes,
     register_websocket_live_routes, register_websocket_demo_routes,
-    register_demo_pages_routes, register_api_demo_routes, register_history_pages_routes
+    register_demo_pages_routes, register_history_pages_routes
 )
 
 
@@ -41,6 +41,3 @@ def register_all_routes(app, logger, config, manager, static_dir, display_fps, d
     
     # Register history page routes
     register_history_pages_routes(app)
-
-    # Register demo API routes
-    register_api_demo_routes(app)

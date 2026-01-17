@@ -7,14 +7,15 @@ import json
 import os
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from ... import demo as _demo
 
 
 def register_api_highlights_routes(app: FastAPI, app_state, data_dir):
     """Register highlights API routes with the FastAPI app."""
-    app.get("/api/highlights")(lambda start=None, end=None: api_highlights(app_state, data_dir, start, end))
+    app.get("/api/highlights")(lambda start=None, end=None, demo=False: api_highlights(app_state, data_dir, start, end, demo))
 
 
-def api_highlights(app_state, data_dir, start: float = None, end: float = None):
+def api_highlights(app_state, data_dir, start: float = None, end: float = None, demo: bool = False):
     """Get highlights, optionally filtered by time range.
     
     Args:
@@ -27,6 +28,16 @@ def api_highlights(app_state, data_dir, start: float = None, end: float = None):
         JSON response with highlights data
     """
     try:
+        if demo:
+            import time
+            now = time.time()
+            if start is None:
+                start = now - 3 * 3600
+            if end is None:
+                end = now
+            highlights = _demo.highlights_for_range(float(start), float(end))
+            return JSONResponse({"highlights": highlights})
+
         hl = getattr(app_state, '_highlights', None)
         if hl is not None:
             highlights = hl.get_highlights()
