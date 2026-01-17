@@ -28,7 +28,13 @@ async def websocket_demo(websocket: WebSocket, demo_manager):
         # Keep connection alive
         while True:
             try:
-                await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                message = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                try:
+                    data = json.loads(message)
+                    if data.get('type') == 'trigger_anomaly':
+                        demo_manager.trigger_anomaly(data.get('anomaly_type', 'spike'))
+                except json.JSONDecodeError:
+                    pass
             except asyncio.TimeoutError:
                 await websocket.send_text(json.dumps({"type": "ping"}))
             except WebSocketDisconnect:

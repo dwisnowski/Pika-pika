@@ -13,4 +13,12 @@ document.addEventListener('DOMContentLoaded', () => {
         enableRangeFetchOnZoom: true,
         enableHighlightShading: true,
     });
+
+    document.getElementById('simSpikeBtn')?.addEventListener('click', () => {
+        window.demoChartManager.triggerAnomaly('spike');
+    });
+
+    document.getElementById('simDropBtn')?.addEventListener('click', () => {
+        window.demoChartManager.triggerAnomaly('drop');
+    });
 });

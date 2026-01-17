@@ -16,6 +16,7 @@ class DemoConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
         self._demo_task = None
+        self._pending_anomalies = asyncio.Queue()
 
     async def connect(self, websocket: WebSocket):
         """Accept and store new WebSocket connection."""
@@ -108,6 +109,22 @@ class DemoConnectionManager:
                 # Generate consistent base voltage with small noise
                 voltage = base_voltage + random.uniform(-0.005, 0.005)
                 
+                # Check for pending manual anomalies
+                try:
+                    while not self._pending_anomalies.empty():
+                        manual_anom = self._pending_anomalies.get_nowait()
+                        duration = random.uniform(3, 10)
+                        magnitude = random.uniform(1.0, 1.8) if manual_anom.get('type') == 'spike' else random.uniform(-1.5, -0.8)
+                        anom_type = manual_anom.get('type', 'spike')
+                        
+                        center = t
+                        start_time = center - duration / 2.0
+                        end_time = center + duration / 2.0
+                        
+                        active_anomalies.append((end_time, magnitude, anom_type, start_time, center))
+                except asyncio.QueueEmpty:
+                    pass
+
                 # Apply active anomalies
                 for end_time, magnitude, anom_type, start_time, center in active_anomalies:
                     if start_time <= t <= end_time:
@@ -152,3 +169,7 @@ class DemoConnectionManager:
             except Exception as e:
                 print(f"Demo simulation error: {e}")
                 await asyncio.sleep(1.0)
+
+    def trigger_anomaly(self, anomaly_type: str = 'spike'):
+        """Trigger a manual anomaly in the demo simulation."""
+        self._pending_anomalies.put_nowait({'type': anomaly_type})

@@ -89,6 +89,26 @@ class PikaChartManager {
                         backgroundColor: '#FF6B6B',
                         showLine: false,
                         pointRadius: 5
+                    },
+                    {
+                        label: 'Min Marker',
+                        data: [],
+                        borderColor: '#FF6B6B',
+                        backgroundColor: 'transparent',
+                        pointRadius: 8,
+                        pointBorderWidth: 2,
+                        pointStyle: 'circle',
+                        showLine: false
+                    },
+                    {
+                        label: 'Max Marker',
+                        data: [],
+                        borderColor: '#90CAF9',
+                        backgroundColor: 'transparent',
+                        pointRadius: 8,
+                        pointBorderWidth: 2,
+                        pointStyle: 'circle',
+                        showLine: false
                     }
                 ]
             },
@@ -307,19 +327,19 @@ class PikaChartManager {
         this.chart.options.scales.x.min = new Date(peak - width / 2);
         this.chart.options.scales.x.max = new Date(peak + width / 2);
 
-        this.chart.data.datasets[2] = this.chart.data.datasets[2] || {
+        this.chart.data.datasets[4] = this.chart.data.datasets[4] || {
             type: 'line',
-            label: 'Marker',
+            label: 'Focus Marker',
             data: [],
-            borderColor: 'black',
+            borderColor: 'white',
             borderWidth: 1,
             pointRadius: 0,
             fill: false
         };
 
-        this.chart.data.datasets[2].data = [
-            { x: new Date(peak), y: null },
-            { x: new Date(peak), y: null }
+        this.chart.data.datasets[4].data = [
+            { x: new Date(peak), y: 0 },
+            { x: new Date(peak), y: 3.3 }
         ];
 
         this.highlightsCache = [h];
@@ -389,6 +409,40 @@ class PikaChartManager {
 
         this.chart.data.labels = filteredLabels;
         this.chart.data.datasets[0].data = filteredData;
+
+        this.updateMinMaxDisplay();
+    }
+
+    updateMinMaxDisplay() {
+        if (!this.chart) return;
+
+        const data = this.chart.data.datasets[0].data;
+        let minPoint = null;
+        let maxPoint = null;
+
+        data.forEach(point => {
+            if (point && typeof point.y === 'number') {
+                if (!minPoint || point.y < minPoint.y) minPoint = point;
+                if (!maxPoint || point.y > maxPoint.y) maxPoint = point;
+            }
+        });
+
+        const minEl = document.getElementById('minVoltage');
+        const maxEl = document.getElementById('maxVoltage');
+
+        if (minPoint && maxPoint) {
+            if (minEl) minEl.textContent = minPoint.y.toFixed(3) + 'V';
+            if (maxEl) maxEl.textContent = maxPoint.y.toFixed(3) + 'V';
+
+            // Update Markers
+            this.chart.data.datasets[2].data = [minPoint];
+            this.chart.data.datasets[3].data = [maxPoint];
+        } else {
+            if (minEl) minEl.textContent = '0.000V';
+            if (maxEl) maxEl.textContent = '0.000V';
+            this.chart.data.datasets[2].data = [];
+            this.chart.data.datasets[3].data = [];
+        }
     }
 
     async updateSampleRate() {
@@ -449,6 +503,7 @@ class PikaChartManager {
             this.chart.data.labels = data.map(d => new Date(d[0] * 1000));
             this.chart.data.datasets[0].data = data.map(d => ({ x: new Date(d[0] * 1000), y: d[1] }));
             this.chart.update();
+            this.updateMinMaxDisplay();
         } catch (e) {
             console.error('range fetch error', e);
         }
@@ -478,5 +533,14 @@ class PikaChartManager {
         setTimeout(() => {
             this.connectWebSocket();
         }, delay);
+    }
+
+    triggerAnomaly(type = 'spike') {
+        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+            this.websocket.send(JSON.stringify({
+                type: 'trigger_anomaly',
+                anomaly_type: type
+            }));
+        }
     }
 }
