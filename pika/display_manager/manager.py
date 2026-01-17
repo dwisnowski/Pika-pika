@@ -9,7 +9,7 @@ import threading
 import time
 from typing import Optional
 
-from ..display_qr import show_on_waveshare
+from ..mini_display import show_on_waveshare
 from .config import DisplaySettings
 from .data_source import AnomalyDataSource, NetworkDataSource, VoltageDataSource
 from .renderer import DisplayRenderer

@@ -8,10 +8,10 @@ Reference (Waveshare): https://www.waveshare.com/wiki/2inch_LCD_Module?amazon#py
 
 Usage examples:
   # show QR of the running UI origin
-  python -m pika.display_qr --url http://192.168.1.50:8000
+  python -m pika.mini_display --url http://192.168.1.50:8000
 
   # auto-detect the current device LAN IP and use port 8000
-  python -m pika.display_qr --auto-ip --port 8000
+  python -m pika.mini_display --auto-ip --port 8000
 
 Note: This script is optional; add the `display` extra (spidev, RPi.GPIO) if you plan to run on Pi.
 """

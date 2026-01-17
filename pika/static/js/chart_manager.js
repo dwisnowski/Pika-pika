@@ -31,7 +31,7 @@ class PikaChartManager {
         this.loadTimeWindow();
         this.connectWebSocket();
         this.setupQRCode();
-
+        this.updateChartIntervals();
         if (!this.options.enableSampleRateControls) {
             const controls = document.getElementById('sampleRate')?.parentElement;
             if (controls) {
@@ -108,9 +108,15 @@ class PikaChartManager {
                 scales: {
                     x: {
                         type: 'time',
-                        time: { unit: 'second', tooltipFormat: 'HH:mm:ss.SSS' },
-                        ticks: { color: '#d0d0d0' },
-                        grid: { color: 'rgba(255,255,255,0.04)' }
+                        time: {
+                            unit: 'second',
+                            displayFormats: { second: 'HH:mm:ss' }
+                        },
+                        ticks: { display: false },
+                        grid: {
+                            color: 'rgba(255,255,255,0.08)',
+                            lineWidth: (ctx) => ctx.tick.major ? 2 : 1
+                        }
                     },
                     y: {
                         suggestedMin: 0,
@@ -344,7 +350,25 @@ class PikaChartManager {
     saveTimeWindow(seconds) {
         this.selectedTimeWindow = seconds;
         localStorage.setItem(this.options.timeWindowStorageKey, seconds.toString());
+        this.updateChartIntervals();
         this.applyTimeWindowFilter();
+    }
+
+    updateChartIntervals() {
+        if (!this.chart) return;
+        const seconds = this.selectedTimeWindow;
+        let unit = 'second';
+        let stepSize = 1;
+
+        if (seconds <= 10) { stepSize = 1; }
+        else if (seconds <= 30) { stepSize = 5; }
+        else if (seconds <= 60) { stepSize = 10; }
+        else if (seconds <= 300) { unit = 'minute'; stepSize = 1; }
+        else { unit = 'minute'; stepSize = 2; }
+
+        this.chart.options.scales.x.time.unit = unit;
+        this.chart.options.scales.x.time.stepSize = stepSize;
+        this.chart.update('none');
     }
 
     applyTimeWindowFilter() {

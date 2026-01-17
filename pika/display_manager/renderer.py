@@ -9,7 +9,7 @@ from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
-from ..display_qr import DISPLAY_W, DISPLAY_H
+from ..mini_display import DISPLAY_W, DISPLAY_H
 from .config import Colors, Layout, Fonts
 from .utils import get_font_with_cache, center_text_x, format_voltage, format_anomaly_status
 

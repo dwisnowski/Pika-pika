@@ -147,7 +147,7 @@ Demo preview: If you don’t have the hardware connected (or you want to try the
 
 ## Displaying the QR on a Waveshare 2" (240x320) SPI LCD
 
-If you have a Waveshare 2" LCD attached to the Pi (SPI), you can render the QR code directly to the screen with the included helper script `pika/display_qr.py`.
+If you have a Waveshare 2" LCD attached to the Pi (SPI), you can render the QR code directly to the screen with the included helper script `pika/mini_display.py`.
 
 - Install optional display/system packages (on the Pi):
 
@@ -162,13 +162,13 @@ uv sync --extra display
 
 ```bash
 # auto-detect local IP and display QR linking to http://<ip>:8000
-python -m pika.display_qr --auto-ip --port 8000
+python -m pika.mini_display --auto-ip --port 8000
 ```
 
 - Or pass a URL directly:
 
 ```bash
-python -m pika.display_qr --url http://192.168.1.50:8000
+python -m pika.mini_display --url http://192.168.1.50:8000
 ```
 
 Notes

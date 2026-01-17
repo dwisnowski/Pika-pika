@@ -11,7 +11,7 @@ templates/
 ├── components/             # Reusable template components
 │   ├── header.html         # Page header and navigation
 │   ├── chart.html          # Chart controls and canvas
-│   ├── qr_code.html        # QR code display
+│   ├── mini_display.html   # Mini display (QR + Voltage)
 │   └── highlights.html     # Highlights panel
 └── README.md              # This file
 ```
@@ -25,7 +25,7 @@ templates/
 - **Asset references**: Uses `{{ url_for('static', path='...') }}`
 
 ### Component Templates
-- **Reusable components**: Header, chart, QR code, highlights
+- **Reusable components**: Header, chart, mini display, highlights
 - **Self-contained**: Each component handles its own HTML structure
 - **Consistent styling**: Uses same CSS classes and patterns
 
@@ -85,7 +85,7 @@ async def index(request: Request):
 {% block content %}
 {% include 'components/header.html' %}
 {% include 'components/chart.html' %}
-{% include 'components/qr_code.html' %}
+{% include 'components/mini_display.html' %}
 {% include 'components/highlights.html' %}
 {% endblock %}
 

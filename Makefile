@@ -1,4 +1,11 @@
-UV := uv
+# Find uv executable
+UV_CANDIDATE := $(shell where uv 2>NUL || which uv 2>/dev/null)
+ifeq ($(UV_CANDIDATE),)
+  # Fallback for this machine if not in PATH
+  UV := C:/Users/xtr3m/.local/bin/uv.exe
+else
+  UV := uv
+endif
 
 .PHONY: help setup sync fresh-install run dev check-running docs docs-sync docs-serve icons clean stop stop-restart
 # Default target
