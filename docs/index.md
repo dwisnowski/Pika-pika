@@ -11,7 +11,7 @@ Welcome to the Pika-pika documentation. Pika-pika is a lightweight, Python-based
 
 ## Getting Started
 
-<div class="grid cards" markdown>
+<div class="grid cards" markdown="1">
 
 -   **[Raspberry Pi Setup](setup-pi.md)**
     Step-by-step guide for OS installation, project setup, and system integration.
@@ -21,6 +21,9 @@ Welcome to the Pika-pika documentation. Pika-pika is a lightweight, Python-based
 
 -   **[Mini-Display & QR](mini-display.md)**
     Setup and usage for the Waveshare 2" LCD status display.
+
+-   **[3D Printed Enclosure](3d-printing.md)**
+    Tinkercad links and assembly info for the custom 3D printed box.
 
 -   **[Contributing Guide](contributing.md)**
     Information for developers wanting to improve the project.
@@ -34,7 +37,7 @@ Welcome to the Pika-pika documentation. Pika-pika is a lightweight, Python-based
 
 ## Screenshots
 
-<div class="grid cards" markdown>
+<div class="grid cards" markdown="1">
 
 -   **Live Monitor**
     ![Live Monitor](images/live-screenshot.PNG){ .glightbox data-title="Live Voltage Monitor" }

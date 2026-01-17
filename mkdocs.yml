@@ -9,6 +9,7 @@ nav:
     - Parts: parts.md
     - Wiring steps: wiring-steps.md
   - Mini-Display & QR: mini-display.md
+  - Enclosure: 3d-printing.md
   - Demo: demo.md
   - Contributing: contributing.md
 
@@ -19,7 +20,7 @@ theme:
   favicon: images/logo.svg
   features:
     - navigation.instant
-    - navigation.sections
+    - navigation.sections.collapsible
     - content.code.copy
     - content.tooltips
   palette:
@@ -45,3 +46,10 @@ plugins:
       height: auto
       zoomable: true
       draggable: true
+
+markdown_extensions:
+  - md_in_html
+  - attr_list
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
