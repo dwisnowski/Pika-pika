@@ -1,7 +1,13 @@
-UV := uv
+# Find uv executable
+UV_CANDIDATE := $(shell where uv 2>NUL || which uv 2>/dev/null)
+ifeq ($(UV_CANDIDATE),)
+  # Fallback for this machine if not in PATH
+  UV := C:/Users/xtr3m/.local/bin/uv.exe
+else
+  UV := uv
+endif
 
-.PHONY: help setup sync fresh-install run dev check-running docs docs-sync docs-serve icons clean
-
+.PHONY: help setup sync fresh-install run dev check-running docs docs-sync docs-serve icons clean stop stop-restart
 # Default target
 help:
 	@echo "Pika-pika Makefile"
@@ -15,9 +21,9 @@ help:
 	@echo "Development targets:"
 	@echo "  make dev            - Run the app in development mode with auto-reload"
 	@echo "                      - Prevents starting if another instance is already running on port 8000"
+	@echo "  make stop-restart   - Stop any running pika-pika app and restart it"
 	@echo "  make docs           - Build MkDocs documentation site (syncs docs dependencies)"
 	@echo "  make docs-serve     - Serve docs locally for development (syncs docs dependencies)"
-	@echo "  make docs-sync      - Sync README.md into docs before building"
 	@echo "  make icons          - Generate favicons and optimized image assets from PNG"
 	@echo "  make clean          - Remove virtual environment and build artifacts"
 	@echo ""
@@ -28,6 +34,11 @@ help:
 	@echo "Quick start (development):"
 	@echo "  make sync           # Sync dependencies and install package"
 	@echo "  make dev            # Run with auto-reload"
+	@echo "  make stop-restart   # Stop and restart the app"
+	@echo "  make stop           # Stop any running pika-pika app"
+	@echo ""
+	@echo "Useful for development when you want to ensure a clean restart"
+	@echo ""
 
 # ============================================================================
 # Production targets (for Raspberry Pi)
@@ -35,32 +46,29 @@ help:
 
 # Check if app is already running on port 8000
 check-running:
-	@python scripts/check_port.py 8000
+	$(UV) run python scripts/check_app_running.py
 
 # Run initial setup script on Raspberry Pi
 setup:
 	@bash scripts/setup_pi.sh
 
-# Sync dependencies and install the package (creates venv if needed)
+# Sync dependencies and install of package (creates venv if needed)
 sync:
 	$(UV) sync
 
 # Run the app in production mode (single worker for low-powered devices)
 run: check-running
 	@if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then \
-		echo "[pika-pika] Detected Raspberry Pi, installing hardware extras..."; \
-		$(UV) sync --extra hardware || echo "[pika-pika] Warning: hardware extras could not be installed"; \
-		echo "[pika-pika] Detected Raspberry Pi, installing display extras..."; \
-		$(UV) sync --extra display || echo "[pika-pika] Warning: display extras could not be installed"; \
+		echo "[pika-pika] Detected Raspberry Pi, installing rpi extras..."; \
+		$(UV) sync --extra rpi || echo "[pika-pika] Warning: rpi extras could not be installed"; \
 	fi
 	$(UV) run uvicorn pika.app:app --host 0.0.0.0 --port 8000 --workers 1
 
 # ============================================================================
 # Development targets
 # ============================================================================
-
 # Run the app in development mode with auto-reload
-dev: check-running
+dev: sync check-running
 	$(UV) run uvicorn pika.app:app --reload --host 0.0.0.0 --port 8000
 
 # Build the MkDocs documentation site
@@ -84,3 +92,27 @@ icons:
 # Clean up virtual environment and build artifacts
 clean:
 	rm -rf $(VENV) build dist *.egg-info
+
+# Stop and restart target
+stop-restart:
+	@echo "Stopping any running pika-pika processes..."
+	@$(UV) run python scripts/check_app_running.py
+	@if errorlevel 1 (
+		echo "pika-pika application is already running"
+		exit /b 1
+	) else (
+		echo "No pika-pika application found running"
+	)
+	@echo "Waiting 2 seconds for processes to fully stop..."
+	@timeout /t 2 >nul 2>&1 || echo "Timeout command not available, continuing..."
+	@echo "Restarting pika-pika application..."
+	@$(MAKE) dev
+
+# Stop target
+stop:
+	@echo "Stopping any running pika-pika processes..."
+	@$(UV) run python scripts/check_app_running.py && echo "No pika-pika application found running" || echo "pika-pika application is already running"
+	@echo "Waiting 2 seconds for processes to fully stop..."
+	@timeout /t 2 >nul 2>&1 || echo "Timeout command not available, continuing..."
+	@echo "Stopping pika-pika application..."
+	@taskkill /F /IM uvicorn.exe 2>NUL || echo "No uvicorn processes found"

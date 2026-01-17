@@ -1,0 +1,53 @@
+<!-- Mini Display Component (LCD Style) -->
+<style>
+    .lcd-container {
+        width: 200px;
+        /* Scaled down slightly to fit layout, real is 240px */
+        height: 266px;
+        /* Aspect ratio of 240x320 */
+        background-color: #000;
+        border: 4px solid #333;
+        border-radius: 4px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px;
+        color: #fff;
+        font-family: 'Courier New', monospace;
+        position: relative;
+    }
+
+    .lcd-header {
+        font-size: 14px;
+        color: #0f0;
+        width: 100%;
+        text-align: center;
+        margin-bottom: 4px;
+    }
+
+    .lcd-voltage {
+        font-size: 24px;
+        color: #fff;
+        margin-top: 8px;
+        font-weight: bold;
+    }
+
+    #qrcode canvas,
+    #qrcode img {
+        border: 2px solid white;
+    }
+</style>
+
+<div class="lcd-container">
+    <div class="lcd-header">SCAN TO OPEN</div>
+    <div id="qrcode"
+        style="background: white; padding: 4px; line-height: 0; display: flex; align-items: center; justify-content: center; min-width: 160px; min-height: 160px;">
+    </div>
+    <div id="qr_voltage" class="lcd-voltage">-- V</div>
+    <div style="font-size: 10px; color: #888; margin-top: 4px;">2" LCD DEMO</div>
+</div>
+
+<div style="display: none;" id="qurl"></div>
+<button id="copyBtn" class="btn primary" style="margin-top:8px; width: 200px;">Copy URL</button>

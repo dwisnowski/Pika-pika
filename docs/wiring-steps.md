@@ -21,13 +21,39 @@ This page provides step-by-step wiring photos and guidance so you can assemble t
 
 > Note: ZMPT101B boards often include a bias circuit — read the board notes and do not apply mains directly without correct isolation and a fuse.
 
-## Step 3 — Verify and test
+## Step 3 — Connect 2" LCD Display (Optional)
 
-![Step 3 — Verify and test](./images/wiring-step-3.svg)
+![Step 3 — Connect 2" LCD Display](./images/wiring-step-3.svg)
+
+The 2" Waveshare SPI LCD (ST7789) provides real-time monitoring with QR code display, voltage readings, and anomaly status.
+
+### LCD SPI Connections:
+
+- **LCD VCC** → Pi 3.3 V (Pin 1)
+- **LCD GND** → Pi GND (Pin 6)  
+- **LCD DIN** (MOSI) → Pi GPIO 10 (SPI MOSI, Pin 19)
+- **LCD CLK** (SCK) → Pi GPIO 11 (SPI SCLK, Pin 23)
+- **LCD CS** → Pi GPIO 8 (SPI CE0, Pin 24)
+- **LCD DC** → Pi GPIO 25 (Pin 22)
+- **LCD RST** → Pi GPIO 27 (Pin 13)
+- **LCD BL** → Pi GPIO 24 (Backlight, Pin 18)
+
+### SPI Configuration Required:
+
+1. **Enable SPI interface**: `sudo raspi-config` → Interfacing Options → SPI → Enable
+2. **Verify SPI devices**: `ls /dev/spi*` should show `/dev/spidev0.0` and `/dev/spidev0.1`
+3. **Test display**: Run `python -m pika.display_qr --auto-ip` to verify LCD functionality
+
+> **Note**: The display is optional. The system will fall back to saving PNG images (`lcd_latest.png`) if no LCD is connected or if running on non-Linux systems.
+
+## Step 4 — Verify and test
+
+![Step 4 — Verify and test](./images/wiring-step-4.svg)
 
 - Power the Pi and run a low-rate read script to confirm values on A0.
 - Use the demo page (`/demo`) to confirm the UI and highlight detection before applying mains voltages.
 - For initial testing prefer a safe, low-voltage source or an isolation transformer.
+- Test LCD display: `python -m pika.display_qr --auto-ip` should show QR code on screen.
 
 ## Measure & adjust sensor output (multimeter)
 

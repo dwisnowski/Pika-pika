@@ -147,7 +147,7 @@ Demo preview: If you don’t have the hardware connected (or you want to try the
 
 ## Displaying the QR on a Waveshare 2" (240x320) SPI LCD
 
-If you have a Waveshare 2" LCD attached to the Pi (SPI), you can render the QR code directly to the screen with the included helper script `pika/display_qr.py`.
+If you have a Waveshare 2" LCD attached to the Pi (SPI), you can render the QR code directly to the screen with the included helper script `pika/mini_display.py`.
 
 - Install optional display/system packages (on the Pi):
 
@@ -162,13 +162,13 @@ uv sync --extra display
 
 ```bash
 # auto-detect local IP and display QR linking to http://<ip>:8000
-python -m pika.display_qr --auto-ip --port 8000
+python -m pika.mini_display --auto-ip --port 8000
 ```
 
 - Or pass a URL directly:
 
 ```bash
-python -m pika.display_qr --url http://192.168.1.50:8000
+python -m pika.mini_display --url http://192.168.1.50:8000
 ```
 
 Notes
@@ -183,3 +183,55 @@ If you'd like, I can add a systemd service file, logging rotation, or a sample w
 ---
 
 Contributions and issues are welcome — see `CONTRIBUTING.md` (when added).
+
+
+---------
+Here is how to read the current state of the I2C port:
+
+sudo raspi-config nonint get_i2c
+
+This command will return:
+
+1 if the port is disabled
+0 if the port is enabled
+
+sudo raspi-config nonint do_i2c 0
+
+
+-----
+source .venv/bin/activate
+uv sync --extra hardware
+uv tool run ipython
+
+
+--------
+
+from collections import deque
+import csv
+import os
+import time
+import threading
+import math
+import random
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+import board
+import busio
+import adafruit_ads1x15.ads1115 as ADS
+from adafruit_ads1x15.analog_in import AnalogIn
+from adafruit_ads1x15 import ADS1015, AnalogIn, ads1x15
+class ADS1115ADC(ADCInterface):
+    def __init__(self, address=0x48, channel=0):
+        logging.info("Using ADS1115 ADC at address 0x%02X, channel %d", address, channel)
+        i2c = busio.I2C(board.SCL, board.SDA)
+        self.ads = ADS.ADS1115(i2c, address=address)
+        self.chan = AnalogIn(self.ads, ads1x15.Pin.A0)
+    def read(self):
+        # return raw ADC voltage (or scaled value)
+        return self.chan.voltage
+    
+reader = ADS1115ADC()
+value = reader.read()
+logging.info(f"ADC Value: {value} V")

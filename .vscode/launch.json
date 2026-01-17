@@ -1,0 +1,37 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Pika-pika App",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "pika.app:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--reload"
+            ],
+            "jinja": true,
+            "justMyCode": true
+        },
+        {
+            "name": "Launch Chrome (Pika-pika)",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:8000",
+            "webRoot": "${workspaceFolder}"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Full Stack Dev (Server + Chrome)",
+            "configurations": [
+                "Python: Pika-pika App",
+                "Launch Chrome (Pika-pika)"
+            ]
+        }
+    ]
+}

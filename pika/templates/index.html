@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Pika-pika Live Monitor{% endblock %}
+
+{% block content %}
+{% include 'components/header.html' %}
+
+{% include 'components/chart.html' %}
+
+{% include 'components/mini_display.html' %}
+
+{% include 'components/highlights.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<script src="{{ url_for('static', path='/js/chart_manager.js') }}"></script>
+<script src="{{ url_for('static', path='/js/live_chart.js') }}"></script>
+{% endblock %}
