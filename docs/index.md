@@ -1,39 +1,48 @@
-# Pika-pika
+# Pika-pika Documentation
 
-A Python-based Raspberry Pi voltage logger and live web viewer.
+Welcome to the Pika-pika documentation. Pika-pika is a lightweight, Python-based voltage logger designed for the Raspberry Pi.
 
-This documentation contains quick links and usage for the project. The full README is included in the repository and the site contains a short guide to the features and a demo page.
+## Key Features
 
-- Live UI: `/` (served by the running app)
-- Demo UI: `/demo` (mock data — no hardware required)
+- **High-frequency Sampling**: Sample voltage at 100 Hz using the ADS1115.
+- **Live Monitoring**: View real-time data and anomalies via a web interface.
+- **Resource Efficient**: Designed to run smoothly on legacy hardware like the Raspberry Pi 2.
+- **System Integration**: Includes systemd support with an automated watchdog for reliability.
 
-## Quick start
+## Getting Started
 
-### Raspberry Pi instructions:
-Use the following guide to install and run this code on your pi:
-[rpi start guide](./rpi-setup-guide.md)
+<div class="grid cards" markdown>
 
+-   **[Raspberry Pi Setup](setup-pi.md)**
+    Step-by-step guide for OS installation, project setup, and system integration.
 
-### Run the demo on your local machine:
-```bash
-make fresh-install
-make dev
-```
+-   **[Hardware & Wiring](wiring-steps.md)**
+    Detailed parts list and wiring diagrams for the voltage sensor and ADC.
 
-3. Open `http://<pi-ip>:8000/` or the demo at `http://<pi-ip>:8000/demo`.
+-   **[Mini-Display & QR](mini-display.md)**
+    Setup and usage for the Waveshare 2" LCD status display.
 
+-   **[Contributing Guide](contributing.md)**
+    Information for developers wanting to improve the project.
 
-### Screenshots of the Application
+</div>
+
+### Quick Links
+
+- [Live UI](/) (served by the running app)
+- [Demo UI](/demo) (mock data — no hardware required)
+
+## Screenshots
 
 <div class="grid cards" markdown>
 
 -   **Live Monitor**
-    ![Live Monitor](./images/live-screenshot.PNG){ .glightbox data-title="Live Voltage Monitor - Real-time data with anomaly highlighting" data-description="The main live monitoring interface showing real-time voltage readings with highlighted anomalies and zoom/pan controls." }
+    ![Live Monitor](images/live-screenshot.PNG){ .glightbox data-title="Live Voltage Monitor" }
 
 -   **Demo Mode**
-    ![Demo Mode](./images/demo-screenshot.PNG){ .glightbox data-title="Demo Mode - Simulated data for testing" data-description="Demo interface with simulated voltage data, LCD preview, and anomaly detection for safe testing without hardware." }
+    ![Demo Mode](images/demo-screenshot.PNG){ .glightbox data-title="Demo Mode" }
 
 -   **History View**
-    ![History View](./images/history-screenshot.PNG){ .glightbox data-title="Historical Data Browser" data-description="Historical data viewer with downsampled charts, time period selection, and detailed anomaly analysis." }
+    ![History View](images/history-screenshot.PNG){ .glightbox data-title="Historical Data Browser" }
 
 </div>

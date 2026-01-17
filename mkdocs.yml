@@ -4,12 +4,13 @@ repo_url: https://github.com/dwisnowski/Pika-pika
 repo_name: dwisnowski / Pika-pika
 nav:
   - Home: index.md
-  - Hardware:
+  - Raspberry Pi Setup: setup-pi.md
+  - Hardware & Wiring:
     - Parts: parts.md
     - Wiring steps: wiring-steps.md
-    - Raspberry Pi Setup Guide: rpi-setup-guide.md
+  - Mini-Display & QR: mini-display.md
   - Demo: demo.md
-  - README: README-synced.md
+  - Contributing: contributing.md
 
 theme:
   name: material
