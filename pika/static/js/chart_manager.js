@@ -31,6 +31,13 @@ class PikaChartManager {
         this.loadTimeWindow();
         this.connectWebSocket();
         this.setupQRCode();
+
+        if (!this.options.enableSampleRateControls) {
+            const controls = document.getElementById('sampleRate')?.parentElement;
+            if (controls) {
+                controls.style.display = 'none';
+            }
+        }
     }
 
     setupChart() {
@@ -247,6 +254,11 @@ class PikaChartManager {
 
         this.applyTimeWindowFilter();
         this.chart.update('none');
+
+        const voltageDisplay = document.getElementById('qr_voltage');
+        if (voltageDisplay) {
+            voltageDisplay.innerText = voltage.toFixed(3) + ' V';
+        }
     }
 
     renderHighlightsList(highlights) {
