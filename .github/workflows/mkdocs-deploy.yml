@@ -31,12 +31,9 @@ jobs:
         with:
           version: "latest"
 
-      - name: Install mkdocs
+      - name: Install documentation dependencies
         run: |
-          uv pip install --system mkdocs mkdocs-material
-
-      - name: Sync README into docs
-        run: python scripts/sync_readme_to_docs.py
+          uv pip install --system ".[docs]"
 
       - name: Build MkDocs site
         run: mkdocs build
