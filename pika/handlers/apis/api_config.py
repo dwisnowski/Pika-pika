@@ -55,7 +55,7 @@ def update_sample_rate(logger, config, manager, sample_hz: int):
     if logger.set_sample_rate(sample_hz):
         # Update config and save to file
         config["sample_hz"] = sample_hz
-        config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config.toml")
+        config_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "config.toml")
         try:
             import tomli_w
             with open(config_path, "wb") as f:

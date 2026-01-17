@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 
 def index(request: Request):
     """Serve the main index page using Jinja2 template."""
-    from ..app import templates
+    from ...app import templates
     return templates.TemplateResponse("index.html", {
         "request": request,
         "page_title": "Pika-pika Live Monitor",

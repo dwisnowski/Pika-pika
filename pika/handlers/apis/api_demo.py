@@ -6,7 +6,7 @@ Provides mocked data endpoints for testing without hardware.
 import time
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from .. import demo
+from ... import demo
 
 
 def register_api_demo_routes(app: FastAPI):
