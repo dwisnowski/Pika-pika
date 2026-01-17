@@ -15,6 +15,7 @@ from .websockets.websocket_live import websocket_live, register_websocket_live_r
 from .websockets.websocket_demo import websocket_demo, register_websocket_demo_routes
 from .pages.demo_pages import demo, register_demo_pages_routes
 from .pages.history_pages import register_history_pages_routes, history
+from .apis.api_devtools import register_devtools_routes
 
 # Import registration functions
 from .router import register_all_routes
@@ -31,6 +32,7 @@ __all__ = [
     'register_websocket_live_routes', 'register_websocket_demo_routes',
     'register_demo_pages_routes',
     'register_history_pages_routes',
+    'register_devtools_routes',
     
     # Automatic registration function
     'register_all_routes'

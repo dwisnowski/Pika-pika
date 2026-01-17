@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "/static/*": [
+                "pika/static/*"
+            ]
+        }
+    },
+    "exclude": [
+        "node_modules",
+        ".venv"
+    ]
+}
