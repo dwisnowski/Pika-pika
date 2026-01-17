@@ -525,6 +525,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#configuration-customization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration &amp; Customization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration &amp; Customization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pin-definitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pin Definitions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#technical-details" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -729,6 +757,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#configuration-customization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration &amp; Customization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration &amp; Customization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pin-definitions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pin Definitions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#technical-details" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -788,6 +844,23 @@ python<span class="w"> </span>-m<span class="w"> </span>pika.mini_display<span c
 </code></pre></div><p></p>
 <h3 id="integration">Integration</h3>
 <p>The main application starts the display automatically if the hardware is detected and dependencies are installed.</p>
+<h2 id="configuration-customization">Configuration &amp; Customization</h2>
+<p>You can customize the project settings and GPIO pins by editing <code>config.toml</code> in the project root.</p>
+<h3 id="pin-definitions">Pin Definitions</h3>
+<p>The <code>[pins]</code> section allows you to customize the hardware setup:</p>
+<div class="highlight"><pre><span></span><code><span class="k">[pins]</span>
+<span class="c1"># ADC Settings (ADS1115)</span>
+<span class="n">adc_address</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x48</span>
+<span class="n">adc_channel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+
+<span class="c1"># LCD Settings (ST7789)</span>
+<span class="n">lcd_port</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="n">lcd_device</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="n">lcd_cs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">8</span>
+<span class="n">lcd_dc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">25</span>
+<span class="n">lcd_rst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">27</span>
+<span class="n">lcd_bl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">24</span>
+</code></pre></div>
 <h2 id="technical-details">Technical Details</h2>
 <p>The script tries several driver names (<code>LCD_2inch</code>, <code>st7789</code>, <code>LCD</code>). If no hardware is found, it fallbacks to saving <code>qr_lcd.png</code> in the repository root for debugging.</p>
 

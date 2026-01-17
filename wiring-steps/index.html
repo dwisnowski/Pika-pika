@@ -414,6 +414,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#gpio-pinout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPIO Pinout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wiring-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring diagram
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Wiring diagram">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-wiring-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick wiring summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#step-1-connect-ads1115" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -647,6 +686,45 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#gpio-pinout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GPIO Pinout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wiring-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wiring diagram
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Wiring diagram">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-wiring-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick wiring summary
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#step-1-connect-ads1115" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -751,6 +829,21 @@
 
 <h1 id="wiring-steps-photos">Wiring steps (photos)</h1>
 <p>This page provides step-by-step wiring photos and guidance so you can assemble the project safely. If you have real photos you'd like to include, replace the SVG placeholders in <code>docs/images/</code> with your own images (e.g., <code>wiring-step-1.jpg</code>).</p>
+<h2 id="gpio-pinout">GPIO Pinout</h2>
+<p><a class="glightbox" data-type="image" data-width="100%" data-height="auto" href="../images/gpio-pins-raspberry-pi.png" data-desc-position="bottom"><img alt="GPIO Pinout" src="../images/gpio-pins-raspberry-pi.png"></a></p>
+<h2 id="wiring-diagram">Wiring diagram</h2>
+<p>Below is an illustrative wiring diagram showing the Raspberry Pi, ADS1115 and ZMPT101B connections. This diagram is <strong>illustrative only</strong> and does not replace proper safety practices.</p>
+<p><a class="glightbox" data-type="image" data-width="100%" data-height="auto" href="../wiring.svg" data-desc-position="bottom"><img alt="Wiring diagram" src="../wiring.svg"></a></p>
+<h3 id="quick-wiring-summary">Quick wiring summary</h3>
+<ul>
+<li>ADS1115 VCC → Pi 3.3 V (Pin 1)</li>
+<li>ADS1115 GND → Pi GND (Pin 6)</li>
+<li>ADS1115 SDA → Pi SDA (Pin 3)</li>
+<li>ADS1115 SCL → Pi SCL (Pin 5)</li>
+<li>ADS1115 A0 → ZMPT101B Vout</li>
+<li>ZMPT101B VCC → 5 V (use board 5 V or external supply, per sensor recommendation)</li>
+<li>ZMPT101B GND → Pi GND</li>
+</ul>
 <h2 id="step-1-connect-ads1115">Step 1 — Connect ADS1115</h2>
 <p><a class="glightbox" data-type="image" data-width="100%" data-height="auto" href="../images/wiring-step-1.svg" data-desc-position="bottom"><img alt="Step 1 — Connect ADS1115" src="../images/wiring-step-1.svg"></a></p>
 <ul>
