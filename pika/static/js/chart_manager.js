@@ -161,8 +161,12 @@ class PikaChartManager {
         if (!qrbox) return;
         if (qurl) qurl.textContent = origin;
 
+        qrbox.innerHTML = ''; // Clear existing
+
         if (typeof QRCode !== 'undefined') {
-            QRCode.toCanvas(qrbox, origin, { width: 160 }, function (err) {
+            const canvas = document.createElement('canvas');
+            qrbox.appendChild(canvas);
+            QRCode.toCanvas(canvas, origin, { width: 160 }, function (err) {
                 if (err) console.error(err);
             });
         } else {
