@@ -36,5 +36,12 @@ docs = ["mkdocs>=1.4", "mkdocs-material>=9.0", "mkdocs-glightbox>=0.4.0"]
 packages = ["pika"]
 
 [[tool.uv.index]]
-name = "piwheels" # Optional name for clarity
+name = "piwheels"
 url = "https://piwheels.org/simple"
+explicit = true
+
+[tool.uv.sources]
+adafruit-circuitpython-ads1x15 = { index = "piwheels" }
+spidev = { index = "piwheels" }
+RPi.GPIO = { index = "piwheels" }
+st7789 = { index = "piwheels" }
