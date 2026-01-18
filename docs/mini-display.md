@@ -69,4 +69,16 @@ If you see an error about `libopenblas.so.0` or `numpy` failing to import, it me
 ```bash
 sudo apt-get install -y libopenblas-dev
 ```
-Then try running the command again.
+
+### Troubleshooting "[Errno 2] No such file or directory"
+This error indicates that the SPI interface is not enabled. 
+1. Run `sudo raspi-config`
+2. Select **3 Interface Options**
+3. Select **I4 SPI** and enable it.
+4. Reboot your Pi.
+
+Alternatively, run:
+```bash
+sudo raspi-config nonint do_spi 0
+sudo reboot
+```

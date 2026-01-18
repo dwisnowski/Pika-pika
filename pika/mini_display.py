@@ -119,6 +119,11 @@ def show_on_waveshare(img: Image.Image, lcd_config: Optional[dict] = None) -> bo
             logger.error("Display driver failed due to missing system libraries (libopenblas/libatlas).")
             logger.error("Please run: sudo apt-get install -y libopenblas-dev")
             show_on_waveshare._logged_sys_err = True
+    elif "[Errno 2]" in full_error_msg or "No such file or directory" in full_error_msg:
+        if not getattr(show_on_waveshare, "_logged_spi_err", False):
+            logger.error("Display driver failed: SPI interface not found.")
+            logger.error("Please enable SPI: sudo raspi-config nonint do_spi 0")
+            show_on_waveshare._logged_spi_err = True
     
     logger.warning("No supported display driver found. Tried: %s", full_error_msg)
     return False

@@ -98,8 +98,10 @@ chmod 775 data || true
 cat <<'EOF'
 
 [pika-pika] Setup complete.
-- Enable I2C: run `sudo raspi-config` -> Interfacing Options -> I2C, then reboot.
-- Start the server: `.venv/bin/uvicorn pika.app:app --host 0.0.0.0 --port 8000` or run `make run`.
+- Enable I2C: run `sudo raspi-config` -> Interfacing Options -> I2C
+- Enable SPI: run `sudo raspi-config` -> Interfacing Options -> SPI
+- Reboot: `sudo reboot`
+- Start the server: `make run`
 
 EOF
 

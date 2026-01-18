@@ -72,11 +72,15 @@ The application includes a systemd watchdog helper. If the datalogger stops samp
 
 ## 5. Hardware Configuration
 
-### Enable I2C
+### Enable I2C & SPI
 If not already enabled:
 ```bash
+# Enable I2C
 sudo raspi-config nonint do_i2c 0
+# Enable SPI
+sudo raspi-config nonint do_spi 0
 ```
+Then reboot your system.
 
 ### Wiring
 Refer to the [Wiring Guide](wiring-steps.md) for detailed schematics.
