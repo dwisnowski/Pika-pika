@@ -26,7 +26,14 @@ dependencies = [
 
 [project.optional-dependencies]
 # ADS1115 library is optional for non-Pi testing or when hardware is present
-rpi = ["adafruit-circuitpython-ads1x15>=3.0.0", "spidev", "RPi.GPIO", "st7789"]
+rpi = [
+  "adafruit-circuitpython-ads1x15>=3.0.0",
+  "spidev",
+  "RPi.GPIO",
+  "st7789",
+  "adafruit-circuitpython-rgb-display",
+  "adafruit-blinka"
+]
 docs = ["mkdocs>=1.4", "mkdocs-material>=9.0", "mkdocs-glightbox>=0.4.0"]
 
 [project.urls]
@@ -38,10 +45,12 @@ packages = ["pika"]
 [[tool.uv.index]]
 name = "piwheels"
 url = "https://piwheels.org/simple"
-# explicit = true
+explicit = true
 
 [tool.uv.sources]
 adafruit-circuitpython-ads1x15 = { index = "piwheels" }
 spidev = { index = "piwheels" }
 "RPi.GPIO" = { index = "piwheels" }
 st7789 = { index = "piwheels" }
+adafruit-circuitpython-rgb-display = { index = "piwheels" }
+adafruit-blinka = { index = "piwheels" }

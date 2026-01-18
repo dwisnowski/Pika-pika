@@ -49,9 +49,69 @@ def get_local_ip() -> Optional[str]:
 
 def show_on_waveshare(img: Image.Image, lcd_config: Optional[dict] = None) -> bool:
     """Attempt several Waveshare/ST7789 display drivers. Returns True if successful."""
-    # Try common Waveshare python example modules
     tried = []
-    # 1) Try Waveshare LCD example module name 'LCD_2inch' (Waveshare sample naming)
+
+    # 1) Try Adafruit RGB Display (CircuitPython/Blinka) - Preferred
+    try:
+        import board
+        import digitalio
+        from adafruit_rgb_display import st7789 as st_ada
+
+        def get_pin(num, default_name):
+            pin_name = f"D{num}"
+            if hasattr(board, pin_name):
+                return getattr(board, pin_name)
+            if hasattr(board, default_name):
+                return getattr(board, default_name)
+            return None
+
+        if lcd_config:
+            cs_pin = digitalio.DigitalInOut(get_pin(lcd_config.get("lcd_cs", 8), "CE0"))
+            dc_pin = digitalio.DigitalInOut(get_pin(lcd_config.get("lcd_dc", 25), "D25"))
+            reset_pin = digitalio.DigitalInOut(get_pin(lcd_config.get("lcd_rst", 27), "D27"))
+            bl_pin_num = lcd_config.get("lcd_bl", 24)
+            if bl_pin_num:
+                try:
+                    bl_pin = digitalio.DigitalInOut(get_pin(bl_pin_num, "D24"))
+                    bl_pin.switch_to_output()
+                    bl_pin.value = True
+                except Exception:
+                    pass
+        else:
+            cs_pin = digitalio.DigitalInOut(board.CE0)
+            dc_pin = digitalio.DigitalInOut(board.D25)
+            reset_pin = digitalio.DigitalInOut(board.D24)
+
+        spi = board.SPI()
+        # Create display. 2.0" ST7789 is typically 240x320.
+        # adafruit_rgb_display handles the rotation and dimensions.
+        disp = st_ada.ST7789(
+            spi,
+            rotation=90,
+            cs=cs_pin,
+            dc=dc_pin,
+            rst=reset_pin,
+            baudrate=24000000,
+        )
+
+        # The adafruit_rgb_display library expects images to match the display size.
+        # Ensure the image matches the current display dimensions (after rotation)
+        if disp.rotation % 180 == 90:
+            target_width = disp.height
+            target_height = disp.width
+        else:
+            target_width = disp.width
+            target_height = disp.height
+            
+        if img.width != target_width or img.height != target_height:
+            img = img.resize((target_width, target_height), Image.Resampling.BICUBIC)
+            
+        disp.image(img)
+        return True
+    except Exception as e:
+        tried.append(f"adafruit_rgb_display: {e}")
+
+    # 2) Try Waveshare LCD example module name 'LCD_2inch' (Waveshare sample naming)
     try:
         import LCD_2inch as lcd
 
@@ -72,7 +132,7 @@ def show_on_waveshare(img: Image.Image, lcd_config: Optional[dict] = None) -> bo
     except Exception as e:
         tried.append(f"LCD_2inch: {e}")
 
-    # 2) Try st7789 library (common for 240x320 SPI LCDs)
+    # 3) Try st7789 library (common for 240x320 SPI LCDs)
     try:
         import st7789 as st
 
@@ -100,7 +160,7 @@ def show_on_waveshare(img: Image.Image, lcd_config: Optional[dict] = None) -> bo
     except Exception as e:
         tried.append(f"st7789: {e}")
 
-    # 3) Try PIL-based Waveshare wrapper naming variations (older samples)
+    # 4) Try PIL-based Waveshare wrapper naming variations (older samples)
     try:
         import LCD as lcdmod
         logger.info("Using LCD driver (generic) from Waveshare samples")
