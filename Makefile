@@ -55,28 +55,8 @@ setup:
 
 # Scan for I2C and SPI hardware
 doctor:
-	@echo "[pika-pika] Starting hardware diagnosis..."
-	@if [ -f "/proc/device-tree/model" ]; then \
-		echo "[System] Model: $$(cat /proc/device-tree/model)"; \
-	else \
-		echo "[System] Warning: Not running on a Raspberry Pi (or device-tree missing)"; \
-	fi
-	@echo ""
-	@echo "[I2C] Scanning bus 1..."
-	@if command -v i2cdetect >/dev/null; then \
-		sudo i2cdetect -y 1 || echo "Error: i2cdetect failed. Ensure i2c-tools is installed."; \
-	else \
-		echo "Error: i2cdetect not found. Run 'sudo apt install i2c-tools'."; \
-	fi
-	@echo ""
-	@echo "[SPI] Checking for device files..."
-	@if ls /dev/spidev* 1> /dev/null 2>&1; then \
-		ls -l /dev/spidev*; \
-	else \
-		echo "Error: No SPI devices found in /dev/. Ensure SPI is enabled in raspi-config."; \
-	fi
-	@echo ""
-	@echo "[pika-pika] Diagnosis complete."
+	@chmod +x scripts/doctor.sh 2>/dev/null || true
+	@bash scripts/doctor.sh
 
 # Sync dependencies and install of package (creates venv if needed)
 sync:
