@@ -27,7 +27,7 @@ import qrcode
 import os
 import logging
 
-from .qr_generator import QRCodeGenerator
+from .qr_generator import QRCodeGenerator, make_qr_image
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -139,8 +139,7 @@ def main(argv=None):
         sys.exit(2)
 
     logger.info("Rendering QR for %s", url)
-    qr_generator = QRCodeGenerator()
-    img = qr_generator.make_qr_image(url, DISPLAY_W, DISPLAY_H)
+    img = make_qr_image(url, DISPLAY_W, DISPLAY_H)
 
     # Try to load config for pins
     lcd_config = None

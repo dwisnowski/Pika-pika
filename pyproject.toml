@@ -35,6 +35,6 @@ docs = ["mkdocs>=1.4", "mkdocs-material>=9.0", "mkdocs-glightbox>=0.4.0"]
 [tool.setuptools]
 packages = ["pika"]
 
-# [[tool.uv.index]]
-# name = "piwheels" # Optional name for clarity
-# url = "https://piwheels.org/simple"
+[[tool.uv.index]]
+name = "piwheels" # Optional name for clarity
+url = "https://piwheels.org/simple"
