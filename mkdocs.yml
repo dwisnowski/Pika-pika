@@ -4,7 +4,7 @@ repo_url: https://github.com/dwisnowski/Pika-pika
 repo_name: dwisnowski / Pika-pika
 nav:
   - Home: index.md
-  - Raspberry Pi
+  - Raspberry Pi:
     - OS Setup: rpi-connect.md
     - Code Setup: setup-pi.md
     - Hardware Setup:
