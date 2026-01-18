@@ -43,5 +43,5 @@ explicit = true
 [tool.uv.sources]
 adafruit-circuitpython-ads1x15 = { index = "piwheels" }
 spidev = { index = "piwheels" }
-RPi.GPIO = { index = "piwheels" }
+"RPi.GPIO" = { index = "piwheels" }
 st7789 = { index = "piwheels" }
