@@ -45,7 +45,7 @@ packages = ["pika"]
 [[tool.uv.index]]
 name = "piwheels"
 url = "https://piwheels.org/simple"
-explicit = true
+# explicit = true
 
 [tool.uv.sources]
 adafruit-circuitpython-ads1x15 = { index = "piwheels" }
