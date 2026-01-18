@@ -18,9 +18,9 @@ Designed for the **Waveshare 2" LCD Module**. It uses the ST7789 driver.
 ### Optional Dependencies
 Install the display-specific dependencies:
 ```bash
-uv sync --extra display
+uv sync --extra rpi
 ```
-Or via the setup script:
+Or via the setup script (recommended as it installs system libraries like `libopenblas-dev`):
 ```bash
 bash scripts/setup_pi.sh
 ```
@@ -63,3 +63,10 @@ lcd_bl = 24
 
 ## Technical Details
 The script tries several driver names (`LCD_2inch`, `st7789`, `LCD`). If no hardware is found, it fallbacks to saving `qr_lcd.png` in the repository root for debugging.
+
+### Troubleshooting "libopenblas.so.0" or NumPy errors
+If you see an error about `libopenblas.so.0` or `numpy` failing to import, it means some system libraries are missing. Run:
+```bash
+sudo apt-get install -y libopenblas-dev
+```
+Then try running the command again.

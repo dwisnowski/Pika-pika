@@ -113,7 +113,14 @@ def show_on_waveshare(img: Image.Image, lcd_config: Optional[dict] = None) -> bo
     except Exception as e:
         tried.append(f"LCD generic import: {e}")
 
-    logger.warning("No supported display driver found. Tried: %s", "; ".join(tried))
+    full_error_msg = "; ".join(tried)
+    if "libopenblas" in full_error_msg or "libatlas" in full_error_msg:
+        if not getattr(show_on_waveshare, "_logged_sys_err", False):
+            logger.error("Display driver failed due to missing system libraries (libopenblas/libatlas).")
+            logger.error("Please run: sudo apt-get install -y libopenblas-dev")
+            show_on_waveshare._logged_sys_err = True
+    
+    logger.warning("No supported display driver found. Tried: %s", full_error_msg)
     return False
 
 

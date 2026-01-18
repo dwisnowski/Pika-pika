@@ -62,7 +62,7 @@ set -euo pipefail
 
 echo "[pika-pika] Updating apt and installing system packages (requires sudo)..."
 sudo apt update
-sudo apt install -y python3 python3-venv build-essential git i2c-tools python3-dev curl libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev tmux
+sudo apt install -y python3 python3-venv build-essential git i2c-tools python3-dev curl libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev libopenblas-dev tmux
 
 # Install uv if not already present and set up uv command
 if ! command -v uv &> /dev/null; then
@@ -84,47 +84,13 @@ if ! command -v uv &> /dev/null; then
   fi
 fi
 
-# Configure pip and uv to use piwheels as extra index URL on Raspberry Pi
-if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
-  echo "[pika-pika] Detected Raspberry Pi, configuring pip and uv to use piwheels..."
-
-  # Configure pip
-  mkdir -p ~/.pip
-  if [ ! -f ~/.pip/pip.conf ]; then
-    cat > ~/.pip/pip.conf << 'EOF'
-[global]
-extra-index-url=https://www.piwheels.org/simple
-EOF
-  else
-    # Check if piwheels is already configured
-    if ! grep -q "https://www.piwheels.org/simple" ~/.pip/pip.conf; then
-      echo "extra-index-url=https://www.piwheels.org/simple" >> ~/.pip/pip.conf
-    fi
-  fi
-
-  # Configure uv to use piwheels as default index
-  mkdir -p ~/.config/uv
-  cat > ~/.config/uv/uv.toml << 'EOF'
-[[index]]
-name = "piwheels"
-url = "https://www.piwheels.org/simple/"
-default = true
-EOF
-
-  echo "[pika-pika] Pip and uv configured to use piwheels as extra/default index URL"
-fi
-
-
 # Sync dependencies and install package (uv will create venv if needed)
 echo "[pika-pika] Syncing dependencies and installing package using uv..."
 uv sync || { echo "[pika-pika] uv sync failed"; exit 1; }
 
 # Try installing optional hardware and display deps, but don't fail if not present
-echo "[pika-pika] Installing optional hardware extras (ADS1115). This may fail on non-Pi or missing wheels; it's optional."
-uv sync --extra hardware || echo "[pika-pika] Optional hardware extras could not be installed (continue)"
-
-echo "[pika-pika] Installing optional display extras (spidev, RPi.GPIO). This may fail on non-Pi; it's optional."
-uv sync --extra display || echo "[pika-pika] Optional display extras could not be installed (continue)"
+echo "[pika-pika] Installing optional Raspberry Pi extras (hardware & display drivers)..."
+uv sync --extra rpi || echo "[pika-pika] Raspberry Pi extras could not be installed (continue)"
 
 mkdir -p data
 chmod 775 data || true
