@@ -96,6 +96,18 @@ If the service is running and the Pi is linked, Connect works.
 
 ---
 
+# ⚠️ Enable "Linger" (For Headless/Persistent Access)    
+
+If you want the service to start automatically at boot without needing to log in physically first, enable "lingering" for your user: 
+
+```bash
+loginctl enable-linger $USER
+```
+
+This ensures your user's systemd instance (and rpi-connect) starts as soon as the Pi powers on. 
+
+---
+
 # 🔧 Optional: Force Connect to Start After Network Is Up
 
 If your Pi boots faster than your network, add a dependency:
