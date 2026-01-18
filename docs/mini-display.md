@@ -30,10 +30,10 @@ bash scripts/setup_pi.sh
 Run the display script:
 ```bash
 # Auto-detect IP and display QR
-python -m pika.mini_display --auto-ip --port 8000
+uv run python -m pika.mini_display --auto-ip --port 8000
 
 # Specify a URL manually
-python -m pika.mini_display --url http://192.168.1.50:8000
+uv run python -m pika.mini_display --url http://192.168.1.50:8000
 ```
 
 ### Integration
