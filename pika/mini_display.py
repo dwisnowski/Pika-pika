@@ -22,12 +22,11 @@ import socket
 import sys
 from typing import Optional
 
-from PIL import Image, ImageOps
-import qrcode
+from PIL import Image
 import os
 import logging
 
-from .qr_generator import QRCodeGenerator, make_qr_image
+from .qr_generator import make_qr_image
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
