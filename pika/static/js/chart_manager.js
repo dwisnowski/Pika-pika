@@ -218,12 +218,14 @@ class PikaChartManager {
                             unit: 'second',
                             displayFormats: { second: 'HH:mm:ss' }
                         },
-                        grid: { color: 'rgba(255,255,255,0.05)' }
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { display: false }
                     },
                     y: {
                         beginAtZero: true,
                         suggestedMax: 3.3,
-                        grid: { color: 'rgba(255,255,255,0.05)' }
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { display: false }
                     }
                 },
                 plugins: {
