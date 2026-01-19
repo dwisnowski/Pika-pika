@@ -113,54 +113,33 @@ def show_on_waveshare(img: Image.Image, lcd_config: Optional[dict] = None) -> bo
     # except Exception as e:
     #     tried.append(f"adafruit_rgb_display: {e}")
 
-    # 2) Try Waveshare LCD example module name 'LCD_2inch' (Waveshare sample naming)
+    # 3) Try st7789 library (common for 240x320 SPI LCDs)
     try:
-        import LCD_2inch as lcd
+        import st7789 as st
 
-        logger.info("Using LCD_2inch driver from Waveshare examples")
-        lcd.Init()
-        # Some drivers expect 24-bit or mirrored images; try ShowImage or ShowPic-like API
+        logger.info("Using st7789 driver")
+        if lcd_config:
+            disp = st.ST7789(
+                port=lcd_config.get("lcd_port", 0),
+                cs=lcd_config.get("lcd_cs", 8),
+                dc=lcd_config.get("lcd_dc", 25),
+                backlight=lcd_config.get("lcd_bl", 24),
+                rst=lcd_config.get("lcd_rst", 27)
+            )
+        else:
+            disp = st.ST7789()
+        # The st7789 library commonly offers a display(image) method
         try:
-            lcd.ShowImage(img)
-        except AttributeError:
-            # Some examples require a raw image buffer
-            if hasattr(lcd, 'LCD_ShowImage'):
-                lcd.LCD_ShowImage(img)
+            disp.display(img)
+        except Exception:
+            # try a different method name
+            if hasattr(disp, 'displayimage'):
+                disp.displayimage(img)
             else:
-                # fallback to rotating and showing via generic method
-                lcd.Init()
-                lcd.ShowImage(img.rotate(0))
+                raise
         return True
     except Exception as e:
-        tried.append(f"LCD_2inch: {e}")
-
-    # # 3) Try st7789 library (common for 240x320 SPI LCDs)
-    # try:
-    #     import st7789 as st
-
-    #     logger.info("Using st7789 driver")
-    #     if lcd_config:
-    #         disp = st.ST7789(
-    #             port=lcd_config.get("lcd_port", 0),
-    #             cs=lcd_config.get("lcd_cs", 8),
-    #             dc=lcd_config.get("lcd_dc", 25),
-    #             backlight=lcd_config.get("lcd_bl", 24),
-    #             rst=lcd_config.get("lcd_rst", 27)
-    #         )
-    #     else:
-    #         disp = st.ST7789()
-    #     # The st7789 library commonly offers a display(image) method
-    #     try:
-    #         disp.display(img)
-    #     except Exception:
-    #         # try a different method name
-    #         if hasattr(disp, 'displayimage'):
-    #             disp.displayimage(img)
-    #         else:
-    #             raise
-    #     return True
-    # except Exception as e:
-    #     tried.append(f"st7789: {e}")
+        tried.append(f"st7789: {e}")
 
     # # 4) Try PIL-based Waveshare wrapper naming variations (older samples)
     # try:
