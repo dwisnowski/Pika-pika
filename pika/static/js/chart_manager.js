@@ -150,9 +150,144 @@ class PikaChartManager {
         }
     }
 
-    // ... setupQRCode, copyURL ...
+    setupChart() {
+        const ctx = document.getElementById('chart').getContext('2d');
+        this.chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: this.options.voltageLabel,
+                        data: [],
+                        borderColor: '#90CAF9',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.1,
+                        segment: {
+                            borderColor: ctx => {
+                                if (ctx.p0.parsed.y > 3.0 || ctx.p0.parsed.y < 0.3) return '#FF6B6B';
+                                return undefined; // use default
+                            }
+                        }
+                    },
+                    {
+                        label: 'Anomalies',
+                        data: [],
+                        backgroundColor: 'rgba(255, 107, 107, 0.2)',
+                        pointBackgroundColor: '#FF6B6B',
+                        pointRadius: 5,
+                        showLine: false
+                    },
+                    {
+                        label: 'Min',
+                        data: [],
+                        pointBackgroundColor: '#FF6B6B',
+                        pointRadius: 4,
+                        showLine: false
+                    },
+                    {
+                        label: 'Max',
+                        data: [],
+                        pointBackgroundColor: '#90CAF9',
+                        pointRadius: 4,
+                        showLine: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                parsing: false, // Performance
+                normalized: true, // Performance
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: {
+                            unit: 'second',
+                            displayFormats: { second: 'HH:mm:ss' }
+                        },
+                        grid: { color: 'rgba(255,255,255,0.05)' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        suggestedMax: 3.3,
+                        grid: { color: 'rgba(255,255,255,0.05)' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    zoom: {
+                        pan: { enabled: true, mode: 'x' },
+                        zoom: {
+                            wheel: { enabled: true },
+                            pinch: { enabled: true },
+                            mode: 'x',
+                            onZoomComplete: ({ chart }) => this.onRangeChanged(chart)
+                        }
+                    }
+                }
+            }
+        });
+    }
 
-    // ... connectWebSocket ...
+    setupQRCode() {
+        const canvas = document.getElementById('qrcode');
+        if (!canvas) return;
+        const url = window.location.origin;
+        QRCode.toCanvas(canvas, url, {
+            width: 120,
+            margin: 2,
+            color: { dark: '#ffffff', light: '#00000000' }
+        }, (err) => {
+            if (err) console.error(err);
+        });
+    }
+
+    async copyURL() {
+        try {
+            await navigator.clipboard.writeText(window.location.origin);
+            const btn = document.getElementById('copyBtn');
+            const original = btn.innerText;
+            btn.innerText = 'Copied!';
+            setTimeout(() => btn.innerText = original, 2000);
+        } catch (err) {
+            console.error('Failed to copy', err);
+        }
+    }
+
+    connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}${this.options.wsPath}`;
+
+        console.log('Connecting to WebSocket:', wsUrl);
+        this.websocket = new WebSocket(wsUrl);
+
+        this.websocket.onopen = () => {
+            console.log('WebSocket connected');
+            this.reconnectAttempts = 0;
+        };
+
+        this.websocket.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                this.handleWebSocketMessage(data);
+            } catch (e) {
+                console.error('Failed to parse WS message', e);
+            }
+        };
+
+        this.websocket.onclose = () => {
+            console.warn('WebSocket closed. Attempting reconnect...');
+            this.attemptReconnect();
+        };
+
+        this.websocket.onerror = (err) => {
+            console.error('WebSocket error:', err);
+        };
+    }
 
     handleWebSocketMessage(data) {
         switch (data.type) {
