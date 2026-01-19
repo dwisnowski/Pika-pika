@@ -3,16 +3,25 @@
 Provides downsampled data for specified time ranges.
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.responses import JSONResponse
 from ... import demo as _demo
-
-
 import os
 
-def register_api_range_routes(app: FastAPI, logger):
+logger = None
+router = APIRouter()
+
+@router.get("/api/range")
+async def handle_api_range(start: float, end: float, max_points: int = 1000, demo: bool = False, source: str = None):
+    """Return downsampled data for the requested time range."""
+    return api_range(logger, start, end, max_points, demo, source)
+
+
+def register_api_range_routes(app: FastAPI, _logger):
     """Register range data API routes with the FastAPI app."""
-    app.get("/api/range")(lambda start, end, max_points=1000, demo=False, source=None: api_range(logger, start, end, max_points, demo, source))
+    global logger
+    logger = _logger
+    app.include_router(router)
 
 
 def api_range(logger, start: float, end: float, max_points: int = 1000, demo: bool = False, source: str = None):

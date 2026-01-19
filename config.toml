@@ -1,6 +1,6 @@
 [pika]
-# Sample rate in Hz (1-100)
-sample_hz = 100
+# Sample rate in Hz (1-860)
+sample_hz = 400
 
 # Data directory for logs
 data_dir = "data"
@@ -29,3 +29,14 @@ lcd_bl = 24
 rotation = 270
 refresh_rate = 30
 qr_size = 60
+
+[datalogger]
+# Write to disk every N samples
+batch_size = 400
+# Or every N milliseconds, whichever comes first
+batch_interval_ms = 1000
+
+[analysis]
+enable_rms = true
+enable_freq = true
+enable_sags_swells = true

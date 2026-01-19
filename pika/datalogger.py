@@ -35,11 +35,24 @@ try:
     from adafruit_ads1x15.analog_in import AnalogIn
     from adafruit_ads1x15 import ads1x15
     class ADS1115ADC(ADCInterface):
-        def __init__(self, address=0x48, channel=0):
-            logging.info("Using ADS1115 ADC at address 0x%02X, channel %d", address, channel)
+        def __init__(self, address=0x48, channel=0, target_rate=100):
+            logging.info("Using ADS1115 ADC at address 0x%02X, channel %d. Target Rate: %d", address, channel, target_rate)
             i2c = busio.I2C(board.SCL, board.SDA)
             self.ads = ADS.ADS1115(i2c, address=address)
+            self.set_rate(target_rate)
             self.chan = AnalogIn(self.ads, getattr(ads1x15.Pin, f"A{channel}"))
+
+        def set_rate(self, target_rate):
+            """Set the ADS1115 data rate to the smallest valid value >= target_rate."""
+            rates = [8, 16, 32, 64, 128, 250, 475, 860]
+            selected_rate = 860
+            for r in rates:
+                if r >= target_rate:
+                    selected_rate = r
+                    break
+            self.ads.data_rate = selected_rate
+            logging.info(f"ADS1115 data rate configured to {selected_rate} SPS")
+
         def read(self):
             # return raw ADC voltage (or scaled value)
             return self.chan.voltage
@@ -47,28 +60,38 @@ except Exception:
     ADS1115ADC = None
 
 class Datalogger:
-    def __init__(self, data_dir="data", filename_prefix="log", sample_hz=100, adc=None, retention_days=5, adc_address=0x48, adc_channel=0):
+    def __init__(self, data_dir="data", filename_prefix="log", sample_hz=100, adc=None, retention_days=5, adc_address=0x48, adc_channel=0, batch_size=400, batch_interval_ms=1000, analysis_config=None):
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
         self.filename_prefix = filename_prefix
-        self.sample_hz = sample_hz
+        self.sample_hz = max(1, min(860, int(sample_hz))) # Cap at 860Hz
         self.interval = 1.0 / float(self.sample_hz)
+        
+        # Batch writing settings
+        self.batch_size = batch_size
+        self.batch_interval_ms = batch_interval_ms
+        self._batch_buffer = []
+        self._last_flush_time = time.time()
+
+        # Analysis
+        from .analysis import StreamAnalyzer
+        self.analysis_config = analysis_config or {}
+        self.stream_analyzer = StreamAnalyzer(self.analysis_config)
+        self._current_analysis = {'rms': 0.0, 'freq': 60.0, 'sags_swells': []}
+
         # Try to initialize the requested ADC hardware
         self.adc = adc
         if self.adc is None:
             if ADS1115ADC:
                 try:
-                    self.adc = ADS1115ADC(address=adc_address, channel=adc_channel)
+                    self.adc = ADS1115ADC(
+                        address=adc_address, 
+                        channel=adc_channel,
+                        target_rate=self.sample_hz
+                    )
                 except Exception as e:
                     logging.error("--- HARDWARE INITIALIZATION FAILURE ---")
                     logging.error("Failed to initialize ADS1115 ADC: %s", e)
-                    if "No I2C device at address" in str(e) or "[Errno 121]" in str(e):
-                        logging.error("HINT: The I2C device was not found at 0x%02X.", adc_address)
-                        logging.error("1. Check your wiring (VCC, GND, SDA, SCL).")
-                        logging.error("2. Ensure I2C is enabled in raspi-config.")
-                        logging.error("3. Run 'i2cdetect -y 1' to scan for the device address.")
-                    logging.error("Falling back to MockADC (simulated data).")
-                    logging.error("---------------------------------------")
                     self.adc = MockADC()
             else:
                 self.adc = MockADC()
@@ -79,106 +102,137 @@ class Datalogger:
         self._current_date = None
         self._file = None
         self.retention_days = int(retention_days)
-        self._sample_callbacks = []  # Callbacks to call when new samples are added
-        # open initial file
+        self._sample_callbacks = []
+        
         self._open_log_file_for_today()
 
-    def add_sample_callback(self, callback):
-        """Add a callback function that gets called with (timestamp, value) when a new sample is added."""
-        self._sample_callbacks.append(callback)
+    def get_current_analysis(self):
+        return self._current_analysis
 
-    def remove_sample_callback(self, callback):
-        """Remove a sample callback function."""
-        if callback in self._sample_callbacks:
-            self._sample_callbacks.remove(callback)
+    def update_analysis_config(self, config):
+        self.analysis_config.update(config)
+        if self.stream_analyzer:
+            self.stream_analyzer.update_config(config)
+
+
 
     def set_sample_rate(self, sample_hz):
-        """Change the sample rate dynamically (1-100 Hz)."""
-        sample_hz = max(1, min(100, int(sample_hz)))  # Clamp to 1-100
+        """Change the sample rate dynamically (1-860 Hz)."""
+        sample_hz = max(1, min(860, int(sample_hz)))  # Clamp to 1-860
         if sample_hz != self.sample_hz:
             self.sample_hz = sample_hz
             self.interval = 1.0 / float(self.sample_hz)
+            
+            # Update ADC rate if supported
+            if hasattr(self.adc, 'set_rate'):
+                try:
+                    self.adc.set_rate(self.sample_hz)
+                except Exception:
+                    logging.warning("Failed to update ADC data rate")
+
             # Update buffer size to maintain 60s of data
             self._buffer = deque(self._buffer, maxlen=int(self.sample_hz * 60))
             logging.info(f"Sample rate changed to {self.sample_hz} Hz")
             return True
         return False
 
-    def _log_filename_for_date(self, dt):
-        if hasattr(dt, 'strftime'):  # datetime object
-            return os.path.join(self.data_dir, f"{self.filename_prefix}-{dt.strftime('%Y%m%d')}.csv")
-        else:  # time.struct_time object
-            return os.path.join(self.data_dir, f"{self.filename_prefix}-{time.strftime('%Y%m%d', dt)}.csv")
+    def add_sample_callback(self, callback):
+        self._sample_callbacks.append(callback)
+
+    def remove_sample_callback(self, callback):
+        if callback in self._sample_callbacks:
+            self._sample_callbacks.remove(callback)
+
+    def _log_filename_for_date(self, date_struct):
+        date_str = time.strftime("%Y-%m-%d", date_struct)
+        return os.path.join(self.data_dir, f"{self.filename_prefix}_{date_str}.csv")
 
     def _open_log_file_for_today(self):
-        dt = time.localtime()
-        today = time.strftime("%Y%m%d", dt)
-        if self._current_date == today and self._file:
-            return
-        # close previous file
-        if self._file:
-            try:
-                self._file.close()
-            except Exception:
-                logging.exception("Error closing previous log file")
-            # compress previous day's file
-            try:
-                prev_path = self._log_filename_for_date(time.localtime(time.time() - 86400))
-                if os.path.exists(prev_path) and not os.path.exists(prev_path + ".gz"):
-                    import gzip, shutil
-                    with open(prev_path, 'rb') as f_in, gzip.open(prev_path + '.gz', 'wb') as f_out:
-                        shutil.copyfileobj(f_in, f_out)
-                    os.remove(prev_path)
-            except Exception:
-                logging.exception("Error compressing previous log file")
-            # cleanup old logs
-            try:
-                self._cleanup_old_logs()
-            except Exception:
-                logging.exception("Error cleaning up old logs")
+        now = time.localtime()
+        date_str = time.strftime("%Y-%m-%d", now)
+        
+        if self._current_date != date_str:
+            if self._file:
+                try:
+                    self._flush_batch()
+                    self._file.close()
+                except Exception:
+                    logging.exception("Error closing log file")
 
-        self._current_date = today
-        filepath = self._log_filename_for_date(time.localtime())
-        new_file = not os.path.exists(filepath)
-        self._file = open(filepath, "a", newline="")
-        if new_file:
-            writer = csv.writer(self._file)
-            writer.writerow(["timestamp", "value"])
-            self._file.flush()
+            self._current_date = date_str
+            filename = self._log_filename_for_date(now)
+            is_new = not os.path.exists(filename)
             try:
-                os.fsync(self._file.fileno())
+                self._file = open(filename, "a", newline='')
+                if is_new:
+                    writer = csv.writer(self._file)
+                    writer.writerow(["timestamp", "value"])
+                    self._file.flush()
             except Exception:
-                pass
+                 logging.exception(f"Failed to open log file {filename}")
+            
+            self._cleanup_old_logs()
 
     def _cleanup_old_logs(self):
-        # remove files older than retention_days (both .csv and .csv.gz)
-        now = time.time()
-        threshold = now - (self.retention_days * 24 * 3600)
-        for fn in os.listdir(self.data_dir):
-            if not (fn.startswith(self.filename_prefix + "-") and (fn.endswith('.csv') or fn.endswith('.csv.gz'))):
-                continue
-            path = os.path.join(self.data_dir, fn)
-            try:
-                mtime = os.path.getmtime(path)
-                if mtime < threshold:
-                    os.remove(path)
-                    logging.info("Removed old log file %s", path)
-            except Exception:
-                logging.exception("Error removing old log file %s", path)
+        try:
+            now = time.time()
+            retention_sec = self.retention_days * 86400
+            for f in os.listdir(self.data_dir):
+                if f.startswith(self.filename_prefix) and f.endswith(".csv"):
+                    path = os.path.join(self.data_dir, f)
+                    if os.stat(path).st_mtime < now - retention_sec:
+                        try:
+                            os.remove(path)
+                            logging.info(f"Deleted old log file: {f}")
+                        except Exception:
+                            pass
+        except Exception:
+            logging.exception("Error cleaning up old logs")
 
     def start(self):
-        if self._thread and self._thread.is_alive():
+        if self._thread is not None:
             return
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
-        logging.info("Datalogger started (%.1f Hz) -> %s-YYYYMMDD.csv", self.sample_hz, self.filename_prefix)
+        logging.info("Datalogger started")
 
     def stop(self):
+        if self._thread is None:
+            return
         self._stop.set()
-        if self._thread:
-            self._thread.join(timeout=1.0)
+        self._thread.join()
+        self._thread = None
+        if self._file:
+            try:
+                self._flush_batch()
+                self._file.close()
+            except Exception:
+                pass
         logging.info("Datalogger stopped")
+
+    def _flush_batch(self):
+        if not self._batch_buffer:
+            return
+        
+        try:
+            writer = csv.writer(self._file)
+            # Format numbers to reduce file size slightly? or keep full precision?
+            # Keeping full precision for now, but could optimize.
+            # writerows is faster than looping writerow
+            writer.writerows([("{:.6f}".format(t), "{:.6f}".format(v)) for t, v in self._batch_buffer])
+            
+            try:
+                self._file.flush()
+                # fsync is expensive, only do it on flush
+                os.fsync(self._file.fileno())
+            except Exception:
+                pass
+            
+            self._batch_buffer.clear()
+            self._last_flush_time = time.time()
+        except Exception:
+            logging.exception("Failed to write batch to disk")
 
     def _run(self):
         next_sample = time.perf_counter()
@@ -193,23 +247,29 @@ class Datalogger:
             try:
                 val = float(self.adc.read())
             except Exception as e:
-                logging.exception("ADC read failed, using NaN: %s", e)
+                # logging.exception("ADC read failed, using NaN: %s", e) # Reduce spam?
                 val = float('nan')
 
+            # Streaming Analysis
             try:
-                writer = csv.writer(self._file)
-                writer.writerow(["{:.6f}".format(ts), "{:.6f}".format(val)])
-                try:
-                    self._file.flush()
-                    os.fsync(self._file.fileno())
-                except Exception:
-                    pass
+                metrics = self.stream_analyzer.process_sample(ts, val)
+                self._current_analysis.update(metrics)
             except Exception:
-                logging.exception("Failed to write sample to disk")
+                pass # Don't crash logging if analysis fails
 
+            # Add to batch buffer
+            self._batch_buffer.append((ts, val))
+            
+            # Check flush conditions
+            now = time.time()
+            if (len(self._batch_buffer) >= self.batch_size) or \
+               ((now - self._last_flush_time) * 1000 >= self.batch_interval_ms):
+                self._flush_batch()
+
+            # Add to memory buffer (for UI)
             self._buffer.append((ts, val))
 
-            # Notify callbacks of new sample
+            # Notify callbacks of new sample (UI updates)
             for callback in self._sample_callbacks:
                 try:
                     callback(ts, val)
@@ -224,6 +284,9 @@ class Datalogger:
             else:
                 # we're behind schedule — skip sleeping to catch up
                 next_sample = time.perf_counter()
+        
+        # Flush remaining on stop
+        self._flush_batch()
 
     def get_recent(self, seconds=5.0):
         cutoff = time.time() - float(seconds)
