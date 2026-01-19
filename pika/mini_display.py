@@ -56,7 +56,9 @@ def show_on_waveshare(img: Image.Image, lcd_config: Optional[dict] = None) -> bo
         import board
         import digitalio
         from adafruit_rgb_display import st7789 as st_ada
-
+        
+        logger.info("Using Adafruit RGB Display (CircuitPython/Blinka) - Preferred")
+        
         def get_pin(num, default_name):
             pin_name = f"D{num}"
             if hasattr(board, pin_name):
