@@ -5,11 +5,26 @@
 {% block content %}
 {% include 'components/header.html' %}
 
-{% include 'components/chart.html' %}
+<div style="max-width:1200px; margin:0 auto;">
+    <!-- Live Monitor Section -->
+    <div class="card" style="padding:20px; margin-bottom:20px;">
+        <h3 style="margin-top:0;">Live Voltage Monitor</h3>
+        {% include 'components/chart.html' %}
+    </div>
 
-{% include 'components/mini_display.html' %}
+    <!-- Analytics & Mini Display Section -->
+    <div style="display:flex; gap:20px; flex-wrap: wrap;">
+        <div class="card" style="flex:1; min-width:320px; padding:20px;">
+            <h4 style="margin-top:0;">Physical Display Mockup</h4>
+            {% include 'components/mini_display.html' %}
+        </div>
 
-{% include 'components/highlights.html' %}
+        <div class="card" style="flex:1.5; min-width:320px; padding:20px;">
+            <h4 style="margin-top:0;">Event Log & Highlights</h4>
+            {% include 'components/highlights.html' %}
+        </div>
+    </div>
+</div>
 
 <!-- Settings Modal -->
 <div id="settingsModal"

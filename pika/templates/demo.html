@@ -5,18 +5,33 @@
 {% block content %}
 {% include 'components/header.html' %}
 
-<!-- Demo Chart Component -->
-{% include 'components/chart.html' %}
+<div style="max-width:1200px; margin:0 auto;">
+    <!-- Demo Chart Section -->
+    <div class="card" style="padding:20px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin-top:0;">Dataset Simulation</h3>
+            <div
+                style="display: flex; gap: 12px; align-items: center; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                <span style="font-weight: 600; font-size: 14px;">Controls:</span>
+                <button id="simSpikeBtn" class="btn" style="background: #4CAF50; color: white;">Simulate Spike</button>
+                <button id="simDropBtn" class="btn" style="background: #F44336; color: white;">Simulate Drop</button>
+            </div>
+        </div>
+        {% include 'components/chart.html' %}
+    </div>
 
-{% include 'components/mini_display.html' %}
+    <!-- Analytics & Mini Display Section -->
+    <div style="display:flex; gap:20px; flex-wrap: wrap;">
+        <div class="card" style="flex:1; min-width:320px; padding:20px;">
+            <h4 style="margin-top:0;">Physical Display Mockup</h4>
+            {% include 'components/mini_display.html' %}
+        </div>
 
-{% include 'components/highlights.html' %}
-
-<div
-    style="margin-top: 24px; display: flex; gap: 12px; align-items: center; justify-content: center; padding: 16px; background: rgba(255,255,255,0.05); border-radius: 8px;">
-    <span style="font-weight: 600;">Simulation Controls:</span>
-    <button id="simSpikeBtn" class="btn" style="background: #4CAF50;">Simulate Spike</button>
-    <button id="simDropBtn" class="btn" style="background: #F44336;">Simulate Drop</button>
+        <div class="card" style="flex:1.5; min-width:320px; padding:20px;">
+            <h4 style="margin-top:0;">Event Log & Highlights</h4>
+            {% include 'components/highlights.html' %}
+        </div>
+    </div>
 </div>
 {% endblock %}
 
