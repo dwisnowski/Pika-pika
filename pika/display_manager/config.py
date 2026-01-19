@@ -15,15 +15,14 @@ class Colors:
 
 class Layout:
     """Layout and positioning constants for display elements."""
-    MARGIN = 8
-    QR_SIZE = 60
-    TITLE_Y = 8
-    VOLTAGE_Y_OFFSET = -20
-    ANOMALY_Y_OFFSET = 24
-    TIME_Y_OFFSET = 24
-    MASCOT_Y_OFFSET = 12
-    SMALL_FONT_SIZE = 10
-    LARGE_FONT_SIZE = 14
+    MARGIN = 12
+    QR_SIZE = 120
+    TITLE_Y = 12
+    DATA_ROW_Y = 185
+    SMALL_FONT_SIZE = 12
+    MEDIUM_FONT_SIZE = 18
+    LARGE_FONT_SIZE = 28
+    EXTRA_SMALL_FONT_SIZE = 10
 
 
 class Fonts:

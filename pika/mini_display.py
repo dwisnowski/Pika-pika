@@ -39,8 +39,8 @@ from .qr_generator import make_qr_image
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DISPLAY_W = 240
-DISPLAY_H = 320
+DISPLAY_W = 320
+DISPLAY_H = 240
 
 # Global Caches
 _DISPLAY_OBJ = None
