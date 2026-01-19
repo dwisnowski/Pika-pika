@@ -52,87 +52,87 @@ def show_on_waveshare(img: Image.Image, lcd_config: Optional[dict] = None) -> bo
     tried = []
 
     # 1) Try Adafruit RGB Display (CircuitPython/Blinka) - Preferred
-    try:
-        import board
-        import digitalio
-        from adafruit_rgb_display import st7789 as st_ada
-        
-        logger.info("Using Adafruit RGB Display (CircuitPython/Blinka) - Preferred")
-        
-        def get_pin(num, default_name):
-            pin_name = f"D{num}"
-            if hasattr(board, pin_name):
-                return getattr(board, pin_name)
-            if hasattr(board, default_name):
-                return getattr(board, default_name)
-            return None
-
-        if lcd_config:
-            cs_pin = digitalio.DigitalInOut(get_pin(lcd_config.get("lcd_cs", 8), "CE0"))
-            dc_pin = digitalio.DigitalInOut(get_pin(lcd_config.get("lcd_dc", 25), "D25"))
-            reset_pin = digitalio.DigitalInOut(get_pin(lcd_config.get("lcd_rst", 27), "D27"))
-            bl_pin_num = lcd_config.get("lcd_bl", 24)
-            if bl_pin_num:
-                try:
-                    bl_pin = digitalio.DigitalInOut(get_pin(bl_pin_num, "D24"))
-                    bl_pin.switch_to_output()
-                    bl_pin.value = True
-                except Exception:
-                    pass
-        else:
-            cs_pin = digitalio.DigitalInOut(board.CE0)
-            dc_pin = digitalio.DigitalInOut(board.D25)
-            reset_pin = digitalio.DigitalInOut(board.D24)
-
-        spi = board.SPI()
-        # Create display. 2.0" ST7789 is typically 240x320.
-        # adafruit_rgb_display handles the rotation and dimensions.
-        disp = st_ada.ST7789(
-            spi,
-            rotation=270,
-            cs=cs_pin,
-            dc=dc_pin,
-            rst=reset_pin,
-            baudrate=24000000,
-        )
-
-        # The adafruit_rgb_display library expects images to match the display size.
-        # Ensure the image matches the current display dimensions (after rotation)
-        if disp.rotation % 180 == 90:
-            target_width = disp.height
-            target_height = disp.width
-        else:
-            target_width = disp.width
-            target_height = disp.height
-            
-        if img.width != target_width or img.height != target_height:
-            img = img.resize((target_width, target_height), Image.Resampling.BICUBIC)
-            
-        disp.image(img)
-        return True
-    except Exception as e:
-        tried.append(f"adafruit_rgb_display: {e}")
-
-    # # 2) Try Waveshare LCD example module name 'LCD_2inch' (Waveshare sample naming)
     # try:
-    #     import LCD_2inch as lcd
+    #     import board
+    #     import digitalio
+    #     from adafruit_rgb_display import st7789 as st_ada
+        
+    #     logger.info("Using Adafruit RGB Display (CircuitPython/Blinka) - Preferred")
+        
+    #     def get_pin(num, default_name):
+    #         pin_name = f"D{num}"
+    #         if hasattr(board, pin_name):
+    #             return getattr(board, pin_name)
+    #         if hasattr(board, default_name):
+    #             return getattr(board, default_name)
+    #         return None
 
-    #     logger.info("Using LCD_2inch driver from Waveshare examples")
-    #     lcd.Init()
-    #     # Some drivers expect 24-bit or mirrored images; try ShowImage or ShowPic-like API
-    #     try:
-    #         lcd.ShowImage(img)
-    #     except AttributeError:
-    #         # Some examples require a raw image buffer
-    #         if hasattr(lcd, 'LCD_ShowImage'):
-    #             lcd.LCD_ShowImage(img)
-    #         else:
-    #             # fallback to rotating and showing via generic method
-    #             lcd.Init()
-    #             lcd.ShowImage(img.rotate(0))
+    #     if lcd_config:
+    #         cs_pin = digitalio.DigitalInOut(get_pin(lcd_config.get("lcd_cs", 8), "CE0"))
+    #         dc_pin = digitalio.DigitalInOut(get_pin(lcd_config.get("lcd_dc", 25), "D25"))
+    #         reset_pin = digitalio.DigitalInOut(get_pin(lcd_config.get("lcd_rst", 27), "D27"))
+    #         bl_pin_num = lcd_config.get("lcd_bl", 24)
+    #         if bl_pin_num:
+    #             try:
+    #                 bl_pin = digitalio.DigitalInOut(get_pin(bl_pin_num, "D24"))
+    #                 bl_pin.switch_to_output()
+    #                 bl_pin.value = True
+    #             except Exception:
+    #                 pass
+    #     else:
+    #         cs_pin = digitalio.DigitalInOut(board.CE0)
+    #         dc_pin = digitalio.DigitalInOut(board.D25)
+    #         reset_pin = digitalio.DigitalInOut(board.D24)
+
+    #     spi = board.SPI()
+    #     # Create display. 2.0" ST7789 is typically 240x320.
+    #     # adafruit_rgb_display handles the rotation and dimensions.
+    #     disp = st_ada.ST7789(
+    #         spi,
+    #         rotation=270,
+    #         cs=cs_pin,
+    #         dc=dc_pin,
+    #         rst=reset_pin,
+    #         baudrate=24000000,
+    #     )
+
+    #     # The adafruit_rgb_display library expects images to match the display size.
+    #     # Ensure the image matches the current display dimensions (after rotation)
+    #     if disp.rotation % 180 == 90:
+    #         target_width = disp.height
+    #         target_height = disp.width
+    #     else:
+    #         target_width = disp.width
+    #         target_height = disp.height
+            
+    #     if img.width != target_width or img.height != target_height:
+    #         img = img.resize((target_width, target_height), Image.Resampling.BICUBIC)
+            
+    #     disp.image(img)
     #     return True
     # except Exception as e:
-    #     tried.append(f"LCD_2inch: {e}")
+    #     tried.append(f"adafruit_rgb_display: {e}")
+
+    # 2) Try Waveshare LCD example module name 'LCD_2inch' (Waveshare sample naming)
+    try:
+        import LCD_2inch as lcd
+
+        logger.info("Using LCD_2inch driver from Waveshare examples")
+        lcd.Init()
+        # Some drivers expect 24-bit or mirrored images; try ShowImage or ShowPic-like API
+        try:
+            lcd.ShowImage(img)
+        except AttributeError:
+            # Some examples require a raw image buffer
+            if hasattr(lcd, 'LCD_ShowImage'):
+                lcd.LCD_ShowImage(img)
+            else:
+                # fallback to rotating and showing via generic method
+                lcd.Init()
+                lcd.ShowImage(img.rotate(0))
+        return True
+    except Exception as e:
+        tried.append(f"LCD_2inch: {e}")
 
     # # 3) Try st7789 library (common for 240x320 SPI LCDs)
     # try:
