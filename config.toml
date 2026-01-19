@@ -24,3 +24,8 @@ lcd_cs = 8
 lcd_dc = 25
 lcd_rst = 27
 lcd_bl = 24
+
+[display]
+rotation = 270
+refresh_rate = 30
+qr_size = 60
