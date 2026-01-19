@@ -113,46 +113,19 @@ def show_on_waveshare(img: Image.Image, lcd_config: Optional[dict] = None) -> bo
     # except Exception as e:
     #     tried.append(f"adafruit_rgb_display: {e}")
 
-    # 3) Try st7789 library (common for 240x320 SPI LCDs)
+
+    # 4) Try PIL-based Waveshare wrapper naming variations (older samples)
     try:
-        import st7789 as st
-
-        logger.info("Using st7789 driver")
-        if lcd_config:
-            disp = st.ST7789(
-                port=lcd_config.get("lcd_port", 0),
-                cs=lcd_config.get("lcd_cs", 8),
-                dc=lcd_config.get("lcd_dc", 25),
-                backlight=lcd_config.get("lcd_bl", 24),
-                rst=lcd_config.get("lcd_rst", 27)
-            )
-        else:
-            disp = st.ST7789()
-        # The st7789 library commonly offers a display(image) method
+        import LCD as lcdmod
+        logger.info("Using LCD driver (generic) from Waveshare samples")
         try:
-            disp.display(img)
-        except Exception:
-            # try a different method name
-            if hasattr(disp, 'displayimage'):
-                disp.displayimage(img)
-            else:
-                raise
-        return True
+            lcdmod.Init()
+            lcdmod.ShowImage(img)
+            return True
+        except Exception as e:
+            tried.append(f"LCD generic show failed: {e}")
     except Exception as e:
-        tried.append(f"st7789: {e}")
-
-    # # 4) Try PIL-based Waveshare wrapper naming variations (older samples)
-    # try:
-    #     import LCD as lcdmod
-    #     logger.info("Using LCD driver (generic) from Waveshare samples")
-    #     try:
-    #         lcdmod.Init()
-    #         lcdmod.ShowImage(img)
-    #         return True
-    #     except Exception as e:
-    #         tried.append(f"LCD generic show failed: {e}")
-    # except Exception as e:
-    #     tried.append(f"LCD generic import: {e}")
+        tried.append(f"LCD generic import: {e}")
 
     full_error_msg = "; ".join(tried)
     if "libopenblas" in full_error_msg or "libatlas" in full_error_msg:
