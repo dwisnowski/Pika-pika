@@ -140,157 +140,217 @@ class HistoryChartManager {
         }
 
         const startTs = Math.floor(startDate.getTime() / 1000);
-        const endTs = Math.floor(endDate.getTime() / 1000);
+        // Set end timestamp to the end of the selected day (23:59:59)
+        const endTs = Math.floor(endDate.getTime() / 1000) + 86399;
+
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const progressBar = document.getElementById('loadingProgressBar');
+        const statusText = document.getElementById('loadingStatusText');
+        const percentageText = document.getElementById('loadingPercentage');
+        const loadBtn = document.getElementById('loadData');
 
         try {
             // Show loading state
-            document.getElementById('loadData').textContent = 'Loading...';
-            document.getElementById('loadData').disabled = true;
+            loadBtn.textContent = 'Loading...';
+            loadBtn.disabled = true;
+            loadingIndicator.style.display = 'block';
+            this.updateProgress(0, 'Initializing requests...');
 
-            // Fetch historical data
-            const response = await fetch(`/api/range?start=${startTs}&end=${endTs}&max_points=5000`);
-            const data = await response.json();
+            // Fetch historical data, anomalies, and analysis in parallel
+            this.updateProgress(10, 'Requesting data from server...');
 
-            if (data.data) {
-                this.currentData = data.data;
-                this.updateChart();
-                this.calculateStatistics();
+            const [dataRes, highlightsRes, analysisRes] = await Promise.all([
+                fetch(`/api/range?start=${startTs}&end=${endTs}&max_points=5000`).then(r => r.json()),
+                fetch(`/api/highlights?start=${startTs}&end=${endTs}`).then(r => r.json()),
+                fetch(`/api/analysis/history?start=${startTs}&end=${endTs}`).then(r => r.json()).catch(e => {
+                    console.warn("Failed to fetch analysis", e);
+                    return { data: [] };
+                })
+            ]);
+
+            this.updateProgress(60, 'Processing data...');
+
+            if (dataRes.data) {
+                this.currentData = dataRes.data;
+            } else {
+                this.currentData = [];
             }
 
-            // Fetch anomalies for the same range
-            const highlightsResponse = await fetch(`/api/highlights?start=${startTs}&end=${endTs}`);
-            const highlightsData = await highlightsResponse.json();
-
-            if (highlightsData.highlights) {
-                this.anomalies = highlightsData.highlights;
-                this.updateAnomalyDisplay();
+            if (highlightsRes.highlights) {
+                this.anomalies = highlightsRes.highlights;
+            } else {
+                this.anomalies = [];
             }
 
-            // Fetch Analysis Data
-            try {
-                const analysisResponse = await fetch(`/api/analysis/history?start=${startTs}&end=${endTs}`);
-                const analysisData = await analysisResponse.json();
-
-                if (analysisData.data) {
-                    this.analysisData = analysisData.data;
-                    this.updateChart();
-                }
-            } catch (e) {
-                console.warn("Failed to fetch analysis", e);
+            if (analysisRes.data) {
+                this.analysisData = analysisRes.data;
+            } else {
+                this.analysisData = [];
             }
+
+            this.updateProgress(80, 'Updating charts and statistics...');
+
+            // Clear chart and reload
+            this.updateChart();
+            this.calculateStatistics();
+            this.updateAnomalyDisplay();
+
+            this.updateProgress(100, 'Complete');
+            setTimeout(() => { loadingIndicator.style.display = 'none'; }, 1000);
 
         } catch (error) {
             console.error('Error loading historical data:', error);
+            statusText.textContent = 'Error loading data';
+            statusText.style.color = 'var(--danger)';
             alert('Failed to load historical data. Please try again.');
         } finally {
             // Reset loading state
-            document.getElementById('loadData').textContent = 'Load Data';
-            document.getElementById('loadData').disabled = false;
+            loadBtn.textContent = 'Load Data';
+            loadBtn.disabled = false;
         }
     }
 
+    updateProgress(percent, text) {
+        const progressBar = document.getElementById('loadingProgressBar');
+        const statusText = document.getElementById('loadingStatusText');
+        const percentageText = document.getElementById('loadingPercentage');
+
+        if (progressBar) progressBar.style.width = `${percent}%`;
+        if (statusText) statusText.textContent = text;
+        if (percentageText) percentageText.textContent = `${percent}%`;
+    }
+
     async loadDemoData() {
+        const demoBtn = document.getElementById('loadDemoData');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const loadBtn = document.getElementById('loadData');
+
         try {
             // Show loading state
-            const demoBtn = document.getElementById('loadDemoData');
-            const originalText = demoBtn.textContent;
             demoBtn.textContent = 'Loading Demo...';
             demoBtn.disabled = true;
+            loadBtn.disabled = true;
+            loadingIndicator.style.display = 'block';
+            this.updateProgress(0, 'Initializing demo request...');
 
             // Define a range that would capture most of the demo data
-            // Since demo data is generated with current timestamps, we use a wide range relative to now
             const now = Math.floor(Date.now() / 1000);
             const startTs = now - 3600 * 24; // last 24 hours
-            const endTs = now + 60; // a bit into the future to catch latest
+            const endTs = now + 86400; // include some future just in case or for full day
 
-            // Fetch historical demo data from demo.csv
-            const response = await fetch(`/api/range?start=${startTs}&end=${endTs}&max_points=5000&source=demo`);
-            const data = await response.json();
+            this.updateProgress(10, 'Fetching demo data...');
 
-            if (data.data) {
-                this.currentData = data.data;
-                this.updateChart();
-                this.calculateStatistics();
+            const [dataRes, highlightsRes, analysisRes] = await Promise.all([
+                fetch(`/api/range?start=${startTs}&end=${endTs}&max_points=5000&source=demo`).then(r => r.json()),
+                fetch(`/api/highlights?start=${startTs}&end=${endTs}&source=demo`).then(r => r.json()),
+                fetch(`/api/analysis/history?start=${startTs}&end=${endTs}`).then(r => r.json()).catch(e => {
+                    console.warn("Failed to fetch analysis", e);
+                    return { data: [] };
+                })
+            ]);
+
+            this.updateProgress(60, 'Processing demo data...');
+
+            if (dataRes.data) {
+                this.currentData = dataRes.data;
+            } else {
+                this.currentData = [];
             }
 
-            // Fetch anomalies from demo_highlights.json
-            const highlightsResponse = await fetch(`/api/highlights?start=${startTs}&end=${endTs}&source=demo`);
-            const highlightsData = await highlightsResponse.json();
-
-            if (highlightsData.highlights) {
-                this.anomalies = highlightsData.highlights;
-                this.updateAnomalyDisplay();
+            if (highlightsRes.highlights) {
+                this.anomalies = highlightsRes.highlights;
+            } else {
+                this.anomalies = [];
             }
 
-            // Fetch Analysis Data
-            try {
-                const analysisResponse = await fetch(`/api/analysis/history?start=${startTs}&end=${endTs}`);
-                const analysisData = await analysisResponse.json();
-
-                if (analysisData.data) {
-                    this.analysisData = analysisData.data;
-                    this.updateChart(); // Re-update chart with analysis
-                }
-            } catch (e) {
-                console.warn("Failed to fetch analysis", e);
+            if (analysisRes.data) {
+                this.analysisData = analysisRes.data;
+            } else {
+                this.analysisData = [];
             }
+
+            this.updateProgress(80, 'Updating charts...');
+
+            this.updateChart();
+            this.calculateStatistics();
+            this.updateAnomalyDisplay();
 
             // Update date inputs to reflect what we just loaded (approximate)
             const startDateObj = new Date(startTs * 1000);
-            const endDateObj = new Date(endTs * 1000);
+            const endDateObj = new Date(now * 1000);
             document.getElementById('startDate').value = startDateObj.toISOString().split('T')[0];
             document.getElementById('endDate').value = endDateObj.toISOString().split('T')[0];
             this.validateDateRange();
+
+            this.updateProgress(100, 'Demo Loaded');
+            setTimeout(() => { loadingIndicator.style.display = 'none'; }, 1000);
 
         } catch (error) {
             console.error('Error loading demo data:', error);
             alert('Failed to load demo data. Make sure demo is active and generating data.');
         } finally {
             // Reset loading state
-            const demoBtn = document.getElementById('loadDemoData');
             demoBtn.textContent = 'Load Demo Data';
             demoBtn.disabled = false;
+            loadBtn.disabled = false;
         }
     }
 
     updateChart() {
-        if (!this.currentData || !this.currentData.length) return;
+        // Prepare datasets array
+        const datasets = [];
 
-        let processedData = this.currentData;
-
-        // Apply smoothing if enabled
-        if (this.smoothData) {
-            processedData = this.applyDataSmoothing(this.currentData);
-        }
-
-        this.chart.data.labels = processedData.map(d => new Date(d[0] * 1000));
-        this.chart.data.datasets[0].data = processedData.map(d => ({ x: new Date(d[0] * 1000), y: d[1] }));
-
-        // Add Analysis Dataset (RMS) if available
-        if (this.analysisData && this.analysisData.length > 0) {
-            const rmsData = this.analysisData.map(d => ({
-                x: new Date(d.ts * 1000),
-                y: d.rms
-            }));
-
-            // Check if dataset exists
-            let rmsDataset = this.chart.data.datasets.find(d => d.label === 'RMS Voltage');
-            if (!rmsDataset) {
-                this.chart.data.datasets.push({
-                    label: 'RMS Voltage',
-                    data: rmsData,
-                    borderColor: '#66BB6A', // Green
-                    backgroundColor: 'rgba(102, 187, 106, 0.1)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    tension: 0.2
-                });
-            } else {
-                rmsDataset.data = rmsData;
+        // 1. Raw Voltage Dataset
+        if (this.currentData && this.currentData.length > 0) {
+            let processedData = this.currentData;
+            if (this.smoothData) {
+                processedData = this.applyDataSmoothing(this.currentData);
             }
+
+            datasets.push({
+                label: 'Voltage',
+                data: processedData.map(d => ({ x: new Date(d[0] * 1000), y: d[1] })),
+                borderColor: '#90CAF9',
+                backgroundColor: 'rgba(144,202,249,0.1)',
+                tension: 0.1,
+                pointRadius: 1
+            });
         }
 
-        this.updateAnomalyMarkers();
+        // 2. RMS Voltage Dataset (Analysis)
+        if (this.analysisData && this.analysisData.length > 0) {
+            datasets.push({
+                label: 'RMS Voltage',
+                data: this.analysisData.map(d => ({
+                    x: new Date(d.ts * 1000),
+                    y: d.rms
+                })),
+                borderColor: '#66BB6A', // Green
+                backgroundColor: 'rgba(102, 187, 106, 0.1)',
+                borderWidth: 2,
+                pointRadius: 0,
+                tension: 0.2
+            });
+        }
+
+        // 3. Anomalies Dataset
+        if (this.showAnomalies && this.anomalies && this.anomalies.length > 0) {
+            datasets.push({
+                label: 'Anomalies',
+                data: this.anomalies.map(a => ({
+                    x: new Date(a.peak_ts * 1000),
+                    y: a.peak_value
+                })),
+                borderColor: '#FF6B6B',
+                backgroundColor: '#FF6B6B',
+                showLine: false,
+                pointRadius: 6,
+                pointStyle: 'triangle'
+            });
+        }
+
+        // Update the chart
+        this.chart.data.datasets = datasets;
         this.chart.update();
     }
 

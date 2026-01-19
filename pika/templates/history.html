@@ -30,6 +30,18 @@
                 <button id="exportData" class="btn">Export CSV</button>
             </div>
         </div>
+
+        <!-- Progress Indicator -->
+        <div id="loadingIndicator" style="display:none; margin-bottom:20px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:12px;">
+                <span id="loadingStatusText">Fetching data...</span>
+                <span id="loadingPercentage">0%</span>
+            </div>
+            <div style="width:100%; height:4px; background:rgba(255,255,255,0.1); border-radius:2px; overflow:hidden;">
+                <div id="loadingProgressBar"
+                    style="width:0%; height:100%; background:var(--primary); transition: width 0.3s ease;"></div>
+            </div>
+        </div>
     </div>
 
     <!-- Statistics Panel -->
