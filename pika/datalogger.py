@@ -114,7 +114,7 @@ class Datalogger:
         if self.stream_analyzer:
             self.stream_analyzer.update_config(config)
 
-    # ... (other methods unchanged: add_sample_callback, remove_sample_callback) ...
+
 
     def set_sample_rate(self, sample_hz):
         """Change the sample rate dynamically (1-860 Hz)."""
@@ -136,7 +136,80 @@ class Datalogger:
             return True
         return False
 
-    # ... (unchanged: _log_filename_for_date, _open_log_file_for_today, _cleanup_old_logs, start, stop) ...
+    def add_sample_callback(self, callback):
+        self._sample_callbacks.append(callback)
+
+    def remove_sample_callback(self, callback):
+        if callback in self._sample_callbacks:
+            self._sample_callbacks.remove(callback)
+
+    def _log_filename_for_date(self, date_struct):
+        date_str = time.strftime("%Y-%m-%d", date_struct)
+        return os.path.join(self.data_dir, f"{self.filename_prefix}_{date_str}.csv")
+
+    def _open_log_file_for_today(self):
+        now = time.localtime()
+        date_str = time.strftime("%Y-%m-%d", now)
+        
+        if self._current_date != date_str:
+            if self._file:
+                try:
+                    self._flush_batch()
+                    self._file.close()
+                except Exception:
+                    logging.exception("Error closing log file")
+
+            self._current_date = date_str
+            filename = self._log_filename_for_date(now)
+            is_new = not os.path.exists(filename)
+            try:
+                self._file = open(filename, "a", newline='')
+                if is_new:
+                    writer = csv.writer(self._file)
+                    writer.writerow(["timestamp", "value"])
+                    self._file.flush()
+            except Exception:
+                 logging.exception(f"Failed to open log file {filename}")
+            
+            self._cleanup_old_logs()
+
+    def _cleanup_old_logs(self):
+        try:
+            now = time.time()
+            retention_sec = self.retention_days * 86400
+            for f in os.listdir(self.data_dir):
+                if f.startswith(self.filename_prefix) and f.endswith(".csv"):
+                    path = os.path.join(self.data_dir, f)
+                    if os.stat(path).st_mtime < now - retention_sec:
+                        try:
+                            os.remove(path)
+                            logging.info(f"Deleted old log file: {f}")
+                        except Exception:
+                            pass
+        except Exception:
+            logging.exception("Error cleaning up old logs")
+
+    def start(self):
+        if self._thread is not None:
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        logging.info("Datalogger started")
+
+    def stop(self):
+        if self._thread is None:
+            return
+        self._stop.set()
+        self._thread.join()
+        self._thread = None
+        if self._file:
+            try:
+                self._flush_batch()
+                self._file.close()
+            except Exception:
+                pass
+        logging.info("Datalogger stopped")
 
     def _flush_batch(self):
         if not self._batch_buffer:
