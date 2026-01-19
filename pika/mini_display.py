@@ -89,7 +89,7 @@ def show_on_waveshare(img: Image.Image, lcd_config: Optional[dict] = None) -> bo
         # adafruit_rgb_display handles the rotation and dimensions.
         disp = st_ada.ST7789(
             spi,
-            rotation=90,
+            rotation=270,
             cs=cs_pin,
             dc=dc_pin,
             rst=reset_pin,
