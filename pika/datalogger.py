@@ -53,7 +53,26 @@ class Datalogger:
         self.filename_prefix = filename_prefix
         self.sample_hz = sample_hz
         self.interval = 1.0 / float(self.sample_hz)
-        self.adc = adc if adc is not None else (ADS1115ADC(address=adc_address, channel=adc_channel) if ADS1115ADC else MockADC())
+        # Try to initialize the requested ADC hardware
+        self.adc = adc
+        if self.adc is None:
+            if ADS1115ADC:
+                try:
+                    self.adc = ADS1115ADC(address=adc_address, channel=adc_channel)
+                except Exception as e:
+                    logging.error("--- HARDWARE INITIALIZATION FAILURE ---")
+                    logging.error("Failed to initialize ADS1115 ADC: %s", e)
+                    if "No I2C device at address" in str(e) or "[Errno 121]" in str(e):
+                        logging.error("HINT: The I2C device was not found at 0x%02X.", adc_address)
+                        logging.error("1. Check your wiring (VCC, GND, SDA, SCL).")
+                        logging.error("2. Ensure I2C is enabled in raspi-config.")
+                        logging.error("3. Run 'i2cdetect -y 1' to scan for the device address.")
+                    logging.error("Falling back to MockADC (simulated data).")
+                    logging.error("---------------------------------------")
+                    self.adc = MockADC()
+            else:
+                self.adc = MockADC()
+
         self._stop = threading.Event()
         self._thread = None
         self._buffer = deque(maxlen=int(self.sample_hz * 60))  # keep last 60s in memory

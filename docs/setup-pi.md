@@ -72,11 +72,22 @@ The application includes a systemd watchdog helper. If the datalogger stops samp
 
 ## 5. Hardware Configuration
 
-### Enable I2C
+### Enable I2C & SPI
 If not already enabled:
 ```bash
+# Enable I2C
 sudo raspi-config nonint do_i2c 0
+# Enable SPI
+sudo raspi-config nonint do_spi 0
 ```
+Then reboot your system.
 
 ### Wiring
 Refer to the [Wiring Guide](wiring-steps.md) for detailed schematics.
+
+### Troubleshooting I2C
+If the application logs "No I2C device at address: 0x48", verify the hardware is visible to the OS:
+```bash
+sudo i2cdetect -y 1
+```
+You should see `48` appearing in the grid. If the grid is empty, check your SDA/SCL wiring and VCC/GND connections.

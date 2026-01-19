@@ -55,7 +55,7 @@ class HighlightsManager:
         mean = sum(vals) / len(vals)
         var = sum((v - mean) ** 2 for v in vals) / len(vals)
         std = var ** 0.5
-        thresh = max(0.06, 4.0 * std)  # 60mV or 4 sigma
+        thresh = max(0.06, 3.0 * std)  # 60mV or 4 sigma
 
         highlights = []
         current = None

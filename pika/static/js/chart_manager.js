@@ -139,7 +139,7 @@ class PikaChartManager {
                         }
                     },
                     y: {
-                        suggestedMin: 0,
+                        suggestedMin: 2,
                         suggestedMax: 3.3,
                         ticks: { color: '#d0d0d0' },
                         grid: { color: 'rgba(255,255,255,0.04)' }

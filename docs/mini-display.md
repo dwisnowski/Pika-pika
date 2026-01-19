@@ -18,9 +18,9 @@ Designed for the **Waveshare 2" LCD Module**. It uses the ST7789 driver.
 ### Optional Dependencies
 Install the display-specific dependencies:
 ```bash
-uv sync --extra display
+uv sync --extra rpi
 ```
-Or via the setup script:
+Or via the setup script (recommended as it installs system libraries like `libopenblas-dev`):
 ```bash
 bash scripts/setup_pi.sh
 ```
@@ -30,10 +30,10 @@ bash scripts/setup_pi.sh
 Run the display script:
 ```bash
 # Auto-detect IP and display QR
-python -m pika.mini_display --auto-ip --port 8000
+uv run python -m pika.mini_display --auto-ip --port 8000
 
 # Specify a URL manually
-python -m pika.mini_display --url http://192.168.1.50:8000
+uv run python -m pika.mini_display --url http://192.168.1.50:8000
 ```
 
 ### Integration
@@ -63,3 +63,22 @@ lcd_bl = 24
 
 ## Technical Details
 The script tries several driver names (`LCD_2inch`, `st7789`, `LCD`). If no hardware is found, it fallbacks to saving `qr_lcd.png` in the repository root for debugging.
+
+### Troubleshooting "libopenblas.so.0" or NumPy errors
+If you see an error about `libopenblas.so.0` or `numpy` failing to import, it means some system libraries are missing. Run:
+```bash
+sudo apt-get install -y libopenblas-dev
+```
+
+### Troubleshooting "[Errno 2] No such file or directory"
+This error indicates that the SPI interface is not enabled. 
+1. Run `sudo raspi-config`
+2. Select **3 Interface Options**
+3. Select **I4 SPI** and enable it.
+4. Reboot your Pi.
+
+Alternatively, run:
+```bash
+sudo raspi-config nonint do_spi 0
+sudo reboot
+```

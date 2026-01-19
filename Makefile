@@ -7,7 +7,7 @@ else
   UV := uv
 endif
 
-.PHONY: help setup sync fresh-install run dev check-running docs docs-sync docs-serve icons clean stop stop-restart
+.PHONY: help setup sync fresh-install run dev diagnose check-running docs docs-sync docs-serve icons clean stop stop-restart
 # Default target
 help:
 	@echo "Pika-pika Makefile"
@@ -15,6 +15,7 @@ help:
 	@echo "Production (Raspberry Pi) targets:"
 	@echo "  make setup          - Run initial setup script (installs system packages, creates venv, installs deps)"
 	@echo "  make sync           - Sync dependencies and install package using uv (creates venv if needed)"
+	@echo "  make doctor         - Scan for I2C/SPI hardware and check interface status"
 	@echo "  make run            - Run the app in production mode (single worker for low-powered devices)"
 	@echo "                      - Prevents starting if another instance is already running on port 8000"
 	@echo ""
@@ -51,6 +52,11 @@ check-running:
 # Run initial setup script on Raspberry Pi
 setup:
 	@bash scripts/setup_pi.sh
+
+# Scan for I2C and SPI hardware
+doctor:
+	@chmod +x scripts/doctor.sh 2>/dev/null || true
+	@bash scripts/doctor.sh
 
 # Sync dependencies and install of package (creates venv if needed)
 sync:
