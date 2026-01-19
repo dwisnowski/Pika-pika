@@ -11,6 +11,7 @@ from .apis.api_recent import api_recent, register_api_recent_routes
 from .apis.api_highlights import api_highlights, register_api_highlights_routes
 from .apis.api_range import api_range, register_api_range_routes
 from .apis.api_config import get_config, update_sample_rate, register_api_config_routes
+from .apis.api_analysis_history import register_api_analysis_routes
 from .websockets.websocket_live import websocket_live, register_websocket_live_routes
 from .websockets.websocket_demo import websocket_demo, register_websocket_demo_routes
 from .pages.demo_pages import demo, register_demo_pages_routes

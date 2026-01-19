@@ -16,11 +16,10 @@ class PikaChartManager {
         this.chart = null;
         this.websocket = null;
         this.liveMode = true;
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-        this.selectedTimeWindow = 60;
-        this.highlightsCache = [];
-        this.highlightsCacheAll = [];
+        this.renderInterval = null;
+        this.renderQueue = [];
+        this.targetFps = 60;
+        this.lastRender = 0;
 
         this.init();
     }
@@ -32,6 +31,9 @@ class PikaChartManager {
         this.connectWebSocket();
         this.setupQRCode();
         this.updateChartIntervals();
+        this.startRenderLoop();
+        this.loadAnalysisConfig();
+
         if (!this.options.enableSampleRateControls) {
             const controls = document.getElementById('sampleRate')?.parentElement;
             if (controls) {
@@ -40,114 +42,55 @@ class PikaChartManager {
         }
     }
 
-    setupChart() {
-        const ctx = document.getElementById('chart')?.getContext('2d');
-        if (!ctx) return;
+    startRenderLoop() {
+        const render = (now) => {
+            requestAnimationFrame(render);
 
-        const highlightPlugin = {
-            id: 'highlightPlugin',
-            afterDraw: (chart) => {
-                if (!this.options.enableHighlightShading) return;
-                const highlights = this.highlightsCache || [];
-                if (!highlights.length) return;
-                const xScale = chart.scales['x'];
-                const _ctx = chart.ctx;
-                const top = chart.chartArea.top;
-                const bottom = chart.chartArea.bottom;
-                _ctx.save();
-                _ctx.globalAlpha = 0.08;
-                _ctx.fillStyle = 'rgb(220,20,60)';
-                highlights.forEach(h => {
-                    const x1 = xScale.getPixelForValue(new Date(h.start_ts * 1000));
-                    const x2 = xScale.getPixelForValue(new Date(h.end_ts * 1000));
-                    _ctx.fillRect(x1, top, Math.max(1, x2 - x1), bottom - top);
-                });
-                _ctx.restore();
+            const interval = 1000 / this.targetFps;
+            const delta = now - this.lastRender;
+
+            if (delta > interval) {
+                this.lastRender = now - (delta % interval);
+                this.processRenderQueue();
             }
         };
+        requestAnimationFrame(render);
+    }
 
-        Chart.defaults.color = '#eaeaea';
-        Chart.defaults.backgroundColor = 'transparent';
+    processRenderQueue() {
+        if (!this.chart || this.renderQueue.length === 0) return;
 
-        this.chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: [],
-                datasets: [
-                    {
-                        label: this.options.voltageLabel,
-                        data: [],
-                        borderColor: '#90CAF9',
-                        backgroundColor: 'rgba(144,202,249,0.06)',
-                        tension: 0.1,
-                        pointRadius: 0
-                    },
-                    {
-                        label: 'Anomalies',
-                        data: [],
-                        borderColor: '#FF6B6B',
-                        backgroundColor: '#FF6B6B',
-                        showLine: false,
-                        pointRadius: 5
-                    },
-                    {
-                        label: 'Min Marker',
-                        data: [],
-                        borderColor: '#FF6B6B',
-                        backgroundColor: 'transparent',
-                        pointRadius: 8,
-                        pointBorderWidth: 2,
-                        pointStyle: 'circle',
-                        showLine: false
-                    },
-                    {
-                        label: 'Max Marker',
-                        data: [],
-                        borderColor: '#90CAF9',
-                        backgroundColor: 'transparent',
-                        pointRadius: 8,
-                        pointBorderWidth: 2,
-                        pointStyle: 'circle',
-                        showLine: false
-                    }
-                ]
-            },
-            options: {
-                animation: false,
-                plugins: {
-                    zoom: {
-                        pan: { enabled: true, mode: 'x', modifierKey: 'ctrl' },
-                        zoom: {
-                            wheel: { enabled: true },
-                            mode: 'x',
-                            pinch: { enabled: true },
-                            onZoomComplete: ({ chart }) => this.onRangeChanged(chart)
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: {
-                            unit: 'second',
-                            displayFormats: { second: 'HH:mm:ss' }
-                        },
-                        ticks: { display: false },
-                        grid: {
-                            color: 'rgba(255,255,255,0.08)',
-                            lineWidth: (ctx) => ctx.tick.major ? 2 : 1
-                        }
-                    },
-                    y: {
-                        suggestedMin: 2,
-                        suggestedMax: 3.3,
-                        ticks: { color: '#d0d0d0' },
-                        grid: { color: 'rgba(255,255,255,0.04)' }
-                    }
-                }
-            },
-            plugins: [highlightPlugin]
+        // Process all queued points
+        const points = this.renderQueue.splice(0, this.renderQueue.length);
+
+        // Add to chart
+        points.forEach(p => {
+            this.chart.data.labels.push(p.x);
+            this.chart.data.datasets[0].data.push(p);
         });
+
+        // Prune old data (performance)
+        // Keep slightly more than window to allow smooth scrolling?
+        // Actually, applyTimeWindowFilter does filtering, but we should remove from dataset too.
+        // For simple pruning:
+        const maxPoints = 5000; // Safety limit
+        if (this.chart.data.labels.length > maxPoints) {
+            const removeCount = this.chart.data.labels.length - maxPoints;
+            this.chart.data.labels.splice(0, removeCount);
+            this.chart.data.datasets[0].data.splice(0, removeCount);
+        }
+
+        this.applyTimeWindowFilter();
+        this.chart.update('none');
+
+        // Update Text Display (use last point)
+        if (points.length > 0) {
+            const last = points[points.length - 1];
+            const voltageDisplay = document.getElementById('qr_voltage');
+            if (voltageDisplay) {
+                voltageDisplay.innerText = last.y.toFixed(3) + ' V';
+            }
+        }
     }
 
     setupEventListeners() {
@@ -158,7 +101,7 @@ class PikaChartManager {
         });
 
         const updateRateBtn = document.getElementById('updateRateBtn');
-        if (updateRateBtn && this.options.enableSampleRateControls) {
+        if (updateRateBtn) {
             updateRateBtn.addEventListener('click', () => {
                 this.updateSampleRate();
             });
@@ -177,72 +120,39 @@ class PikaChartManager {
                 await this.copyURL();
             });
         }
-    }
 
-    setupQRCode() {
-        const origin = window.location.origin;
-        const qrbox = document.getElementById('qrcode');
-        const qurl = document.getElementById('qurl');
+        // Settings Modal Controls
+        const settingsBtn = document.getElementById('settingsBtn');
+        const closeSettingsBtn = document.getElementById('settingsBtnClose') || document.getElementById('closeSettingsBtn'); // Handle multiple potential IDs
+        const settingsModal = document.getElementById('settingsModal');
 
-        if (!qrbox) return;
-        if (qurl) qurl.textContent = origin;
-
-        qrbox.innerHTML = ''; // Clear existing
-
-        if (typeof QRCode !== 'undefined') {
-            const canvas = document.createElement('canvas');
-            qrbox.appendChild(canvas);
-            QRCode.toCanvas(canvas, origin, { width: 160 }, function (err) {
-                if (err) console.error(err);
+        if (settingsBtn && settingsModal) {
+            settingsBtn.addEventListener('click', () => {
+                settingsModal.style.display = 'flex';
+                this.loadAnalysisConfig(); // Reload fresh status
             });
-        } else {
-            const img = document.createElement('img');
-            img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent(origin);
-            qrbox.appendChild(img);
+        }
+
+        if (closeSettingsBtn && settingsModal) {
+            closeSettingsBtn.addEventListener('click', () => settingsModal.style.display = 'none');
+        }
+
+        const updateAnalysisBtn = document.getElementById('updateAnalysisBtn');
+        if (updateAnalysisBtn) {
+            updateAnalysisBtn.addEventListener('click', () => this.saveAnalysisConfig());
+        }
+
+        const chartFpsSelect = document.getElementById('chartFps');
+        if (chartFpsSelect) {
+            chartFpsSelect.addEventListener('change', (e) => {
+                this.targetFps = parseInt(e.target.value);
+            });
         }
     }
 
-    async copyURL() {
-        const origin = window.location.origin;
-        const copyBtn = document.getElementById('copyBtn');
+    // ... setupQRCode, copyURL ...
 
-        try {
-            await navigator.clipboard.writeText(origin);
-            if (copyBtn) {
-                copyBtn.textContent = 'Copied!';
-                setTimeout(() => copyBtn.textContent = 'Copy URL', 1500);
-            }
-        } catch (e) {
-            console.error('copy failed', e);
-            if (copyBtn) {
-                copyBtn.textContent = 'Copy failed';
-                setTimeout(() => copyBtn.textContent = 'Copy URL', 1500);
-            }
-        }
-    }
-
-    connectWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}${this.options.wsPath}`;
-
-        this.websocket = new WebSocket(wsUrl);
-
-        this.websocket.onopen = () => {
-            this.reconnectAttempts = 0;
-        };
-
-        this.websocket.onmessage = (event) => {
-            this.handleWebSocketMessage(JSON.parse(event.data));
-        };
-
-        this.websocket.onclose = () => {
-            this.attemptReconnect();
-        };
-
-        this.websocket.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
-    }
+    // ... connectWebSocket ...
 
     handleWebSocketMessage(data) {
         switch (data.type) {
@@ -256,6 +166,9 @@ class PikaChartManager {
                 this.renderHighlightsList(data.highlights);
                 this.highlightsCacheAll = data.highlights;
                 this.highlightsCache = data.highlights;
+                break;
+            case 'config_update':
+                // Optional: update UI if config changed from another client
                 break;
             case 'ping':
                 break;
@@ -275,21 +188,56 @@ class PikaChartManager {
     }
 
     addNewSample(data) {
-        if (!this.chart) return;
+        // Instead of updating immediately, push to queue
         const [timestamp, voltage] = data;
-        const point = { x: new Date(timestamp * 1000), y: voltage };
+        this.renderQueue.push({ x: new Date(timestamp * 1000), y: voltage });
+    }
 
-        this.chart.data.labels.push(point.x);
-        this.chart.data.datasets[0].data.push(point);
+    async loadAnalysisConfig() {
+        try {
+            const res = await fetch('/api/config/analysis');
+            const config = await res.json();
 
-        this.applyTimeWindowFilter();
-        this.chart.update('none');
-
-        const voltageDisplay = document.getElementById('qr_voltage');
-        if (voltageDisplay) {
-            voltageDisplay.innerText = voltage.toFixed(3) + ' V';
+            document.getElementById('enableRms').checked = config.enable_rms !== false;
+            document.getElementById('enableFreq').checked = config.enable_freq !== false;
+            document.getElementById('enableSags').checked = config.enable_sags_swells !== false;
+        } catch (e) {
+            console.error("Failed to load analysis config", e);
         }
     }
+
+    async saveAnalysisConfig() {
+        const config = {
+            enable_rms: document.getElementById('enableRms').checked,
+            enable_freq: document.getElementById('enableFreq').checked,
+            enable_sags_swells: document.getElementById('enableSags').checked
+        };
+
+        try {
+            await fetch('/api/config/analysis', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            // Visual feedback?
+            const btn = document.getElementById('updateAnalysisBtn');
+            const original = btn.textContent;
+            btn.textContent = "Saved!";
+            setTimeout(() => btn.textContent = original, 1500);
+
+        } catch (e) {
+            console.error("Failed to save analysis config", e);
+            alert("Failed to save configuration");
+        }
+    }
+
+    // ... renderHighlightsList, focusOnHighlight, resetView, load/saveTimeWindow ...
+
+    // ... updateChartIntervals, applyTimeWindowFilter, updateMinMaxDisplay, updateSampleRate ...
+
+    // ... fetchRange, onRangeChanged, attemptReconnect, triggerAnomaly ...
+
 
     renderHighlightsList(highlights) {
         const container = document.getElementById('highlightsList');

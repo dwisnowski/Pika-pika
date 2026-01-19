@@ -166,6 +166,19 @@ class HistoryChartManager {
                 this.updateAnomalyDisplay();
             }
 
+            // Fetch Analysis Data
+            try {
+                const analysisResponse = await fetch(`/api/analysis/history?start=${startTs}&end=${endTs}`);
+                const analysisData = await analysisResponse.json();
+
+                if (analysisData.data) {
+                    this.analysisData = analysisData.data;
+                    this.updateChart();
+                }
+            } catch (e) {
+                console.warn("Failed to fetch analysis", e);
+            }
+
         } catch (error) {
             console.error('Error loading historical data:', error);
             alert('Failed to load historical data. Please try again.');
@@ -209,6 +222,19 @@ class HistoryChartManager {
                 this.updateAnomalyDisplay();
             }
 
+            // Fetch Analysis Data
+            try {
+                const analysisResponse = await fetch(`/api/analysis/history?start=${startTs}&end=${endTs}`);
+                const analysisData = await analysisResponse.json();
+
+                if (analysisData.data) {
+                    this.analysisData = analysisData.data;
+                    this.updateChart(); // Re-update chart with analysis
+                }
+            } catch (e) {
+                console.warn("Failed to fetch analysis", e);
+            }
+
             // Update date inputs to reflect what we just loaded (approximate)
             const startDateObj = new Date(startTs * 1000);
             const endDateObj = new Date(endTs * 1000);
@@ -239,6 +265,30 @@ class HistoryChartManager {
 
         this.chart.data.labels = processedData.map(d => new Date(d[0] * 1000));
         this.chart.data.datasets[0].data = processedData.map(d => ({ x: new Date(d[0] * 1000), y: d[1] }));
+
+        // Add Analysis Dataset (RMS) if available
+        if (this.analysisData && this.analysisData.length > 0) {
+            const rmsData = this.analysisData.map(d => ({
+                x: new Date(d.ts * 1000),
+                y: d.rms
+            }));
+
+            // Check if dataset exists
+            let rmsDataset = this.chart.data.datasets.find(d => d.label === 'RMS Voltage');
+            if (!rmsDataset) {
+                this.chart.data.datasets.push({
+                    label: 'RMS Voltage',
+                    data: rmsData,
+                    borderColor: '#66BB6A', // Green
+                    backgroundColor: 'rgba(102, 187, 106, 0.1)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.2
+                });
+            } else {
+                rmsDataset.data = rmsData;
+            }
+        }
 
         this.updateAnomalyMarkers();
         this.chart.update();

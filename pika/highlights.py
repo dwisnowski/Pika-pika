@@ -13,6 +13,7 @@ import time
 import json
 import os
 import logging
+from collections import deque
 from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -27,18 +28,40 @@ class HighlightsManager:
         self._stop = threading.Event()
         self._thread = None
         self._highlights: List[Dict] = []
+        
+        # Internal buffer for streaming data (approx 10-15 mins to be safe)
+        # Assuming max 860Hz * 600s = 516,000 points. 
+        # Deque is efficient for append/popleft.
+        # We need to know sample rate to size it? Or just strict time-based pruning?
+        # Let's use time-based pruning in the scan loop, and a generous maxlen.
+        self._buffer_maxlen = 1000000 
+        self._buffer = deque(maxlen=self._buffer_maxlen) 
+        self._buffer_lock = threading.Lock()
+        
         os.makedirs(self.data_dir, exist_ok=True)
+
+    def _on_sample(self, ts, val):
+        """Callback from datalogger."""
+        with self._buffer_lock:
+            self._buffer.append((ts, val))
 
     def start(self):
         if self._thread and self._thread.is_alive():
             return
         self._stop.clear()
+        
+        # Subscribe to datalogger
+        self.datalogger.add_sample_callback(self._on_sample)
+        
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
-        logger.info("HighlightsManager started (scan every %ds)" % self.scan_interval)
+        logger.info("HighlightsManager started (scan every %ds, streaming mode)" % self.scan_interval)
 
     def stop(self):
         self._stop.set()
+        # Unsubscribe
+        self.datalogger.remove_sample_callback(self._on_sample)
+        
         if self._thread:
             self._thread.join(timeout=1.0)
 
@@ -46,16 +69,15 @@ class HighlightsManager:
         return list(self._highlights)
 
     def _detect(self, samples: List[tuple]) -> List[Dict]:
-        # samples: list of (ts, val) sorted by ts
         if len(samples) < self.min_points:
             return []
-        # compute rolling mean/std over small neighborhoods and flag outliers
-        vals = [v for (_, v) in samples]
+        
         # simple global stats
+        vals = [v for (_, v) in samples]
         mean = sum(vals) / len(vals)
         var = sum((v - mean) ** 2 for v in vals) / len(vals)
         std = var ** 0.5
-        thresh = max(0.06, 3.0 * std)  # 60mV or 4 sigma
+        thresh = max(0.06, 3.0 * std)
 
         highlights = []
         current = None
@@ -76,7 +98,6 @@ class HighlightsManager:
         if current is not None:
             highlights.append(current)
 
-        # convert to API friendly list with score
         out = []
         for h in highlights:
             duration = h['end'] - h['start']
@@ -94,19 +115,35 @@ class HighlightsManager:
     def _run(self):
         while not self._stop.is_set():
             try:
-                samples = self.datalogger.get_recent(seconds=self.window_seconds)
-                samples.sort()
-                highlights = self._detect(samples)
-                self._highlights = highlights
-                # write to disk for UI or offline use
-                try:
-                    with open(os.path.join(self.data_dir, 'highlights.json'), 'w') as f:
-                        json.dump(highlights, f)
-                except Exception:
-                    logger.exception("Failed to write highlights.json")
+                # Get local copy of recent buffer
+                now = time.time()
+                cutoff = now - self.window_seconds
+                
+                samples_to_analyze = []
+                with self._buffer_lock:
+                    # Prune old
+                    while self._buffer and self._buffer[0][0] < cutoff:
+                        self._buffer.popleft()
+                    # Copy reference (list conversion is fast enough for <1M items)
+                    # Optimization: iterate directly to avoid full copy if massive?
+                    # For now, list(deque) is simplest.
+                    samples_to_analyze = list(self._buffer)
+                
+                if samples_to_analyze:
+                    # Sort not needed if append is monotonic, but safety first
+                    # samples_to_analyze.sort() 
+                    highlights = self._detect(samples_to_analyze)
+                    self._highlights = highlights
+                    
+                    try:
+                        with open(os.path.join(self.data_dir, 'highlights.json'), 'w') as f:
+                            json.dump(highlights, f)
+                    except Exception:
+                        logger.exception("Failed to write highlights.json")
             except Exception:
                 logger.exception("Error running highlights detection")
-            # sleep until next scan
+            
+            # sleep
             for _ in range(int(self.scan_interval)):
                 if self._stop.is_set():
                     break

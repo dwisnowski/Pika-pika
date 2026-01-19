@@ -5,14 +5,50 @@ Provides access to current configuration and allows updating sample rate.
 
 import json
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
 from fastapi.responses import JSONResponse
 
+router = APIRouter()
 
-def register_api_config_routes(app: FastAPI, logger, config, manager, display_fps, display_auto_ip):
+# Global variables to hold instances passed during registration
+logger = None
+config = None
+manager = None
+display_fps = None
+display_auto_ip = None
+
+
+@router.put("/config/analysis")
+async def update_analysis_config(data: dict):
+    """Update analysis configuration."""
+    try:
+        if logger:
+            logger.update_analysis_config(data)
+        return {"success": True, "config": (logger.analysis_config if logger else {})}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+@router.get("/config/analysis")
+async def get_analysis_config():
+    """Get current analysis configuration."""
+    if logger:
+        return logger.analysis_config
+    return {}
+
+
+def register_api_config_routes(app: FastAPI, _logger, _config, _manager, _display_fps, _display_auto_ip):
     """Register configuration API routes with the FastAPI app."""
-    app.get("/api/config")(lambda: get_config(logger, config, display_fps, display_auto_ip))
-    app.put("/api/config/sample-rate")(lambda sample_hz: update_sample_rate(logger, config, manager, sample_hz))
+    global logger, config, manager, display_fps, display_auto_ip
+    logger = _logger
+    config = _config
+    manager = _manager
+    display_fps = _display_fps
+    display_auto_ip = _display_auto_ip
+
+    router.get("/config")(lambda: get_config(logger, config, display_fps, display_auto_ip))
+    router.put("/config/sample-rate")(lambda sample_hz: update_sample_rate(logger, config, manager, sample_hz))
+
+    app.include_router(router, prefix="/api")
 
 
 def get_config(logger, config, display_fps, display_auto_ip):

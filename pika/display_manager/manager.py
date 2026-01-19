@@ -106,11 +106,18 @@ class DisplayManager:
             voltage = self._voltage_source.get_current_voltage()
             anomaly_count = self._anomaly_source.get_recent_anomaly_count(hours=1)
             
+            # Get analysis data
+            analysis = self.logger.get_current_analysis() if hasattr(self.logger, 'get_current_analysis') else {}
+            rms = analysis.get('rms', 0.0)
+            freq = analysis.get('freq', 0.0)
+            
             # Render frame
             frame = self._renderer.render_complete_frame(
                 url=self.url,
                 voltage=voltage,
-                anomaly_count=anomaly_count
+                anomaly_count=anomaly_count,
+                rms=rms,
+                freq=freq
             )
             
             # Display frame

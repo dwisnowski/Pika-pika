@@ -131,11 +131,27 @@ class DisplayRenderer:
         my = DISPLAY_H - Layout.MASCOT_Y_OFFSET
         draw.text((mx, my), mascot, fill=Colors.GREEN, font=font)
     
+    def draw_analysis(
+        self,
+        draw: ImageDraw.ImageDraw,
+        font: ImageFont.ImageFont,
+        y_position: int,
+        rms: float,
+        freq: float
+    ) -> None:
+        """Draw RMS and Frequency below anomaly status."""
+        text = f"RMS: {rms:.2f}V | {freq:.1f}Hz"
+        x = center_text_x(text, font, DISPLAY_W)
+        y = y_position + Layout.ANOMALY_Y_OFFSET  # Use same offset/spacing
+        draw.text((x, y), text, fill=Colors.GREEN, font=font)
+
     def render_complete_frame(
         self,
         url: Optional[str],
         voltage: Optional[float],
-        anomaly_count: int
+        anomaly_count: int,
+        rms: float = 0.0,
+        freq: float = 0.0
     ) -> Image.Image:
         """Render complete display frame with all UI elements.
         
@@ -143,6 +159,8 @@ class DisplayRenderer:
             url: URL for QR code (optional)
             voltage: Current voltage reading
             anomaly_count: Number of anomalies detected
+            rms: RMS voltage
+            freq: Frequency in Hz
             
         Returns:
             Complete rendered image
@@ -160,7 +178,16 @@ class DisplayRenderer:
         
         self.draw_title(draw, font)
         voltage_y = self.draw_voltage(draw, large_font, voltage)
+        
+        # Draw anomaly status
         self.draw_anomaly_status(draw, font, voltage_y, anomaly_count)
+        
+        # Draw Analysis below anomaly status
+        # Calculate Y pos: Voltage Y + Anomaly Delta + Analysis Delta
+        # Or just use relative
+        analysis_y = voltage_y + Layout.ANOMALY_Y_OFFSET + 25 # Add some space
+        self.draw_analysis(draw, font, analysis_y, rms, freq)
+        
         self.draw_time(draw, font)
         self.draw_mascot(draw, font)
         

@@ -65,6 +65,8 @@ def load_config():
 full_config = load_config()
 config = full_config.get("pika", {})
 pins = full_config.get("pins", {})
+dl_config = full_config.get("datalogger", {})
+analysis_config = full_config.get("analysis", {})
 
 DATA_DIR = config.get("data_dir", "data")
 SAMPLE_HZ = config.get("sample_hz", 100)
@@ -75,7 +77,10 @@ logger = Datalogger(
     data_dir=DATA_DIR, 
     sample_hz=SAMPLE_HZ,
     adc_address=pins.get("adc_address", 0x48),
-    adc_channel=pins.get("adc_channel", 0)
+    adc_channel=pins.get("adc_channel", 0),
+    batch_size=dl_config.get("batch_size", 400),
+    batch_interval_ms=dl_config.get("batch_interval_ms", 1000),
+    analysis_config=analysis_config
 )
 
 manager = ConnectionManager()
