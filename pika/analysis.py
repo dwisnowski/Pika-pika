@@ -14,6 +14,8 @@ class StreamAnalyzer:
         # State for RMS (1s window)
         self._window_size = 100 # Approx samples for 1s @ 100Hz, will adjust dynamic
         self._buffer = deque() 
+        self._sum_v = 0.0
+        self._sum_v2 = 0.0
         self._last_rms = 0.0
 
         # State for Frequency (Zero crossing)
@@ -38,49 +40,62 @@ class StreamAnalyzer:
         """Process a single sample and return current metrics."""
         result = {}
         
-        # 1. RMS Calculation
-        if self.enabled_rms:
-            # Keep ~1 second of data. 
-            # We don't know exact sample rate, so we use timestamp to prune.
+        # Update buffer and running sums for DC offset/RMS
+        # We need the buffer for both RMS and Frequency (for dynamic DC offset)
+        if self.enabled_rms or self.enabled_freq:
             self._buffer.append((ts, val))
+            self._sum_v += val
+            self._sum_v2 += val * val
             
             # Prune old samples > 1.0s
             while len(self._buffer) > 0 and (ts - self._buffer[0][0] > 1.0):
-                self._buffer.popleft()
-            
+                t_old, v_old = self._buffer.popleft()
+                self._sum_v -= v_old
+                self._sum_v2 -= v_old * v_old
+
+        # 1. RMS Calculation
+        if self.enabled_rms:
             # Compute RMS if we have enough data (at least a few cycles, say 100ms)
             if len(self._buffer) > 10: 
                 # RMS = sqrt(mean(x^2))
-                # Optimization: Could maintain running sum_sq, but strict moving window is safer against drift
-                sum_sq = sum(v*v for t, v in self._buffer)
-                mean_sq = sum_sq / len(self._buffer)
-                self._last_rms = math.sqrt(mean_sq)
+                # Using running sum for O(1) calculation
+                mean_sq = self._sum_v2 / len(self._buffer)
+                self._last_rms = math.sqrt(max(0, mean_sq))
             
             result['rms'] = self._last_rms
 
         # 2. Frequency Calculation (Zero Crossing)
         if self.enabled_freq:
             # Simple zero-crossing detection (rising edge)
-            # We assume signal is roughly centered or use DC offset removal
-            if self.enabled_rms and len(self._buffer) > 10:
-                dc_offset = sum(v for t, v in self._buffer) / len(self._buffer)
+            # Use dynamic DC offset if we have buffer data, otherwise fallback to 1.65V
+            if len(self._buffer) > 10:
+                dc_offset = self._sum_v / len(self._buffer)
             else:
-                dc_offset = 1.65 # Default center for 3.3V ADC
+                dc_offset = self.config.get("dc_offset", 1.65)
 
             if (self._last_val <= dc_offset) and (val > dc_offset):
-                # Rising edge
-                self._crossings.append(ts)
-                # Keep last 10-20 cycles (approx 0.3s)
-                while len(self._crossings) > 20:
-                    self._crossings.popleft()
+                # Rising edge detected
+                # Use linear interpolation for more accurate crossing time
+                # t_cross = t_prev + (t_curr - t_prev) * (dc_offset - v_prev) / (v_curr - v_prev)
+                t_prev = self._last_ts
+                v_prev = self._last_val
                 
-                if len(self._crossings) > 1:
-                    # Duration for N cycles
-                    duration = self._crossings[-1] - self._crossings[0]
-                    cycles = len(self._crossings) - 1
-                    if duration > 0:
-                        self._last_freq = cycles / duration
+                # Check for first sample or if we have a valid previous sample
+                if t_prev > 0 and val != v_prev:
+                    t_cross = t_prev + (ts - t_prev) * (dc_offset - v_prev) / (val - v_prev)
+                    self._crossings.append(t_cross)
+                    
+                    # Keep last 20 cycles
+                    while len(self._crossings) > 20:
+                        self._crossings.popleft()
+                    
+                    if len(self._crossings) > 1:
+                        duration = self._crossings[-1] - self._crossings[0]
+                        cycles = len(self._crossings) - 1
+                        if duration > 0:
+                            self._last_freq = cycles / duration
             
+            self._last_ts = ts
             self._last_val = val
             result['freq'] = self._last_freq
 
@@ -119,6 +134,8 @@ class StreamAnalyzer:
         results = []
         # Reset state for batch processing to avoid carry-over artifacts
         self._buffer.clear()
+        self._sum_v = 0.0
+        self._sum_v2 = 0.0
         self._crossings.clear()
         self._last_rms = 0.0
         self._last_freq = 60.0

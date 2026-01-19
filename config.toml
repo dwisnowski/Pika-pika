@@ -1,6 +1,6 @@
 [pika]
 # Sample rate in Hz (1-860)
-sample_hz = 100
+sample_hz = 400
 
 # Data directory for logs
 data_dir = "data"
