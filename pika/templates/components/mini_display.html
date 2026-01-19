@@ -1,22 +1,21 @@
 <!-- Mini Display Component (LCD Style) -->
 <style>
     .lcd-container {
-        width: 200px;
-        /* Scaled down slightly to fit layout, real is 240px */
-        height: 266px;
-        /* Aspect ratio of 240x320 */
+        width: 320px;
+        height: 240px;
         background-color: #000;
         border: 4px solid #333;
-        border-radius: 4px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.8);
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: space-between;
-        padding: 12px;
+        padding: 16px;
         color: #fff;
         font-family: 'Courier New', monospace;
         position: relative;
+        overflow: hidden;
     }
 
     .lcd-header {
@@ -24,30 +23,62 @@
         color: #0f0;
         width: 100%;
         text-align: center;
-        margin-bottom: 4px;
-    }
-
-    .lcd-voltage {
-        font-size: 24px;
-        color: #fff;
-        margin-top: 8px;
+        margin-bottom: 8px;
+        letter-spacing: 2px;
         font-weight: bold;
     }
 
-    #qrcode canvas,
-    #qrcode img {
-        border: 2px solid white;
+    .lcd-data-row {
+        display: flex;
+        width: 100%;
+        justify-content: space-around;
+        align-items: center;
+        margin-top: 10px;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 8px;
+        border-radius: 4px;
+    }
+
+    .lcd-voltage {
+        font-size: 28px;
+        color: #fff;
+        font-weight: bold;
+        text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+    }
+
+    .lcd-freq {
+        font-size: 20px;
+        color: #0f0;
+        font-weight: bold;
+    }
+
+    #qrcode {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background: white;
+        padding: 6px;
+        border-radius: 4px;
+        margin: 5px 0;
+    }
+
+    #qrcode canvas {
+        display: block;
     }
 </style>
 
 <div class="lcd-container">
-    <div class="lcd-header">SCAN TO OPEN</div>
-    <div id="qrcode"
-        style="background: white; padding: 4px; line-height: 0; display: flex; align-items: center; justify-content: center; min-width: 160px; min-height: 160px;">
+    <div class="lcd-header">Pika-pika LCD</div>
+
+    <div id="qrcode"></div>
+
+    <div class="lcd-data-row">
+        <div id="qr_voltage" class="lcd-voltage">-- V</div>
+        <div id="qr_freq" class="lcd-freq">-- Hz</div>
     </div>
-    <div id="qr_voltage" class="lcd-voltage">-- V</div>
-    <div style="font-size: 10px; color: #888; margin-top: 4px;">2" LCD DEMO</div>
+
+    <div style="font-size: 11px; color: #555; margin-top: 5px;">320x240 HORIZONTAL MODE</div>
 </div>
 
 <div style="display: none;" id="qurl"></div>
-<button id="copyBtn" class="btn primary" style="margin-top:8px; width: 200px;">Copy URL</button>
+<button id="copyBtn" class="btn primary" style="margin-top:12px; width: 320px;">Copy URL</button>

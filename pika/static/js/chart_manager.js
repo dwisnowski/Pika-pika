@@ -90,6 +90,15 @@ class PikaChartManager {
             if (voltageDisplay) {
                 voltageDisplay.innerText = last.y.toFixed(3) + ' V';
             }
+
+            // Update analysis metrics if present in any point of this batch
+            const analysisPoint = points.slice().reverse().find(p => p.analysis);
+            if (analysisPoint && analysisPoint.analysis) {
+                const freqDisplay = document.getElementById('qr_freq');
+                if (freqDisplay && analysisPoint.analysis.freq !== undefined) {
+                    freqDisplay.innerText = analysisPoint.analysis.freq.toFixed(1) + ' Hz';
+                }
+            }
         }
     }
 
@@ -234,13 +243,19 @@ class PikaChartManager {
     }
 
     setupQRCode() {
-        const canvas = document.getElementById('qrcode');
-        if (!canvas) return;
+        const container = document.getElementById('qrcode');
+        if (!container) return;
+
+        // Remove existing canvas if any
+        container.innerHTML = '';
+        const canvas = document.createElement('canvas');
+        container.appendChild(canvas);
+
         const url = window.location.origin;
         QRCode.toCanvas(canvas, url, {
-            width: 120,
+            width: 140,
             margin: 2,
-            color: { dark: '#ffffff', light: '#00000000' }
+            color: { dark: '#000000', light: '#ffffff' } // Standard QR colors for readability
         }, (err) => {
             if (err) console.error(err);
         });
@@ -295,7 +310,7 @@ class PikaChartManager {
                 this.updateChartData(data.data);
                 break;
             case 'new_sample':
-                this.addNewSample(data.data);
+                this.addNewSample(data.data, data.analysis);
                 break;
             case 'highlights':
                 this.renderHighlightsList(data.highlights);
@@ -322,10 +337,14 @@ class PikaChartManager {
         this.chart.update('none');
     }
 
-    addNewSample(data) {
+    addNewSample(data, analysis) {
         // Instead of updating immediately, push to queue
         const [timestamp, voltage] = data;
-        this.renderQueue.push({ x: new Date(timestamp * 1000), y: voltage });
+        const point = { x: new Date(timestamp * 1000), y: voltage };
+        if (analysis) {
+            point.analysis = analysis;
+        }
+        this.renderQueue.push(point);
     }
 
     async loadAnalysisConfig() {
@@ -535,8 +554,8 @@ class PikaChartManager {
         if (!rateInput || !currentRateSpan) return;
 
         const newRate = parseInt(rateInput.value);
-        if (newRate < 1 || newRate > 100) {
-            alert('Sample rate must be between 1 and 100 Hz');
+        if (newRate < 1 || newRate > 860) {
+            alert('Sample rate must be between 1 and 860 Hz');
             return;
         }
 

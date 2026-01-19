@@ -117,9 +117,20 @@ def startup_event():
     asyncio.create_task(manager.start_broadcast_task())
 
     # Register WebSocket callback for real-time data
+    _last_analysis_broadcast = 0
+
     def sync_callback(ts, val):
         """Thread-safe callback to add samples to broadcast queue."""
-        manager.add_sample(ts, val)
+        nonlocal _last_analysis_broadcast
+        analysis = None
+        now = time.time()
+        
+        # Broadcast analysis metrics every 200ms (5Hz) to avoid flooding
+        if now - _last_analysis_broadcast > 0.2:
+            analysis = logger.get_current_analysis()
+            _last_analysis_broadcast = now
+            
+        manager.add_sample(ts, val, analysis)
 
     logger.add_sample_callback(sync_callback)
     # start the display manager (renders QR and animation if display available)

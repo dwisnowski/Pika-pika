@@ -38,19 +38,19 @@ class ConnectionManager:
                 if connection in self.active_connections:
                     self.active_connections.remove(connection)
 
-    def add_sample(self, ts: float, val: float):
-        """Add a sample to the queue for broadcasting (thread-safe)."""
+    def add_sample(self, ts: float, val: float, analysis=None):
+        """Add a sample and optional analysis to the queue for broadcasting (thread-safe)."""
         try:
             # Use asyncio.create_task in a thread-safe way
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                asyncio.create_task(self.sample_queue.put((ts, val)))
+                asyncio.create_task(self.sample_queue.put((ts, val, analysis)))
             else:
                 # If no loop running, just queue it for later processing
-                self.sample_queue.put_nowait((ts, val))
+                self.sample_queue.put_nowait((ts, val, analysis))
         except RuntimeError:
             # If no event loop, just queue it for later processing
-            self.sample_queue.put_nowait((ts, val))
+            self.sample_queue.put_nowait((ts, val, analysis))
 
     async def start_broadcast_task(self):
         """Start the background task that broadcasts samples to WebSocket clients."""
@@ -61,11 +61,14 @@ class ConnectionManager:
         """Background task that processes the sample queue and broadcasts to clients."""
         while True:
             try:
-                ts, val = await self.sample_queue.get()
+                ts, val, analysis = await self.sample_queue.get()
                 data_msg = {
                     "type": "new_sample",
                     "data": [ts, val]
                 }
+                if analysis:
+                    data_msg["analysis"] = analysis
+                
                 await self.broadcast(json.dumps(data_msg))
                 self.sample_queue.task_done()
             except Exception as e:

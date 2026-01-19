@@ -36,6 +36,17 @@ async def get_analysis_config():
     return {}
 
 
+@router.get("/config")
+async def get_current_config():
+    """Get current configuration."""
+    return get_config(logger, config, display_fps, display_auto_ip)
+
+@router.put("/config/sample-rate")
+async def handle_update_sample_rate(data: dict):
+    """Update the sample rate."""
+    return update_sample_rate(logger, config, manager, data)
+
+
 def register_api_config_routes(app: FastAPI, _logger, _config, _manager, _display_fps, _display_auto_ip):
     """Register configuration API routes with the FastAPI app."""
     global logger, config, manager, display_fps, display_auto_ip
@@ -44,9 +55,6 @@ def register_api_config_routes(app: FastAPI, _logger, _config, _manager, _displa
     manager = _manager
     display_fps = _display_fps
     display_auto_ip = _display_auto_ip
-
-    router.get("/config")(lambda: get_config(logger, config, display_fps, display_auto_ip))
-    router.put("/config/sample-rate")(lambda sample_hz: update_sample_rate(logger, config, manager, sample_hz))
 
     app.include_router(router, prefix="/api")
 
@@ -72,20 +80,11 @@ def get_config(logger, config, display_fps, display_auto_ip):
     })
 
 
-def update_sample_rate(logger, config, manager, sample_hz: int):
-    """Update the sample rate (1-100 Hz).
-    
-    Args:
-        logger: Datalogger instance
-        config: Configuration dictionary
-        manager: WebSocket connection manager
-        sample_hz: New sample rate in Hz
-        
-    Returns:
-        JSON response with update result
-    """
-    if sample_hz < 1 or sample_hz > 100:
-        raise HTTPException(status_code=400, detail="Sample rate must be between 1 and 100 Hz")
+def update_sample_rate(logger, config, manager, data: dict):
+    """Update the sample rate (1-860 Hz)."""
+    sample_hz = data.get("sample_hz")
+    if sample_hz < 1 or sample_hz > 860:
+        raise HTTPException(status_code=400, detail="Sample rate must be between 1 and 860 Hz")
 
     # Update the datalogger
     if logger.set_sample_rate(sample_hz):
