@@ -569,10 +569,29 @@ class PikaChartManager {
 
         const minEl = document.getElementById('minVoltage');
         const maxEl = document.getElementById('maxVoltage');
+        const acEl = document.getElementById('acVoltage');
+        const statusEl = document.getElementById('voltageStatus');
 
         if (minPoint && maxPoint) {
             if (minEl) minEl.textContent = minPoint.y.toFixed(3) + 'V';
             if (maxEl) maxEl.textContent = maxPoint.y.toFixed(3) + 'V';
+
+            // Calculate AC RMS from ADC Vpp
+            // Using voltage conversion: ADC Vpp * calibration factor
+            const adcVpp = maxPoint.y - minPoint.y;
+            const acRms = this.adcVppToAcRms(adcVpp);
+
+            if (acEl) {
+                acEl.textContent = acRms.toFixed(1) + 'V';
+            }
+
+            // Classify voltage status and apply color
+            if (statusEl) {
+                const { status, color } = this.classifyVoltage(acRms);
+                statusEl.textContent = status;
+                statusEl.style.color = color;
+                if (acEl) acEl.style.color = color;
+            }
 
             // Update Markers
             this.chart.data.datasets[2].data = [minPoint];
@@ -580,8 +599,50 @@ class PikaChartManager {
         } else {
             if (minEl) minEl.textContent = '0.000V';
             if (maxEl) maxEl.textContent = '0.000V';
+            if (acEl) acEl.textContent = '0.0V';
+            if (statusEl) {
+                statusEl.textContent = 'NO DATA';
+                statusEl.style.color = '#888';
+            }
             this.chart.data.datasets[2].data = [];
             this.chart.data.datasets[3].data = [];
+        }
+    }
+
+    // ADC Vpp to AC RMS conversion
+    // Calibration factor: configurable, default assumes ~1V ADC Vpp = 85V AC RMS
+    adcVppToAcRms(adcVpp) {
+        // This can be adjusted in config.toml [voltage] section
+        const calibrationFactor = this.voltageCalibration || 85.0;
+        return adcVpp * calibrationFactor;
+    }
+
+    // Classify voltage based on ANSI C84.1 thresholds
+    classifyVoltage(acRms) {
+        // Thresholds for 120V nominal
+        const thresholds = {
+            dropout: 80,
+            severe_brownout: 95,
+            brownout: 108,
+            undervoltage: 114,
+            overvoltage: 126,
+            severe_overvoltage: 132
+        };
+
+        if (acRms < thresholds.dropout) {
+            return { status: 'DROPOUT', color: '#B71C1C' };
+        } else if (acRms < thresholds.severe_brownout) {
+            return { status: 'SEVERE BROWNOUT', color: '#D32F2F' };
+        } else if (acRms < thresholds.brownout) {
+            return { status: 'BROWNOUT', color: '#F57C00' };
+        } else if (acRms < thresholds.undervoltage) {
+            return { status: 'LOW', color: '#FFC107' };
+        } else if (acRms > thresholds.severe_overvoltage) {
+            return { status: 'SEVERE OVERVOLTAGE', color: '#D32F2F' };
+        } else if (acRms > thresholds.overvoltage) {
+            return { status: 'HIGH', color: '#FFC107' };
+        } else {
+            return { status: 'NORMAL', color: '#4CAF50' };
         }
     }
 

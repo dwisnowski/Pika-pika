@@ -30,6 +30,25 @@ rotation = 270
 refresh_rate = 30
 qr_size = 60
 
+[voltage]
+# ZMPT101B Calibration
+# ADC peak-to-peak voltage when measuring 120VAC
+# Adjust based on your sensor output
+adc_vpp_to_ac_rms = 85.0
+adc_offset = 1.65
+
+# Brownout thresholds (ANSI C84.1 based for 120V nominal)
+undervoltage_warning = 114
+brownout = 108
+severe_brownout = 95
+dropout = 80
+overvoltage_warning = 126
+severe_overvoltage = 132
+
+# Minimum duration to trigger event (milliseconds)
+# 50ms = ~3 cycles at 60Hz
+min_duration_ms = 50
+
 [datalogger]
 # Write to disk every N samples
 batch_size = 400
