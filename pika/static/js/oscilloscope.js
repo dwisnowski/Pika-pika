@@ -17,7 +17,7 @@ class Oscilloscope {
 
         // Data
         this.dataBuffer = [];
-        this.maxBufferSize = 2000;
+        this.maxBufferSize = 4000;  // Increased for more cycle data
         this.running = true;
         this.singleCapture = false;
 
@@ -29,9 +29,21 @@ class Oscilloscope {
         this.csvEnabled = true;
 
         // ZMPT101B calibration
-        // Assuming centered around 1.65V (half of 3.3V) with ~1V peak-to-peak for 120VAC
         this.adcOffset = 1.65;  // DC offset in ADC volts
         this.acScaleFactor = 120 * Math.sqrt(2);  // Peak voltage for 120VAC RMS
+
+        // Low-pass filter settings
+        this.lpfEnabled = true;
+        this.lpfCutoff = 120;  // Hz (default for 60Hz signal, allows 2nd harmonic)
+        this.filteredBuffer = [];
+
+        // Display mode: 'rolling' or 'cycle'
+        this.displayMode = 'rolling';
+
+        // RMS envelope
+        this.showRMSEnvelope = false;
+        this.rmsWindowMs = 16.67;  // ~1 cycle at 60Hz
+        this.rmsEnvelopeBuffer = [];
 
         // Measurements
         this.measurements = {
@@ -146,6 +158,52 @@ class Oscilloscope {
             document.getElementById('realtimeBtn').classList.remove('active');
             this.batchMode = true;
         });
+
+        // Low-pass filter toggle
+        const lpfToggle = document.getElementById('lpfToggle');
+        if (lpfToggle) {
+            lpfToggle.addEventListener('click', () => {
+                this.lpfEnabled = !this.lpfEnabled;
+                lpfToggle.classList.toggle('active', this.lpfEnabled);
+            });
+        }
+
+        // LPF cutoff slider
+        const lpfCutoffInput = document.getElementById('lpfCutoff');
+        const lpfCutoffValue = document.getElementById('lpfCutoffValue');
+        if (lpfCutoffInput) {
+            lpfCutoffInput.addEventListener('input', (e) => {
+                this.lpfCutoff = parseInt(e.target.value);
+                if (lpfCutoffValue) lpfCutoffValue.textContent = this.lpfCutoff + ' Hz';
+            });
+        }
+
+        // Display mode toggle (rolling vs cycle-locked)
+        const modeRolling = document.getElementById('modeRolling');
+        const modeCycle = document.getElementById('modeCycle');
+        if (modeRolling) {
+            modeRolling.addEventListener('click', () => {
+                this.displayMode = 'rolling';
+                modeRolling.classList.add('active');
+                if (modeCycle) modeCycle.classList.remove('active');
+            });
+        }
+        if (modeCycle) {
+            modeCycle.addEventListener('click', () => {
+                this.displayMode = 'cycle';
+                modeCycle.classList.add('active');
+                if (modeRolling) modeRolling.classList.remove('active');
+            });
+        }
+
+        // RMS envelope toggle
+        const rmsToggle = document.getElementById('rmsToggle');
+        if (rmsToggle) {
+            rmsToggle.addEventListener('click', () => {
+                this.showRMSEnvelope = !this.showRMSEnvelope;
+                rmsToggle.classList.toggle('active', this.showRMSEnvelope);
+            });
+        }
     }
 
     updateRunStopButton() {
@@ -195,7 +253,7 @@ class Oscilloscope {
             await fetch('/api/oscilloscope/mode', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enabled: !this.csvEnabled })  // oscilloscope mode = CSV disabled
+                body: JSON.stringify({ enabled: !this.csvEnabled })
             });
             this.updateCSVDisplay();
         } catch (e) {
@@ -290,12 +348,87 @@ class Oscilloscope {
 
     addSample(sample) {
         const [timestamp, voltage] = sample;
-        this.dataBuffer.push({ t: timestamp * 1000, v: voltage });  // Convert to ms
+        this.dataBuffer.push({ t: timestamp * 1000, v: voltage });
 
         // Limit buffer size
         while (this.dataBuffer.length > this.maxBufferSize) {
             this.dataBuffer.shift();
         }
+    }
+
+    // Simple IIR low-pass filter (single-pole)
+    applyLowPassFilter(data, sampleRate) {
+        if (!this.lpfEnabled || data.length < 2) return data;
+
+        const rc = 1.0 / (2.0 * Math.PI * this.lpfCutoff);
+        const dt = 1.0 / sampleRate;
+        const alpha = dt / (rc + dt);
+
+        const filtered = [{ t: data[0].t, v: data[0].v }];
+
+        for (let i = 1; i < data.length; i++) {
+            const prevFiltered = filtered[i - 1].v;
+            const newVal = prevFiltered + alpha * (data[i].v - prevFiltered);
+            filtered.push({ t: data[i].t, v: newVal });
+        }
+
+        return filtered;
+    }
+
+    // Extract one complete cycle starting from a rising zero crossing
+    extractCycle(data) {
+        if (data.length < 20) return data;
+
+        const mean = data.reduce((s, d) => s + d.v, 0) / data.length;
+
+        // Find rising zero crossings
+        const crossings = [];
+        for (let i = 1; i < data.length; i++) {
+            if (data[i - 1].v < mean && data[i].v >= mean) {
+                crossings.push(i);
+            }
+        }
+
+        // Need at least 2 crossings for one cycle
+        if (crossings.length < 2) return data.slice(-100);
+
+        // Get the most recent complete cycle
+        const startIdx = crossings[crossings.length - 2];
+        const endIdx = crossings[crossings.length - 1];
+
+        // Return cycle data, normalized to start at t=0
+        const cycleData = data.slice(startIdx, endIdx + 1);
+        const t0 = cycleData[0].t;
+        return cycleData.map(d => ({ t: d.t - t0, v: d.v }));
+    }
+
+    // Calculate RMS envelope over rolling window
+    calculateRMSEnvelope(data, windowMs) {
+        if (data.length < 10) return [];
+
+        const envelope = [];
+        const halfWindow = windowMs / 2;
+
+        for (let i = 0; i < data.length; i++) {
+            const centerT = data[i].t;
+            const windowStart = centerT - halfWindow;
+            const windowEnd = centerT + halfWindow;
+
+            // Get samples in window
+            const windowSamples = data.filter(d => d.t >= windowStart && d.t <= windowEnd);
+
+            if (windowSamples.length > 0) {
+                // Calculate RMS (subtract DC offset for AC RMS)
+                const sumSq = windowSamples.reduce((s, d) => {
+                    const ac = d.v - this.adcOffset;
+                    return s + ac * ac;
+                }, 0);
+                const rms = Math.sqrt(sumSq / windowSamples.length);
+                envelope.push({ t: data[i].t, v: rms });
+            }
+        }
+
+        return envelope;
     }
 
     drawGrid() {
@@ -342,28 +475,109 @@ class Oscilloscope {
 
         if (this.dataBuffer.length < 2) return;
 
-        // Calculate visible time window
-        const timeWindow = this.timePerDiv * this.divisions.x;  // Total ms visible
-        const now = this.dataBuffer[this.dataBuffer.length - 1].t;
-        const startTime = now - timeWindow;
+        // Estimate sample rate from data
+        const dt = this.dataBuffer.length > 1 ?
+            (this.dataBuffer[this.dataBuffer.length - 1].t - this.dataBuffer[0].t) / this.dataBuffer.length : 1;
+        const estimatedSampleRate = 1000 / dt;
 
-        // Filter visible data
-        const visibleData = this.dataBuffer.filter(d => d.t >= startTime);
+        // Apply low-pass filter if enabled
+        let displayData = this.lpfEnabled ?
+            this.applyLowPassFilter(this.dataBuffer, estimatedSampleRate) :
+            this.dataBuffer;
 
         // Calculate Y scale
         const voltsVisible = this.voltsPerDiv * this.divisions.y;
         const yOffset = (this.vPosition / 100) * (height / 2);
         const yCenter = height / 2 + yOffset;
 
-        // Draw waveform
+        let visibleData;
+        let timeWindow;
+        let startTime;
+
+        if (this.displayMode === 'cycle') {
+            // Cycle-locked mode: extract and display one complete cycle
+            visibleData = this.extractCycle(displayData);
+            timeWindow = visibleData.length > 1 ?
+                visibleData[visibleData.length - 1].t - visibleData[0].t : this.timePerDiv * this.divisions.x;
+            startTime = 0;
+        } else {
+            // Rolling mode: show latest time window
+            timeWindow = this.timePerDiv * this.divisions.x;
+            const now = displayData[displayData.length - 1].t;
+            startTime = now - timeWindow;
+            visibleData = displayData.filter(d => d.t >= startTime);
+        }
+
+        // Draw main waveform
+        this.drawWaveform(ctx, visibleData, width, height, voltsVisible, yCenter, startTime, timeWindow, '#90CAF9', 2);
+
+        // Draw RMS envelope if enabled
+        if (this.showRMSEnvelope) {
+            const envelope = this.calculateRMSEnvelope(visibleData, this.rmsWindowMs);
+            if (envelope.length > 0) {
+                // Draw envelope as filled area from center
+                ctx.beginPath();
+                ctx.fillStyle = 'rgba(255, 152, 0, 0.3)';
+
+                envelope.forEach((point, i) => {
+                    const x = this.displayMode === 'cycle' ?
+                        (point.t / timeWindow) * width :
+                        ((point.t - startTime) / timeWindow) * width;
+                    const yTop = yCenter - (point.v / voltsVisible) * height;
+                    const yBottom = yCenter + (point.v / voltsVisible) * height;
+
+                    if (i === 0) {
+                        ctx.moveTo(x, yTop);
+                    } else {
+                        ctx.lineTo(x, yTop);
+                    }
+                });
+
+                // Draw back along bottom
+                for (let i = envelope.length - 1; i >= 0; i--) {
+                    const point = envelope[i];
+                    const x = this.displayMode === 'cycle' ?
+                        (point.t / timeWindow) * width :
+                        ((point.t - startTime) / timeWindow) * width;
+                    const yBottom = yCenter + (point.v / voltsVisible) * height;
+                    ctx.lineTo(x, yBottom);
+                }
+
+                ctx.closePath();
+                ctx.fill();
+
+                // Draw RMS line (top of envelope)
+                ctx.beginPath();
+                ctx.strokeStyle = '#FF9800';
+                ctx.lineWidth = 1;
+                envelope.forEach((point, i) => {
+                    const x = this.displayMode === 'cycle' ?
+                        (point.t / timeWindow) * width :
+                        ((point.t - startTime) / timeWindow) * width;
+                    const y = yCenter - (point.v / voltsVisible) * height;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+            }
+        }
+
+        // Update measurements from visible data
+        this.updateMeasurements(visibleData);
+        this.updateMeasurementDisplay();
+    }
+
+    drawWaveform(ctx, data, width, height, voltsVisible, yCenter, startTime, timeWindow, color, lineWidth) {
+        if (data.length < 2) return;
+
         ctx.beginPath();
-        ctx.strokeStyle = '#90CAF9';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = lineWidth;
 
-        let minV = Infinity, maxV = -Infinity, sumV = 0, sumVSq = 0;
-
-        visibleData.forEach((point, i) => {
-            const x = ((point.t - startTime) / timeWindow) * width;
+        data.forEach((point, i) => {
+            const x = this.displayMode === 'cycle' ?
+                (point.t / timeWindow) * width :
+                ((point.t - startTime) / timeWindow) * width;
             const y = yCenter - ((point.v - this.adcOffset) / voltsVisible) * height;
 
             if (i === 0) {
@@ -371,32 +585,32 @@ class Oscilloscope {
             } else {
                 ctx.lineTo(x, Math.max(0, Math.min(height, y)));
             }
-
-            // Measurements
-            minV = Math.min(minV, point.v);
-            maxV = Math.max(maxV, point.v);
-            sumV += point.v;
-            sumVSq += point.v * point.v;
         });
 
         ctx.stroke();
+    }
 
-        // Update measurements
-        if (visibleData.length > 0) {
-            this.measurements.vpp = maxV - minV;
-            this.measurements.vrms = Math.sqrt(sumVSq / visibleData.length);
+    updateMeasurements(data) {
+        if (data.length < 2) return;
 
-            // Estimate AC voltage from ADC reading
-            // ZMPT101B: Vpp on ADC corresponds to Vpeak of AC
-            // Assuming linear scaling with Vpp of ~1V ADC = ~170V AC peak
-            const acPeak = (this.measurements.vpp / 2) * 170;  // Rough estimate
-            this.measurements.acVoltage = acPeak / Math.sqrt(2);  // Convert to RMS
+        let minV = Infinity, maxV = -Infinity, sumVSq = 0;
 
-            // Frequency via zero-crossing
-            this.calculateFrequency(visibleData);
-        }
+        data.forEach(point => {
+            minV = Math.min(minV, point.v);
+            maxV = Math.max(maxV, point.v);
+            const ac = point.v - this.adcOffset;
+            sumVSq += ac * ac;
+        });
 
-        this.updateMeasurementDisplay();
+        this.measurements.vpp = maxV - minV;
+        this.measurements.vrms = Math.sqrt(sumVSq / data.length);
+
+        // Estimate AC voltage from ADC reading
+        const acPeak = (this.measurements.vpp / 2) * 170;
+        this.measurements.acVoltage = acPeak / Math.sqrt(2);
+
+        // Frequency via zero-crossing
+        this.calculateFrequency(data);
     }
 
     calculateFrequency(data) {
@@ -414,7 +628,7 @@ class Oscilloscope {
 
         if (crossings.length >= 2) {
             const avgPeriod = (crossings[crossings.length - 1] - crossings[0]) / (crossings.length - 1);
-            this.measurements.freq = 1000 / (avgPeriod * 2);  // Half period to full period
+            this.measurements.freq = 1000 / (avgPeriod * 2);
         }
     }
 

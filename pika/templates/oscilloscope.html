@@ -269,6 +269,38 @@
         </div>
     </div>
 
+    <!-- Second Row: Signal Processing Controls -->
+    <div class="control-panel">
+        <!-- Low-Pass Filter -->
+        <div class="control-group">
+            <label>Low-Pass Filter</label>
+            <div class="control-row">
+                <button class="preset-btn active" id="lpfToggle">LPF ON</button>
+            </div>
+            <div class="control-row" style="margin-top:4px;">
+                <input type="range" id="lpfCutoff" min="30" max="300" value="120" style="width:100px;">
+                <span id="lpfCutoffValue" style="font-size:11px; color:#90CAF9; min-width:50px;">120 Hz</span>
+            </div>
+        </div>
+
+        <!-- Display Mode -->
+        <div class="control-group">
+            <label>Display Mode</label>
+            <div class="control-row">
+                <button class="preset-btn active" id="modeRolling">Rolling</button>
+                <button class="preset-btn" id="modeCycle">Cycle Lock</button>
+            </div>
+        </div>
+
+        <!-- RMS Envelope -->
+        <div class="control-group">
+            <label>RMS Envelope</label>
+            <div class="control-row">
+                <button class="preset-btn" id="rmsToggle">Show RMS</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Oscilloscope Display -->
     <div class="scope-container">
         <div class="scope-display" style="height: 400px;">
