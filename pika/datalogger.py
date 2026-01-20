@@ -85,6 +85,7 @@ class Datalogger:
         self.batch_interval_ms = batch_interval_ms
         self._batch_buffer = []
         self._last_flush_time = time.time()
+        self.csv_write_enabled = True  # Can be disabled for oscilloscope mode
 
         # Analysis
         from .analysis import StreamAnalyzer
@@ -283,11 +284,16 @@ class Datalogger:
             # Add to batch buffer
             self._batch_buffer.append((ts, val))
             
-            # Check flush conditions
+            # Check flush conditions (only if CSV writing is enabled)
             now = time.time()
-            if (len(self._batch_buffer) >= self.batch_size) or \
-               ((now - self._last_flush_time) * 1000 >= self.batch_interval_ms):
+            if self.csv_write_enabled and (
+                (len(self._batch_buffer) >= self.batch_size) or
+                ((now - self._last_flush_time) * 1000 >= self.batch_interval_ms)
+            ):
                 self._flush_batch()
+            elif not self.csv_write_enabled:
+                # Clear batch buffer when CSV is disabled to save memory
+                self._batch_buffer.clear()
 
             # Add to memory buffer (for UI)
             self._buffer.append((ts, val))

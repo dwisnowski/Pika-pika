@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block title %}Pika-pika Oscilloscope{% endblock %}
+
+{% block extra_head %}
+<style>
+    .scope-container {
+        background: #1a1a1a;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+
+    .scope-display {
+        background: #0a0a0a;
+        border: 2px solid #333;
+        border-radius: 4px;
+        position: relative;
+    }
+
+    .scope-grid {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        pointer-events: none;
+    }
+
+    .control-panel {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+        padding: 16px;
+        background: #222;
+        border-radius: 8px;
+        margin-bottom: 16px;
+    }
+
+    .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .control-group label {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: #888;
+        letter-spacing: 0.5px;
+    }
+
+    .control-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .dial {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+        border: 2px solid #444;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .dial:hover {
+        border-color: #666;
+    }
+
+    .dial-value {
+        font-size: 12px;
+        font-weight: bold;
+        color: #90CAF9;
+    }
+
+    .preset-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+        background: #333;
+        border: 1px solid #555;
+        color: #fff;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .preset-btn:hover {
+        background: #444;
+    }
+
+    .preset-btn.active {
+        background: #90CAF9;
+        color: #000;
+    }
+
+    .run-btn {
+        padding: 8px 24px;
+        font-size: 14px;
+        font-weight: bold;
+        border-radius: 4px;
+        cursor: pointer;
+        border: none;
+    }
+
+    .run-btn.running {
+        background: #4CAF50;
+        color: white;
+    }
+
+    .run-btn.stopped {
+        background: #f44336;
+        color: white;
+    }
+
+    .measurement-box {
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 12px;
+        min-width: 120px;
+    }
+
+    .measurement-label {
+        font-size: 10px;
+        color: #888;
+        text-transform: uppercase;
+    }
+
+    .measurement-value {
+        font-size: 18px;
+        font-weight: bold;
+        color: #90CAF9;
+        font-family: monospace;
+    }
+
+    .status-indicator {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        background: #1a1a1a;
+        border-radius: 4px;
+    }
+
+    .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #4CAF50;
+    }
+
+    .status-dot.paused {
+        background: #ff9800;
+    }
+
+    .csv-toggle {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: #333;
+        border: 1px solid #555;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .csv-toggle.paused {
+        background: #ff9800;
+        border-color: #ff9800;
+        color: #000;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'components/header.html' %}
+
+<div style="max-width:1400px; margin:0 auto;">
+    <!-- Control Panel -->
+    <div class="control-panel">
+        <!-- Vertical Controls -->
+        <div class="control-group">
+            <label>Volts/Div</label>
+            <div class="control-row">
+                <button class="preset-btn" data-volts="0.1">0.1V</button>
+                <button class="preset-btn" data-volts="0.2">0.2V</button>
+                <button class="preset-btn active" data-volts="0.5">0.5V</button>
+                <button class="preset-btn" data-volts="1">1V</button>
+                <button class="preset-btn" data-volts="2">2V</button>
+            </div>
+        </div>
+
+        <!-- Horizontal Controls -->
+        <div class="control-group">
+            <label>Time/Div</label>
+            <div class="control-row">
+                <button class="preset-btn" data-time="2">2ms</button>
+                <button class="preset-btn" data-time="5">5ms</button>
+                <button class="preset-btn active" data-time="10">10ms</button>
+                <button class="preset-btn" data-time="20">20ms</button>
+                <button class="preset-btn" data-time="50">50ms</button>
+                <button class="preset-btn" data-time="100">100ms</button>
+            </div>
+        </div>
+
+        <!-- Position Controls -->
+        <div class="control-group">
+            <label>Vertical Position</label>
+            <input type="range" id="vPosition" min="-100" max="100" value="0" style="width:120px;">
+        </div>
+
+        <!-- Sample Rate -->
+        <div class="control-group">
+            <label>Sample Rate</label>
+            <div class="control-row">
+                <input type="number" id="sampleRateInput" min="1" max="860" value="400"
+                    style="width:70px; padding:4px; background:#333; border:1px solid #555; color:white; border-radius:4px;">
+                <span style="color:#888;">Hz</span>
+            </div>
+            <div class="control-row">
+                <button class="preset-btn" data-rate="120">120</button>
+                <button class="preset-btn" data-rate="240">240</button>
+                <button class="preset-btn active" data-rate="400">400</button>
+                <button class="preset-btn" data-rate="860">860</button>
+            </div>
+        </div>
+
+        <!-- ADC Channel -->
+        <div class="control-group">
+            <label>Channel</label>
+            <div class="control-row">
+                <button class="preset-btn active" data-channel="0">A0</button>
+                <button class="preset-btn" data-channel="1">A1</button>
+                <button class="preset-btn" data-channel="2">A2</button>
+                <button class="preset-btn" data-channel="3">A3</button>
+            </div>
+        </div>
+
+        <!-- Run/Stop -->
+        <div class="control-group">
+            <label>Capture</label>
+            <div class="control-row">
+                <button id="runStopBtn" class="run-btn running">RUN</button>
+                <button id="singleBtn" class="preset-btn">SINGLE</button>
+            </div>
+        </div>
+
+        <!-- CSV Toggle -->
+        <div class="control-group">
+            <label>Performance</label>
+            <div id="csvToggle" class="csv-toggle">
+                <span>📁 CSV</span>
+                <span id="csvStatus">ON</span>
+            </div>
+        </div>
+
+        <!-- Mode Toggle -->
+        <div class="control-group">
+            <label>Data Mode</label>
+            <div class="control-row">
+                <button class="preset-btn" id="realtimeBtn" data-mode="realtime">Realtime</button>
+                <button class="preset-btn active" id="batchBtn" data-mode="batch">Batch</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Oscilloscope Display -->
+    <div class="scope-container">
+        <div class="scope-display" style="height: 400px;">
+            <canvas id="scopeCanvas"></canvas>
+            <svg class="scope-grid" id="scopeGrid"></svg>
+        </div>
+    </div>
+
+    <!-- Measurements -->
+    <div style="display:flex; gap:16px; flex-wrap:wrap;">
+        <div class="measurement-box">
+            <div class="measurement-label">Vpp (ADC)</div>
+            <div class="measurement-value" id="measVpp">0.000 V</div>
+        </div>
+        <div class="measurement-box">
+            <div class="measurement-label">Vrms (ADC)</div>
+            <div class="measurement-value" id="measVrms">0.000 V</div>
+        </div>
+        <div class="measurement-box">
+            <div class="measurement-label">Frequency</div>
+            <div class="measurement-value" id="measFreq">0.0 Hz</div>
+        </div>
+        <div class="measurement-box">
+            <div class="measurement-label">AC Voltage (Est.)</div>
+            <div class="measurement-value" id="measAC">0.0 V</div>
+        </div>
+        <div class="status-indicator">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">Streaming</span>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='/js/oscilloscope.js') }}"></script>
+{% endblock %}

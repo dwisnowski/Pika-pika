@@ -11,6 +11,7 @@ from . import (
     register_demo_pages_routes, register_history_pages_routes,
     register_devtools_routes, register_api_analysis_routes
 )
+from .apis.api_oscilloscope import register_api_oscilloscope_routes
 
 
 def register_all_routes(app, logger, config, manager, static_dir, display_fps, display_auto_ip, data_dir):
@@ -48,3 +49,6 @@ def register_all_routes(app, logger, config, manager, static_dir, display_fps, d
     
     # Register Analysis API
     register_api_analysis_routes(app, logger)
+    
+    # Register Oscilloscope API
+    register_api_oscilloscope_routes(app, logger, config, manager)

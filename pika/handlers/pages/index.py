@@ -17,6 +17,17 @@ def index(request: Request):
     })
 
 
+def oscilloscope(request: Request):
+    """Serve the oscilloscope page using Jinja2 template."""
+    from ...app import templates
+    return templates.TemplateResponse("oscilloscope.html", {
+        "request": request,
+        "page_title": "Pika-pika Oscilloscope",
+        "page_description": "Real-time oscilloscope view of ADC data."
+    })
+
+
 def register_index_routes(app: FastAPI):
     """Register index page routes with FastAPI app."""
     app.get("/")(index)
+    app.get("/oscilloscope")(oscilloscope)
