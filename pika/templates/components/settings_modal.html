@@ -1,0 +1,37 @@
+<!-- Settings Modal -->
+<div id="settingsModal"
+    style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center;">
+    <div class="card" style="width:400px; padding:24px; pointer-events:auto; background:#222; border:1px solid #444;">
+        <h3 style="margin-top:0;">Configuration</h3>
+
+        <div style="margin-bottom:20px; border-bottom:1px solid #333; padding-bottom:20px;">
+            <label style="display:block; margin-bottom:8px; font-weight:bold;">Real-time Analysis</label>
+            <label style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                <input type="checkbox" id="enableRms"> Enable RMS Calculation
+            </label>
+            <label style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                <input type="checkbox" id="enableFreq"> Enable Frequency Calculation
+            </label>
+            <label style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                <input type="checkbox" id="enableSags"> Enable Sags/Swells Detection
+            </label>
+            <button id="updateAnalysisBtn" class="btn secondary" style="margin-top:10px; width:100%;">Save Analysis
+                Config</button>
+        </div>
+
+        <div style="margin-bottom:20px;">
+            <label style="display:block; margin-bottom:8px; font-weight:bold;">Chart Performance</label>
+            <label style="display:block; margin-bottom:4px;">Max Chart FPS</label>
+            <select id="chartFps"
+                style="width:100%; padding:8px; background:#333; color:white; border:1px solid #555; border-radius:4px;">
+                <option value="60">60 FPS (Full)</option>
+                <option value="30">30 FPS</option>
+                <option value="10">10 FPS (Low CPU)</option>
+            </select>
+        </div>
+
+        <div style="text-align:right;">
+            <button id="closeSettingsBtn" class="btn">Close</button>
+        </div>
+    </div>
+</div>

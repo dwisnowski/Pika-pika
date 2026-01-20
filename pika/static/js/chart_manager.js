@@ -33,6 +33,7 @@ class PikaChartManager {
         this.updateChartIntervals();
         this.startRenderLoop();
         this.loadAnalysisConfig();
+        this.loadSystemConfig();
 
         if (!this.options.enableSampleRateControls) {
             const controls = document.getElementById('sampleRate')?.parentElement;
@@ -106,6 +107,12 @@ class PikaChartManager {
         document.querySelectorAll('input[name="timeWindow"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
                 this.saveTimeWindow(parseInt(e.target.value));
+            });
+        });
+
+        document.querySelectorAll('input[name="adcChannel"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                this.updateAdcChannel(parseInt(e.target.value));
             });
         });
 
@@ -320,7 +327,14 @@ class PikaChartManager {
                 this.highlightsCache = data.highlights;
                 break;
             case 'config_update':
-                // Optional: update UI if config changed from another client
+                if (data.config && data.config.adc_channel !== undefined) {
+                    const radio = document.querySelector(`input[name="adcChannel"][value="${data.config.adc_channel}"]`);
+                    if (radio) radio.checked = true;
+                }
+                if (data.config && data.config.sample_hz !== undefined) {
+                    const rateInput = document.getElementById('sampleRate');
+                    if (rateInput) rateInput.value = data.config.sample_hz;
+                }
                 break;
             case 'ping':
                 break;
@@ -467,7 +481,10 @@ class PikaChartManager {
             if (radio) {
                 radio.checked = true;
             }
+        } else {
+            this.selectedTimeWindow = 10; // Default
         }
+        this.updateChartIntervals();
         this.applyTimeWindowFilter();
     }
 
@@ -496,10 +513,12 @@ class PikaChartManager {
     }
 
     applyTimeWindowFilter() {
-        if (!this.chart) return;
+        if (!this.chart || !this.selectedTimeWindow) return;
 
-        const now = Date.now();
-        const cutoff = now - (this.selectedTimeWindow * 1000);
+        // Use the latest point's timestamp as 'now' to avoid clock drift issues
+        const dataCount = this.chart.data.labels.length;
+        const latestSampleTime = dataCount > 0 ? this.chart.data.labels[dataCount - 1].getTime() : Date.now();
+        const cutoff = latestSampleTime - (this.selectedTimeWindow * 1000);
 
         const filteredLabels = [];
         const filteredData = [];
@@ -580,6 +599,42 @@ class PikaChartManager {
         } catch (error) {
             console.error('Failed to update sample rate:', error);
             currentRateSpan.textContent = ' (Error)';
+        }
+    }
+
+    async updateAdcChannel(channel) {
+        try {
+            const response = await fetch('/api/config/adc-channel', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ channel: channel })
+            });
+
+            const result = await response.json();
+            if (!result.success) {
+                console.error('Failed to update ADC channel:', result.message);
+            }
+        } catch (error) {
+            console.error('Error updating ADC channel:', error);
+        }
+    }
+
+    async loadSystemConfig() {
+        try {
+            const res = await fetch('/api/config');
+            const config = await res.json();
+
+            if (config.adc_channel !== undefined) {
+                const radio = document.querySelector(`input[name="adcChannel"][value="${config.adc_channel}"]`);
+                if (radio) radio.checked = true;
+            }
+
+            const rateInput = document.getElementById('sampleRate');
+            if (rateInput && config.sample_hz) {
+                rateInput.value = config.sample_hz;
+            }
+        } catch (e) {
+            console.error("Failed to load system config", e);
         }
     }
 

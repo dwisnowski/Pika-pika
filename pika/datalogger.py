@@ -17,15 +17,22 @@ logging.basicConfig(level=logging.INFO)
 class ADCInterface:
     def read(self):
         raise NotImplementedError
+    def set_channel(self, channel):
+        pass
 
 class MockADC(ADCInterface):
     def __init__(self):
         logging.info("Using MockADC (simulated data)")
         self._t0 = time.time()
+        self.channel = 0
+    def set_channel(self, channel):
+        logging.info("MockADC switching to channel %d", channel)
+        self.channel = channel
     def read(self):
         t = time.time() - self._t0
-        # simulated AC-ish signal + noise
-        return 10 #1.5 + math.sin(2.0 * math.pi * 1.0 * t) * 0.8 + random.uniform(-0.02, 0.02)
+        # simulated AC-ish signal + noise, vary by channel
+        offset = self.channel * 1
+        return 1 + offset #1.5 + offset + math.sin(2.0 * math.pi * 1.0 * t) * 0.8 + random.uniform(-0.02, 0.02)
 
 try:
     # Try to import Adafruit ADS1115 library (CircuitPython)
@@ -40,6 +47,7 @@ try:
             i2c = busio.I2C(board.SCL, board.SDA)
             self.ads = ADS.ADS1115(i2c, address=address)
             self.set_rate(target_rate)
+            self.channel = channel
             self.chan = AnalogIn(self.ads, getattr(ads1x15.Pin, f"A{channel}"))
 
         def set_rate(self, target_rate):
@@ -56,6 +64,11 @@ try:
         def read(self):
             # return raw ADC voltage (or scaled value)
             return self.chan.voltage
+
+        def set_channel(self, channel):
+            logging.info("ADS1115 switching to channel %d", channel)
+            self.channel = channel
+            self.chan = AnalogIn(self.ads, getattr(ads1x15.Pin, f"A{channel}"))
 except Exception:
     ADS1115ADC = None
 
@@ -135,6 +148,16 @@ class Datalogger:
             logging.info(f"Sample rate changed to {self.sample_hz} Hz")
             return True
         return False
+
+    def set_adc_channel(self, channel):
+        """Change the ADC channel (0-3)."""
+        channel = max(0, min(3, int(channel)))
+        try:
+            self.adc.set_channel(channel)
+            return True
+        except Exception:
+            logging.exception("Failed to set ADC channel")
+            return False
 
     def add_sample_callback(self, callback):
         self._sample_callbacks.append(callback)

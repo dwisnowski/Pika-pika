@@ -22,6 +22,7 @@ dependencies = [
   "Pillow>=10.0",
   "jinja2>=3.0.0",
   "psutil>=5.9.0",
+  "tomlkit>=0.12.0",
 ]
 
 [project.optional-dependencies]
