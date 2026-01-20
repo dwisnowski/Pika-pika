@@ -321,6 +321,9 @@ class PikaChartManager {
             case 'new_sample':
                 this.addNewSample(data.data, data.analysis);
                 break;
+            case 'batch_samples':
+                this.addBatchSamples(data.data, data.analysis);
+                break;
             case 'highlights':
                 this.renderHighlightsList(data.highlights);
                 this.highlightsCacheAll = data.highlights;
@@ -361,6 +364,20 @@ class PikaChartManager {
             point.analysis = analysis;
         }
         this.renderQueue.push(point);
+    }
+
+    addBatchSamples(dataArray, analysis) {
+        // Add all batched samples to render queue at once
+        dataArray.forEach(data => {
+            const [timestamp, voltage] = data;
+            const point = { x: new Date(timestamp * 1000), y: voltage };
+            this.renderQueue.push(point);
+        });
+
+        // Attach analysis to the last point if available
+        if (analysis && this.renderQueue.length > 0) {
+            this.renderQueue[this.renderQueue.length - 1].analysis = analysis;
+        }
     }
 
     async loadAnalysisConfig() {
