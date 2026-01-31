@@ -1,4 +1,4 @@
-"""FastAPI webserver that starts the datalogger and serves a Chart.js UI."""
+"""FastAPI webserver that uses shared memory for multiprocessing architecture."""
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,7 +6,7 @@ import os
 import time
 import json
 import asyncio
-from typing import List
+from typing import List, Optional
 from asyncio import Queue
 try:
     import tomllib  # Python 3.11+
@@ -14,7 +14,7 @@ except ImportError:
     import tomli as tomllib  # Fallback for older versions
 
 from fastapi.templating import Jinja2Templates
-from .datalogger import Datalogger
+from .shared_memory import SharedSampleBuffer, SharedAnalysisBuffer, SharedConfigBuffer
 from . import demo
 from .handlers import register_all_routes, register_websocket_demo_routes
 from .websocket import ConnectionManager, DemoConnectionManager
@@ -73,31 +73,227 @@ SAMPLE_HZ = config.get("sample_hz", 100)
 DISPLAY_FPS = config.get("display_fps", 5.0)
 DISPLAY_AUTO_IP = config.get("display_auto_ip", True)
 
-logger = Datalogger(
-    data_dir=DATA_DIR, 
-    sample_hz=SAMPLE_HZ,
-    adc_address=pins.get("adc_address", 0x48),
-    adc_channel=pins.get("adc_channel", 0),
-    batch_size=dl_config.get("batch_size", 400),
-    batch_interval_ms=dl_config.get("batch_interval_ms", 1000),
-    analysis_config=analysis_config
-)
+# Initialize shared memory buffers (attach to existing ones created by process supervisor)
+shared_sample_buffer: Optional[SharedSampleBuffer] = None
+shared_analysis_buffer: Optional[SharedAnalysisBuffer] = None
+shared_config_buffer: Optional[SharedConfigBuffer] = None
 
+# Initialize connection managers (will be updated with shared memory buffers after initialization)
 manager = ConnectionManager()
 demo_manager = DemoConnectionManager(data_dir=DATA_DIR)
+
+# Create a minimal datalogger instance for CSV file reading (range queries)
+# This is only used for historical data access, not for sampling
+class MinimalDatalogger:
+    """Minimal datalogger for CSV file reading only."""
+    def __init__(self, data_dir: str, filename_prefix: str = "log"):
+        self.data_dir = data_dir
+        self.filename_prefix = filename_prefix
+    
+    def _log_filename_for_date(self, date_struct):
+        """Generate log filename for a given date."""
+        date_str = time.strftime("%Y-%m-%d", date_struct)
+        return os.path.join(self.data_dir, f"{self.filename_prefix}_{date_str}.csv")
+    
+    def get_range(self, start_ts: float, end_ts: float, max_points: int = 1000):
+        """Return downsampled data in the range [start_ts, end_ts].
+
+        Performs streaming bucketing to produce at most `max_points` samples by averaging
+        values that fall into the same time bucket. Returns a list of (ts, value) tuples.
+        """
+        import csv
+        import logging
+        
+        try:
+            start_ts = float(start_ts)
+            end_ts = float(end_ts)
+        except Exception:
+            return []
+        if end_ts <= start_ts:
+            return []
+        # determine days to check
+        start_day = time.localtime(start_ts)
+        end_day = time.localtime(end_ts)
+        # build date list inclusive
+        days = []
+        dt = time.mktime(start_day)
+        while dt <= end_ts:
+            days.append(time.localtime(dt))
+            dt += 86400
+        # prepare buckets
+        bucket_count = max(1, int(max_points))
+        interval = (end_ts - start_ts) / bucket_count
+        buckets = [{'sum': 0.0, 'count': 0, 'min': None, 'max': None, 'ts_sum': 0.0} for _ in range(bucket_count)]
+
+        def process_file(path, open_fn):
+            with open_fn(path, 'rt') as f:
+                reader = csv.reader(f)
+                next(reader, None)
+                for row in reader:
+                    if len(row) < 2:
+                        continue
+                    try:
+                        ts = float(row[0])
+                        val = float(row[1])
+                    except Exception:
+                        continue
+                    if ts < start_ts or ts > end_ts:
+                        continue
+                    idx = int((ts - start_ts) / interval)
+                    if idx < 0:
+                        idx = 0
+                    elif idx >= bucket_count:
+                        idx = bucket_count - 1
+                    b = buckets[idx]
+                    b['sum'] += val
+                    b['count'] += 1
+                    b['ts_sum'] += ts
+                    if b['min'] is None or val < b['min']:
+                        b['min'] = val
+                    if b['max'] is None or val > b['max']:
+                        b['max'] = val
+
+        # open files for each day
+        for day in days:
+            path = self._log_filename_for_date(day)
+            if os.path.exists(path):
+                try:
+                    process_file(path, open)
+                except Exception:
+                    logging.exception("Error processing log file %s", path)
+            gz = path + '.gz'
+            if os.path.exists(gz):
+                try:
+                    import gzip
+                    process_file(gz, gzip.open)
+                except Exception:
+                    logging.exception("Error processing gzip log file %s", gz)
+
+        # build result: for buckets with data, use average timestamp and mean value
+        result = []
+        for b in buckets:
+            if b['count'] > 0:
+                avg_ts = b['ts_sum'] / b['count']
+                avg_val = b['sum'] / b['count']
+                result.append((avg_ts, avg_val))
+        return result
+    
+    def get_range_from_file(self, filepath: str, start_ts: float, end_ts: float, max_points: int = 1000):
+        """Return downsampled data from a specific CSV file in the range [start_ts, end_ts]."""
+        import csv
+        import logging
+        
+        if not os.path.exists(filepath):
+            return []
+        try:
+            start_ts = float(start_ts)
+            end_ts = float(end_ts)
+        except Exception:
+            return []
+            
+        bucket_count = max(1, int(max_points))
+        interval = (end_ts - start_ts) / bucket_count
+        buckets = [{'sum': 0.0, 'count': 0, 'min': None, 'max': None, 'ts_sum': 0.0} for _ in range(bucket_count)]
+
+        try:
+            with open(filepath, 'rt') as f:
+                reader = csv.reader(f)
+                next(reader, None) # skip header
+                for row in reader:
+                    if len(row) < 2:
+                        continue
+                    try:
+                        ts = float(row[0])
+                        val = float(row[1])
+                    except Exception:
+                        continue
+                    if ts < start_ts or ts > end_ts:
+                        continue
+                    idx = int((ts - start_ts) / interval)
+                    if idx < 0: idx = 0
+                    elif idx >= bucket_count: idx = bucket_count - 1
+                    b = buckets[idx]
+                    b['sum'] += val
+                    b['count'] += 1
+                    b['ts_sum'] += ts
+                    if b['min'] is None or val < b['min']: b['min'] = val
+                    if b['max'] is None or val > b['max']: b['max'] = val
+        except Exception:
+            logging.exception(f"Error processing CSV file {filepath}")
+            return []
+
+        result = []
+        for b in buckets:
+            if b['count'] > 0:
+                avg_ts = b['ts_sum'] / b['count']
+                avg_val = b['sum'] / b['count']
+                result.append((avg_ts, avg_val))
+        return result
+
+minimal_logger = MinimalDatalogger(DATA_DIR)
 
 # static files
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+def initialize_shared_memory():
+    """Initialize or attach to shared memory buffers."""
+    global shared_sample_buffer, shared_analysis_buffer, shared_config_buffer, manager
+    
+    try:
+        # Try to attach to existing shared memory created by process supervisor
+        # In a real implementation, the process supervisor would pass the memory names
+        # For now, we'll create new ones as placeholders
+        shared_sample_buffer = SharedSampleBuffer(create=True)
+        shared_analysis_buffer = SharedAnalysisBuffer(create=True)
+        shared_config_buffer = SharedConfigBuffer(create=True)
+        
+        # Initialize config buffer with current configuration
+        config_data = {
+            'sample_hz': SAMPLE_HZ,
+            'batch_size': dl_config.get('batch_size', 100),
+            'batch_interval_ms': dl_config.get('batch_interval_ms', 1000),
+            'analysis_config': analysis_config,
+            'display_fps': DISPLAY_FPS
+        }
+        shared_config_buffer.update_config(config_data)
+        
+        # Update connection manager with shared memory buffers
+        manager.sample_buffer = shared_sample_buffer
+        manager.analysis_buffer = shared_analysis_buffer
+        
+    except Exception as e:
+        import logging as _logging
+        _logging.getLogger(__name__).exception("Failed to initialize shared memory")
+        # Continue without shared memory (graceful degradation)
+        shared_sample_buffer = None
+        shared_analysis_buffer = None
+        shared_config_buffer = None
+        # Manager will work in degraded mode without shared memory buffers
+
 # Automatically register all routes from handlers package
-register_all_routes(app, logger, config, manager, static_dir, DISPLAY_FPS, DISPLAY_AUTO_IP, DATA_DIR)
+# Note: We pass shared memory buffers instead of the datalogger
+register_all_routes(
+    app, 
+    shared_sample_buffer, 
+    shared_config_buffer, 
+    minimal_logger,  # Only for CSV file reading
+    config, 
+    manager, 
+    static_dir, 
+    DISPLAY_FPS, 
+    DISPLAY_AUTO_IP, 
+    DATA_DIR
+)
 
 # Register demo WebSocket route (has dependency on demo_manager)
 register_websocket_demo_routes(app, demo_manager)
 
 @app.on_event("startup")
 def startup_event():
+    # Initialize shared memory buffers
+    initialize_shared_memory()
+    
     # Clear demo files to ensure each run starts fresh
     demo_csv = os.path.join(DATA_DIR, "demo.csv")
     demo_highlights = os.path.join(DATA_DIR, "demo_highlights.json")
@@ -109,85 +305,22 @@ def startup_event():
                 import logging as _logging
                 _logging.getLogger(__name__).exception(f"Failed to remove {f}")
 
-    # Restore recent samples from disk and start sampling
-    logger.tail_from_disk(seconds=30)
-    logger.start()
-
     # Start the WebSocket broadcast task
     asyncio.create_task(manager.start_broadcast_task())
 
-    # Register WebSocket callback for real-time data
-    _last_analysis_broadcast = 0
-
-    def sync_callback(ts, val):
-        """Thread-safe callback to add samples to broadcast queue."""
-        nonlocal _last_analysis_broadcast
-        analysis = None
-        now = time.time()
-        
-        # Broadcast analysis metrics every 200ms (5Hz) to avoid flooding
-        if now - _last_analysis_broadcast > 0.2:
-            analysis = logger.get_current_analysis()
-            _last_analysis_broadcast = now
-            
-        manager.add_sample(ts, val, analysis)
-
-    logger.add_sample_callback(sync_callback)
-    # start the display manager (renders QR and animation if display available)
-    try:
-        from .display_manager import start_display
-        start_display(
-            logger, 
-            auto_ip=DISPLAY_AUTO_IP, 
-            port=config.get("port", 8000), 
-            fps=DISPLAY_FPS, 
-            data_dir=DATA_DIR,
-            lcd_config=pins
-        )
-    except Exception:
-        # non-fatal: continue if display is not available
-        import logging as _logging
-        _logging.getLogger(__name__).exception("Could not start display manager")
-
-    # start systemd watchdog notifier (if available)
-    try:
-        from .watchdog import start_watchdog
-        # Pass the datalogger to allow watchdog to verify fresh samples
-        _wd = start_watchdog(datalogger=logger, stale_threshold=3.0)
-        # store on app state for shutdown
-        app.state._watchdog = _wd
-    except Exception:
-        import logging as _logging
-        _logging.getLogger(__name__).exception("Could not start systemd watchdog notifier")
-
-    # start highlights manager (anomaly detection)
-    try:
-        from .highlights import start_highlights
-        _hl = start_highlights(logger, data_dir=DATA_DIR)
-        app.state._highlights = _hl
-    except Exception:
-        import logging as _logging
-        _logging.getLogger(__name__).exception("Could not start highlights manager")
+    # Note: Datalogger initialization, sample callbacks, display manager, 
+    # watchdog, and highlights manager are now handled by separate processes
+    # The FastAPI process only handles web serving and API endpoints
 
 @app.on_event("shutdown")
 def shutdown_event():
-    # stop watchdog, display then datalogger
-    try:
-        wd = getattr(app.state, '_watchdog', None)
-        if wd is not None:
-            from .watchdog import stop_watchdog
-            stop_watchdog(wd)
-    except Exception:
-        import logging as _logging
-        _logging.getLogger(__name__).exception("Error stopping watchdog")
-
-    try:
-        from .display_manager import stop_display
-        stop_display()
-    except Exception:
-        import logging as _logging
-        _logging.getLogger(__name__).exception("Error stopping display manager")
-    logger.stop()
+    # Clean up shared memory resources
+    if shared_sample_buffer:
+        shared_sample_buffer.cleanup()
+    if shared_analysis_buffer:
+        shared_analysis_buffer.cleanup()
+    if shared_config_buffer:
+        shared_config_buffer.cleanup()
 
 
 if __name__ == "__main__":

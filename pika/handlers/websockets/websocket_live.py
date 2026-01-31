@@ -23,22 +23,14 @@ async def websocket_live(websocket: WebSocket, manager, logger, app_state, data_
     Args:
         websocket: WebSocket connection
         manager: Connection manager for live data
-        logger: Datalogger instance
+        logger: Datalogger instance (may be None in multiprocessing mode)
         app_state: FastAPI application state
         data_dir: Data directory path
     """
     await manager.connect(websocket)
     try:
-        # Send initial recent data
-        recent_data = logger.get_recent(seconds=5.0)
-        if recent_data:
-            data_msg = {
-                "type": "recent_data",
-                "data": [[ts, val] for ts, val in recent_data]
-            }
-            await websocket.send_text(json.dumps(data_msg))
-
-        # Send initial highlights
+        # Send initial recent data (handled by manager.connect now)
+        # But also send highlights if available
         try:
             hl = getattr(app_state, '_highlights', None)
             highlights = []
@@ -59,6 +51,17 @@ async def websocket_live(websocket: WebSocket, manager, logger, app_state, data_
         except Exception:
             pass
 
+        # Send connection status for graceful degradation
+        try:
+            status = manager.get_connection_status()
+            status_msg = {
+                "type": "connection_status",
+                "status": status
+            }
+            await websocket.send_text(json.dumps(status_msg))
+        except Exception:
+            pass
+
         # Keep connection alive and listen for messages (though we don't expect any from client)
         while True:
             try:
@@ -66,7 +69,16 @@ async def websocket_live(websocket: WebSocket, manager, logger, app_state, data_
                 await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
             except asyncio.TimeoutError:
                 # Send a ping to keep connection alive
-                await websocket.send_text(json.dumps({"type": "ping"}))
+                ping_msg = {"type": "ping"}
+                
+                # Include connection status in ping for monitoring
+                try:
+                    status = manager.get_connection_status()
+                    ping_msg["status"] = status
+                except Exception:
+                    pass
+                    
+                await websocket.send_text(json.dumps(ping_msg))
             except WebSocketDisconnect:
                 break
 

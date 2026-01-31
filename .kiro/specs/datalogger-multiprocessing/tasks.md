@@ -107,47 +107,47 @@ This implementation plan transforms the current single-process FastAPI applicati
     - Apply configuration updates without process restart
     - _Requirements: 5.5_
 
-- [ ] 7. Modify FastAPI process for multiprocessing
-  - [ ] 7.1 Update API endpoints to use shared memory
+- [x] 7. Modify FastAPI process for multiprocessing
+  - [x] 7.1 Update API endpoints to use shared memory
     - Modify /api/recent to read from SharedSampleBuffer
     - Update /api/highlights to read from highlights file
     - Preserve /api/range to use existing CSV file reading
     - _Requirements: 9.1, 9.2, 9.3_
 
-  - [ ] 7.2 Implement configuration API updates
+  - [x] 7.2 Implement configuration API updates
     - Update sample rate API to write to SharedConfigBuffer
     - Add analysis parameter update endpoints
     - Ensure configuration changes propagate to appropriate processes
     - _Requirements: 9.5_
 
-  - [ ] 7.3 Remove datalogger initialization from FastAPI startup
+  - [x] 7.3 Remove datalogger initialization from FastAPI startup
     - Remove direct datalogger instantiation
     - Remove sample callback registration
     - Keep WebSocket manager initialization
     - _Requirements: 1.1_
 
-- [ ] 7.4 Write property test for API backward compatibility
+- [x] 7.4 Write property test for API backward compatibility
   - **Property 10: API Backward Compatibility**
   - **Validates: Requirements 9.1, 9.2, 9.3, 9.4**
 
-- [ ] 8. Update WebSocket handler for shared memory
-  - [ ] 8.1 Modify ConnectionManager to read from shared memory
+- [x] 8. Update WebSocket handler for shared memory
+  - [x] 8.1 Modify ConnectionManager to read from shared memory
     - Update sample broadcasting to read from SharedSampleBuffer
     - Modify analysis metrics inclusion from SharedAnalysisBuffer
     - Maintain existing WebSocket message format
     - _Requirements: 4.1, 4.4_
 
-  - [ ] 8.2 Implement graceful degradation for missing datalogger
+  - [x] 8.2 Implement graceful degradation for missing datalogger
     - Continue serving cached data when datalogger unavailable
     - Add connection status indicators
     - _Requirements: 4.5_
 
-  - [ ] 8.3 Preserve initial data delivery on connection
+  - [x] 8.3 Preserve initial data delivery on connection
     - Send last 5 seconds of data to new WebSocket connections
     - Maintain existing connection lifecycle
     - _Requirements: 4.3_
 
-- [ ] 9. Checkpoint - Test multiprocessing integration
+- [x] 9. Checkpoint - Test multiprocessing integration
   - Verify all processes start and communicate correctly
   - Test WebSocket streaming with shared memory data
   - Verify API endpoints return correct data
