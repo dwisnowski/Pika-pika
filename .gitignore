@@ -16,3 +16,10 @@ data/log-20260110.csv
 lcd_latest.png
 uv.lock
 .hypothesis
+
+# Test files should be in tests/ directory
+test_logs/
+/test_*.py
+/*test*.py
+/*validation*.py
+/*integration*.py

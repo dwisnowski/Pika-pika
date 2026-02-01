@@ -18,8 +18,8 @@ import threading
 import logging
 from typing import Dict, List, Any
 
-# Add the current directory to Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# Add the parent directory to Python path to import pika modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pika.shared_memory import SharedSampleBuffer, SharedAnalysisBuffer, SharedConfigBuffer
 from pika.process_supervisor import ProcessSupervisor, ProcessState
@@ -438,22 +438,22 @@ class InfrastructureVerifier:
             
             # Test circular buffer property
             logger.info("  Running circular buffer property test...")
-            result = os.system("python tests/test_circular_buffer_property.py > /dev/null 2>&1")
+            result = os.system("uv run python tests/test_circular_buffer_property.py > /dev/null 2>&1")
             test_results['circular_buffer'] = result == 0
             
             # Test non-blocking memory property
             logger.info("  Running non-blocking memory property test...")
-            result = os.system("python tests/test_nonblocking_memory_property.py > /dev/null 2>&1")
+            result = os.system("uv run python tests/test_nonblocking_memory_property.py > /dev/null 2>&1")
             test_results['nonblocking_memory'] = result == 0
             
             # Test process supervision property
             logger.info("  Running process supervision property test...")
-            result = os.system("python tests/test_process_supervision_property.py > /dev/null 2>&1")
+            result = os.system("uv run python tests/test_process_supervision_property.py > /dev/null 2>&1")
             test_results['process_supervision'] = result == 0
             
             # Test ADC fallback property
             logger.info("  Running ADC fallback property test...")
-            result = os.system("python tests/test_adc_property_fallback.py > /dev/null 2>&1")
+            result = os.system("uv run python tests/test_adc_property_fallback.py > /dev/null 2>&1")
             test_results['adc_fallback'] = result == 0
             
             success = all(test_results.values())

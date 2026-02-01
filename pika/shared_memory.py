@@ -201,6 +201,21 @@ class SharedSampleBuffer:
         except struct.error:
             return None
     
+    def clear(self) -> None:
+        """
+        Clear the buffer by resetting head and count to zero.
+        
+        This method is useful for testing and buffer reset operations.
+        """
+        with self.head.get_lock():
+            self.head.value = 0
+        with self.count.get_lock():
+            self.count.value = 0
+        
+        # Optionally zero out the buffer memory
+        for i in range(self.buffer_size):
+            self.shm.buf[i] = 0
+    
     def get_buffer_info(self) -> dict:
         """
         Get current buffer status information.

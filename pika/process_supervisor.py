@@ -1,7 +1,8 @@
 """Process supervisor and management system for multiprocessing architecture.
 
 This module provides process lifecycle management, health monitoring, and graceful
-shutdown coordination for the datalogger multiprocessing system.
+shutdown coordination for the datalogger multiprocessing system with comprehensive
+error handling and crash detection.
 """
 
 import os
@@ -13,6 +14,9 @@ from multiprocessing import Process, Event, Value
 from typing import Dict, Optional, Callable, Tuple, Any
 from dataclasses import dataclass
 from enum import Enum
+
+from .error_handling import ErrorHandler, ProcessCrashDetector, ErrorSeverity, ErrorCategory
+from .performance_optimizer import PerformanceOptimizer, ProcessPriority, CPUCore
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +58,17 @@ class ProcessSupervisor:
     assignment for optimal performance on the Raspberry Pi 2's quad-core CPU.
     """
     
-    def __init__(self, heartbeat_interval: float = 5.0, restart_delay: float = 2.0):
+    def __init__(self, heartbeat_interval: float = 5.0, restart_delay: float = 2.0,
+                 error_handler: Optional[ErrorHandler] = None,
+                 performance_optimizer: Optional[PerformanceOptimizer] = None):
         """
         Initialize process supervisor.
         
         Args:
             heartbeat_interval: Interval in seconds between heartbeat checks
             restart_delay: Delay in seconds before restarting failed processes
+            error_handler: ErrorHandler instance for comprehensive error handling
+            performance_optimizer: PerformanceOptimizer for resource management
         """
         self.processes: Dict[str, ProcessInfo] = {}
         self.shutdown_event = Event()
@@ -70,11 +78,25 @@ class ProcessSupervisor:
         self.shared_memory_resources = []  # Track shared memory resources for cleanup
         self._shutdown_in_progress = False
         
+        # Error handling integration
+        self.error_handler = error_handler
+        self.crash_detector: Optional[ProcessCrashDetector] = None
+        
+        if self.error_handler:
+            self.crash_detector = ProcessCrashDetector(
+                error_handler=self.error_handler,
+                check_interval=heartbeat_interval,
+                heartbeat_timeout=heartbeat_interval * 3
+            )
+        
+        # Performance optimization integration
+        self.performance_optimizer = performance_optimizer
+        
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
         
-        logger.info("ProcessSupervisor initialized")
+        logger.info("ProcessSupervisor initialized with enhanced error handling and performance optimization")
     
     def register_shared_memory(self, resource) -> None:
         """
@@ -144,7 +166,7 @@ class ProcessSupervisor:
     
     def start_process(self, name: str) -> bool:
         """
-        Start a registered process.
+        Start a registered process with enhanced error handling.
         
         Args:
             name: Name of process to start
@@ -153,7 +175,13 @@ class ProcessSupervisor:
             True if process started successfully, False otherwise
         """
         if name not in self.processes:
-            logger.error(f"Process '{name}' not registered")
+            error_msg = f"Process '{name}' not registered"
+            logger.error(error_msg)
+            if self.error_handler:
+                self.error_handler.handle_error(
+                    ValueError(error_msg), "supervisor", 
+                    ErrorSeverity.MEDIUM, ErrorCategory.PROCESS
+                )
             return False
         
         process_info = self.processes[name]
@@ -185,6 +213,11 @@ class ProcessSupervisor:
                     logger.info(f"Set CPU affinity for '{name}' to core {process_info.cpu_affinity}")
                 except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
                     logger.warning(f"Failed to set CPU affinity for '{name}': {e}")
+                    if self.error_handler:
+                        self.error_handler.handle_error(
+                            e, name, ErrorSeverity.LOW, ErrorCategory.RESOURCE,
+                            context={'cpu_affinity': process_info.cpu_affinity}
+                        )
             
             # Update process info
             process_info.process = process
@@ -192,12 +225,53 @@ class ProcessSupervisor:
             process_info.start_time = time.time()
             process_info.last_heartbeat = time.time()
             
+            # Register with crash detector
+            if self.crash_detector:
+                self.crash_detector.register_process(
+                    name, process, 
+                    recovery_handler=lambda n, i: self.restart_process(n)
+                )
+            
+            # Register with performance optimizer
+            if self.performance_optimizer:
+                # Determine priority and CPU core based on process name
+                priority_map = {
+                    'datalogger': ProcessPriority.REALTIME,
+                    'event_logger': ProcessPriority.HIGH,
+                    'fastapi': ProcessPriority.NORMAL,
+                    'websocket': ProcessPriority.NORMAL
+                }
+                
+                cpu_core_map = {
+                    'datalogger': CPUCore.CORE_0,
+                    'event_logger': CPUCore.CORE_1,
+                    'fastapi': CPUCore.CORE_2,
+                    'websocket': CPUCore.CORE_3
+                }
+                
+                priority = priority_map.get(name, ProcessPriority.NORMAL)
+                cpu_core = cpu_core_map.get(name)
+                
+                self.performance_optimizer.register_process(
+                    name, process, priority=priority, cpu_core=cpu_core
+                )
+                
+                # Apply optimizations immediately
+                self.performance_optimizer.optimize_process(name)
+            
             logger.info(f"Process '{name}' started successfully (PID: {process.pid})")
             return True
             
         except Exception as e:
             logger.error(f"Failed to start process '{name}': {e}")
             process_info.state = ProcessState.FAILED
+            
+            if self.error_handler:
+                self.error_handler.handle_error(
+                    e, name, ErrorSeverity.HIGH, ErrorCategory.PROCESS,
+                    context={'action': 'start_process'}
+                )
+            
             return False
     
     def stop_process(self, name: str, timeout: float = 10.0) -> bool:
@@ -378,51 +452,108 @@ class ProcessSupervisor:
     
     def monitor_health(self) -> None:
         """
-        Monitor process health and restart failed processes.
+        Monitor process health and restart failed processes with enhanced error handling.
         
         This method runs continuously and should be called in a separate thread
         or as part of the main supervision loop.
         """
-        logger.info("Starting health monitoring")
+        logger.info("Starting enhanced health monitoring")
         self.supervisor_running.value = 1
+        
+        # Start crash detector if available
+        if self.crash_detector:
+            self.crash_detector.start_monitoring()
+        
+        # Start performance monitoring if available
+        if self.performance_optimizer:
+            self.performance_optimizer.start_monitoring()
         
         try:
             while not self.shutdown_event.is_set():
                 current_time = time.time()
                 
                 for name, process_info in self.processes.items():
-                    if process_info.state == ProcessState.RUNNING:
-                        if process_info.process is None:
-                            logger.error(f"Process '{name}' is marked as running but has no process object")
-                            process_info.state = ProcessState.FAILED
-                            continue
-                        
-                        # Check if process is still alive
-                        if not process_info.process.is_alive():
-                            logger.error(f"Process '{name}' has died unexpectedly")
-                            process_info.state = ProcessState.FAILED
+                    try:
+                        if process_info.state == ProcessState.RUNNING:
+                            if process_info.process is None:
+                                error_msg = f"Process '{name}' is marked as running but has no process object"
+                                logger.error(error_msg)
+                                process_info.state = ProcessState.FAILED
+                                
+                                if self.error_handler:
+                                    self.error_handler.handle_error(
+                                        RuntimeError(error_msg), name,
+                                        ErrorSeverity.HIGH, ErrorCategory.PROCESS
+                                    )
+                                continue
                             
-                            # Attempt restart if within limits
-                            if process_info.restart_count < process_info.max_restarts:
-                                logger.info(f"Attempting to restart failed process '{name}'")
-                                self.restart_process(name)
-                            else:
-                                logger.error(f"Process '{name}' has exceeded restart limit, marking as failed")
-                        
-                        # Check heartbeat (if implemented by processes)
-                        heartbeat_age = current_time - process_info.last_heartbeat
-                        if heartbeat_age > self.heartbeat_interval * 3:  # 3x interval = timeout
-                            logger.warning(f"Process '{name}' heartbeat timeout ({heartbeat_age:.1f}s)")
-                            # Could implement heartbeat-based restart here
+                            # Check if process is still alive
+                            if not process_info.process.is_alive():
+                                error_msg = f"Process '{name}' has died unexpectedly"
+                                logger.error(error_msg)
+                                process_info.state = ProcessState.FAILED
+                                
+                                if self.error_handler:
+                                    self.error_handler.handle_error(
+                                        RuntimeError(error_msg), name,
+                                        ErrorSeverity.CRITICAL, ErrorCategory.PROCESS,
+                                        context={
+                                            'pid': process_info.process.pid,
+                                            'exit_code': process_info.process.exitcode
+                                        }
+                                    )
+                                
+                                # Attempt restart if within limits
+                                if process_info.restart_count < process_info.max_restarts:
+                                    logger.info(f"Attempting to restart failed process '{name}'")
+                                    self.restart_process(name)
+                                else:
+                                    logger.error(f"Process '{name}' has exceeded restart limit, marking as failed")
+                            
+                            # Check heartbeat (if implemented by processes)
+                            heartbeat_age = current_time - process_info.last_heartbeat
+                            if heartbeat_age > self.heartbeat_interval * 3:  # 3x interval = timeout
+                                logger.warning(f"Process '{name}' heartbeat timeout ({heartbeat_age:.1f}s)")
+                                
+                                if self.error_handler:
+                                    self.error_handler.handle_error(
+                                        TimeoutError(f"Heartbeat timeout for process '{name}'"),
+                                        name, ErrorSeverity.MEDIUM, ErrorCategory.PROCESS,
+                                        context={'heartbeat_age': heartbeat_age}
+                                    )
+                                
+                                # Update crash detector heartbeat
+                                if self.crash_detector:
+                                    self.crash_detector.update_heartbeat(name)
+                    
+                    except Exception as e:
+                        logger.error(f"Error monitoring process '{name}': {e}")
+                        if self.error_handler:
+                            self.error_handler.handle_error(
+                                e, "supervisor", ErrorSeverity.MEDIUM, ErrorCategory.PROCESS,
+                                context={'monitored_process': name}
+                            )
                 
                 # Sleep before next health check
                 time.sleep(self.heartbeat_interval)
                 
         except Exception as e:
             logger.error(f"Health monitoring error: {e}")
+            if self.error_handler:
+                self.error_handler.handle_error(
+                    e, "supervisor", ErrorSeverity.HIGH, ErrorCategory.PROCESS
+                )
         finally:
+            # Stop crash detector
+            if self.crash_detector:
+                self.crash_detector.stop_monitoring()
+            
+            # Stop performance monitoring
+            if self.performance_optimizer:
+                self.performance_optimizer.stop_monitoring()
+            
             self.supervisor_running.value = 0
-            logger.info("Health monitoring stopped")
+            logger.info("Enhanced health monitoring stopped")
     
     def get_process_status(self, name: str) -> Optional[Dict[str, Any]]:
         """
