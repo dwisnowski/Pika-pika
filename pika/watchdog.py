@@ -10,7 +10,9 @@ import os
 import threading
 import time
 import logging
-from typing import Optional
+from typing import Optional, Dict, Any
+
+from .config import ConfigurationManager
 
 logger = logging.getLogger(__name__)
 
@@ -20,16 +22,39 @@ except Exception:  # pragma: no cover - sdnotify may not be installed in tests
     SystemdNotifier = None
 
 
-def start_watchdog(datalogger=None, stale_threshold: float = 3.0):
+def start_watchdog(datalogger=None, stale_threshold: Optional[float] = None, config: Optional[Dict[str, Any]] = None):
     """Start a background thread that notifies systemd about readiness and health.
 
     - `datalogger` (optional): object with `get_recent(seconds)` method returning samples.
-    - `stale_threshold`: seconds allowed since last sample before considering the datalogger stale.
+    - `stale_threshold` (optional): seconds allowed since last sample before considering the datalogger stale.
+                                   If None, will be loaded from config.
+    - `config` (optional): configuration dictionary. If None, will be loaded from config.toml.
 
     Returns a `stop_event` that can be set() to stop the background thread.
     If SystemdNotifier is unavailable or WATCHDOG_USEC is not set, the function will still send READY=1 if possible
     but will not start the periodic watchdog thread.
     """
+    # Load configuration if not provided
+    if config is None:
+        try:
+            config_manager = ConfigurationManager()
+            full_config = config_manager.load_configuration()
+            systemd_config = full_config.get("systemd", {})
+        except Exception as e:
+            logger.warning(f"Failed to load configuration: {e}, using defaults")
+            systemd_config = {"enable_watchdog": True, "stale_threshold": 3.0}
+    else:
+        systemd_config = config.get("systemd", {"enable_watchdog": True, "stale_threshold": 3.0})
+    
+    # Use stale_threshold from parameter, config, or default
+    if stale_threshold is None:
+        stale_threshold = systemd_config.get("stale_threshold", 3.0)
+    
+    # Check if watchdog is enabled in configuration
+    if not systemd_config.get("enable_watchdog", True):
+        logger.info("Systemd watchdog disabled in configuration")
+        return None
+    
     notifier = None
     if SystemdNotifier is None:
         logger.info("sdnotify not available; systemd watchdog will be disabled")
@@ -44,6 +69,7 @@ def start_watchdog(datalogger=None, stale_threshold: float = 3.0):
         logger.exception("Failed to notify systemd READY=1")
 
     # See if WATCHDOG_USEC is set; if not, skip starting the watchdog loop
+    # Note: This is a systemd-specific environment variable and should remain as os.environ.get
     usec = os.environ.get("WATCHDOG_USEC")
     if not usec:
         logger.info("WATCHDOG_USEC not set; systemd watchdog loop will not start")

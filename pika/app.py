@@ -16,6 +16,7 @@ except ImportError:
 from fastapi.templating import Jinja2Templates
 from .shared_memory import SharedSampleBuffer, SharedAnalysisBuffer, SharedConfigBuffer
 from .process_supervisor import ProcessSupervisor
+from .config import ConfigurationManager
 from . import demo
 from .handlers import register_all_routes, register_websocket_demo_routes
 from .websocket import ConnectionManager, DemoConnectionManager
@@ -34,40 +35,29 @@ app.add_middleware(
     allow_credentials=True,
 )
 
-def load_config():
-    """Load configuration from config.toml file."""
-    config_path = os.path.join(os.path.dirname(__file__), "..", "config.toml")
-    if not os.path.exists(config_path):
-        # Create default config if it doesn't exist
-        return {
-            "pika": {
-                "sample_hz": 100,
-                "data_dir": "data",
-                "port": 8000,
-                "display_fps": 5.0,
-                "display_auto_ip": True
-            },
-            "pins": {
-                "adc_address": 0x48,
-                "adc_channel": 0,
-                "lcd_port": 0,
-                "lcd_device": 0,
-                "lcd_cs": 8,
-                "lcd_dc": 25,
-                "lcd_rst": 27,
-                "lcd_bl": 24
-            }
-        }
+# Load configuration using the centralized configuration manager
+config_manager = ConfigurationManager()
+try:
+    full_config = config_manager.load_configuration()
+except Exception as e:
+    import logging as _logging
+    _logging.getLogger(__name__).error(f"Failed to load configuration: {e}")
+    # Fallback to basic config
+    full_config = {
+        "pika": {"sample_hz": 100, "data_dir": "data", "port": 8000, "display_fps": 5.0, "display_auto_ip": True},
+        "pins": {"adc_address": 0x48, "adc_channel": 0},
+        "datalogger": {"batch_size": 100, "batch_interval_ms": 1000},
+        "analysis": {"enable_rms": True, "enable_freq": True, "enable_sags_swells": True},
+        "multiprocessing": {"enable_multiprocessing": False, "shared_memory_names": {"sample_buffer": "pika_samples", "analysis_buffer": "pika_analysis", "config_buffer": "pika_config"}},
+        "systemd": {"enable_watchdog": True, "stale_threshold": 3.0}
+    }
 
-    with open(config_path, "rb") as f:
-        return tomllib.load(f)
-
-# Load configuration
-full_config = load_config()
 config = full_config.get("pika", {})
 pins = full_config.get("pins", {})
 dl_config = full_config.get("datalogger", {})
 analysis_config = full_config.get("analysis", {})
+mp_config = full_config.get("multiprocessing", {})
+systemd_config = full_config.get("systemd", {})
 
 DATA_DIR = config.get("data_dir", "data")
 SAMPLE_HZ = config.get("sample_hz", 100)
@@ -238,14 +228,17 @@ def initialize_process_supervisor():
     """Initialize process supervisor for standalone operation (development mode)."""
     global process_supervisor
     
+    # Check configuration for multiprocessing mode
+    multiprocessing_enabled = mp_config.get('enable_multiprocessing', False)
+    
     # Only initialize process supervisor if running in standalone mode
     # (when not launched by the main multiprocessing application)
-    if os.environ.get('PIKA_MULTIPROCESSING_MODE') != 'true':
+    if not multiprocessing_enabled:
         try:
             from .main import MultiprocessingApplication
             
             # Check if we should run in multiprocessing mode
-            if os.environ.get('PIKA_ENABLE_MULTIPROCESSING', 'false').lower() == 'true':
+            if multiprocessing_enabled:
                 import logging as _logging
                 _logging.getLogger(__name__).info("Multiprocessing mode enabled, but running FastAPI standalone")
                 _logging.getLogger(__name__).info("Consider using 'python -m pika.main' for full multiprocessing")
@@ -266,10 +259,11 @@ def initialize_shared_memory():
     global shared_sample_buffer, shared_analysis_buffer, shared_config_buffer, manager
     
     try:
-        # Get shared memory names from environment variables (set by process supervisor)
-        sample_buffer_name = os.environ.get('PIKA_SAMPLE_BUFFER_NAME', 'pika_samples')
-        analysis_buffer_name = os.environ.get('PIKA_ANALYSIS_BUFFER_NAME', 'pika_analysis')
-        config_buffer_name = os.environ.get('PIKA_CONFIG_BUFFER_NAME', 'pika_config')
+        # Get shared memory names from configuration
+        shared_memory_names = mp_config.get('shared_memory_names', {})
+        sample_buffer_name = shared_memory_names.get('sample_buffer', 'pika_samples')
+        analysis_buffer_name = shared_memory_names.get('analysis_buffer', 'pika_analysis')
+        config_buffer_name = shared_memory_names.get('config_buffer', 'pika_config')
         
         # Attach to existing shared memory created by process supervisor
         shared_sample_buffer = SharedSampleBuffer(
@@ -383,7 +377,8 @@ def shutdown_event():
     # Clean up shared memory resources
     # Note: In multiprocessing mode, shared memory cleanup is handled by the main application
     # In standalone mode, we clean up our own shared memory
-    if os.environ.get('PIKA_MULTIPROCESSING_MODE') != 'true':
+    multiprocessing_enabled = mp_config.get('enable_multiprocessing', False)
+    if not multiprocessing_enabled:
         if shared_sample_buffer:
             try:
                 shared_sample_buffer.cleanup()
@@ -404,8 +399,8 @@ def shutdown_event():
 if __name__ == "__main__":
     import uvicorn
     
-    # Check if multiprocessing mode is requested
-    enable_multiprocessing = os.environ.get('PIKA_ENABLE_MULTIPROCESSING', 'false').lower() == 'true'
+    # Check if multiprocessing mode is requested from configuration
+    enable_multiprocessing = mp_config.get('enable_multiprocessing', False)
     
     if enable_multiprocessing:
         # Use the main multiprocessing application
@@ -419,5 +414,5 @@ if __name__ == "__main__":
     else:
         # Run standalone FastAPI server (development mode)
         print("Starting in standalone FastAPI mode...")
-        print("Set PIKA_ENABLE_MULTIPROCESSING=true to enable multiprocessing mode")
+        print("Set multiprocessing.enable_multiprocessing=true in config.toml to enable multiprocessing mode")
         uvicorn.run("pika.app:app", host="0.0.0.0", port=8000, log_level="info")

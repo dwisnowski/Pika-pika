@@ -35,7 +35,6 @@ ExecStart=$UVICORN pika.app:app --host 0.0.0.0 --port 8000 --workers 1
 Restart=always
 RestartSec=5
 WatchdogSec=30
-Environment=PIKA_DATA_DIR=$REPO_DIR/data
 Environment=PYTHONUNBUFFERED=1
 
 [Install]

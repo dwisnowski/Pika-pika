@@ -7,7 +7,7 @@ else
   UV := uv
 endif
 
-.PHONY: help setup sync fresh-install run dev diagnose check-running docs docs-sync docs-serve icons clean stop stop-restart
+.PHONY: help setup sync fresh-install run dev diagnose check-running docs docs-sync docs-serve icons clean stop stop-restart verify verify-full
 # Default target
 help:
 	@echo "Pika-pika Makefile"
@@ -22,6 +22,8 @@ help:
 	@echo "Development targets:"
 	@echo "  make dev            - Run the app in development mode with auto-reload"
 	@echo "                      - Prevents starting if another instance is already running on port 8000"
+	@echo "  make verify         - Quick health check of core infrastructure (30 seconds)"
+	@echo "  make verify-full    - Comprehensive validation including property-based tests (5+ minutes)"
 	@echo "  make stop-restart   - Stop any running pika-pika app and restart it"
 	@echo "  make docs           - Build MkDocs documentation site (syncs docs dependencies)"
 	@echo "  make docs-serve     - Serve docs locally for development (syncs docs dependencies)"
@@ -34,6 +36,7 @@ help:
 	@echo ""
 	@echo "Quick start (development):"
 	@echo "  make sync           # Sync dependencies and install package"
+	@echo "  make verify         # Quick health check (recommended before development)"
 	@echo "  make dev            # Run with auto-reload"
 	@echo "  make stop-restart   # Stop and restart the app"
 	@echo "  make stop           # Stop any running pika-pika app"
@@ -76,6 +79,16 @@ run: check-running
 # Run the app in development mode with auto-reload
 dev: sync check-running
 	$(UV) run uvicorn pika.app:app --reload --host 0.0.0.0 --port 8000
+
+# Quick health check of core infrastructure (30 seconds)
+verify: sync
+	@echo "Running quick verification of core infrastructure..."
+	$(UV) run python scripts/quick_verification.py
+
+# Comprehensive validation including property-based tests (5+ minutes)
+verify-full: sync
+	@echo "Running comprehensive infrastructure verification..."
+	$(UV) run python scripts/verify_core_infrastructure.py
 
 # Build the MkDocs documentation site
 docs: docs-sync

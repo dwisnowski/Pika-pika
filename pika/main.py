@@ -155,6 +155,13 @@ class MultiprocessingApplication:
         try:
             logger.info("Initializing shared memory structures")
             
+            # Get shared memory names from configuration
+            mp_config = self.config.get("multiprocessing", {})
+            shared_memory_names = mp_config.get('shared_memory_names', {})
+            sample_buffer_name = shared_memory_names.get('sample_buffer', 'pika_samples')
+            analysis_buffer_name = shared_memory_names.get('analysis_buffer', 'pika_analysis')
+            config_buffer_name = shared_memory_names.get('config_buffer', 'pika_config')
+            
             # Create shared sample buffer (60 seconds at configured sample rate)
             sample_hz = self.config["pika"]["sample_hz"]
             buffer_size = sample_hz * 60  # 60 seconds of data
@@ -162,21 +169,21 @@ class MultiprocessingApplication:
             self.shared_sample_buffer = SharedSampleBuffer(
                 size=buffer_size,
                 create=True,
-                name="pika_samples"
+                name=sample_buffer_name
             )
             logger.info(f"Created shared sample buffer: {buffer_size} samples")
             
             # Create shared analysis buffer
             self.shared_analysis_buffer = SharedAnalysisBuffer(
                 create=True,
-                name="pika_analysis"
+                name=analysis_buffer_name
             )
             logger.info("Created shared analysis buffer")
             
             # Create shared configuration buffer and initialize with current config
             self.shared_config_buffer = SharedConfigBuffer(
                 create=True,
-                name="pika_config"
+                name=config_buffer_name
             )
             
             # Initialize configuration buffer with loaded configuration
@@ -255,12 +262,7 @@ class MultiprocessingApplication:
             self.process_supervisor.register_process(
                 name='fastapi',
                 target=self._run_fastapi_process,
-                args=(
-                    self.shared_sample_buffer.shm.name,
-                    self.shared_analysis_buffer.shm.name,
-                    self.shared_config_buffer.shm.name,
-                    fastapi_config['port']
-                ),
+                args=(fastapi_config['port'],),
                 cpu_affinity=2,  # Core 3
                 max_restarts=3  # Fewer restarts for web server
             )
@@ -301,8 +303,7 @@ class MultiprocessingApplication:
             logger.error(f"Event logger process error: {e}")
             raise
     
-    def _run_fastapi_process(self, sample_buffer_name: str, analysis_buffer_name: str,
-                           config_buffer_name: str, port: int) -> None:
+    def _run_fastapi_process(self, port: int) -> None:
         """Entry point for FastAPI process."""
         try:
             # Set up logging for the process
@@ -312,15 +313,9 @@ class MultiprocessingApplication:
             )
             
             # Import and run FastAPI app
-            # Note: This would need to be updated to use shared memory names
-            # For now, we'll use uvicorn to run the existing app
+            # The FastAPI app will load its own configuration from config.toml
+            # and use the shared memory names from there
             import uvicorn
-            
-            # Set environment variables for shared memory names
-            os.environ['PIKA_SAMPLE_BUFFER_NAME'] = sample_buffer_name
-            os.environ['PIKA_ANALYSIS_BUFFER_NAME'] = analysis_buffer_name
-            os.environ['PIKA_CONFIG_BUFFER_NAME'] = config_buffer_name
-            os.environ['PIKA_MULTIPROCESSING_MODE'] = 'true'
             
             uvicorn.run(
                 "pika.app:app",

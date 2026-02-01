@@ -146,6 +146,10 @@ class ConfigurationManager:
                 "restart_delay": 2.0,
                 "max_restarts": 5,
                 "shutdown_timeout": 30.0
+            },
+            "systemd": {
+                "enable_watchdog": True,
+                "stale_threshold": 3.0
             }
         }
     
