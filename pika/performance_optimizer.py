@@ -245,10 +245,14 @@ class PerformanceOptimizer:
             else:
                 core_list = [cpu_core.value]
             
-            psutil_process.cpu_affinity(core_list)
-            logger.info(f"Set CPU affinity for '{process_name}' to core {core_list}")
+            # Check if CPU affinity is supported on this platform
+            if hasattr(psutil_process, 'cpu_affinity') and callable(getattr(psutil_process, 'cpu_affinity', None)):
+                psutil_process.cpu_affinity(core_list)
+                logger.info(f"Set CPU affinity for '{process_name}' to core {core_list}")
+            else:
+                logger.warning(f"CPU affinity not supported on this platform for '{process_name}'")
             
-        except (psutil.AccessDenied, OSError) as e:
+        except (psutil.AccessDenied, OSError, AttributeError) as e:
             logger.warning(f"Failed to set CPU affinity for '{process_name}': {e}")
     
     def _set_process_priority(self, psutil_process: psutil.Process, 

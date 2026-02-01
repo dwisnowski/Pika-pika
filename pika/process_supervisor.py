@@ -209,9 +209,13 @@ class ProcessSupervisor:
             if process_info.cpu_affinity is not None:
                 try:
                     proc = psutil.Process(process.pid)
-                    proc.cpu_affinity([process_info.cpu_affinity])
-                    logger.info(f"Set CPU affinity for '{name}' to core {process_info.cpu_affinity}")
-                except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                    # Check if CPU affinity is supported on this platform
+                    if hasattr(proc, 'cpu_affinity') and callable(getattr(proc, 'cpu_affinity', None)):
+                        proc.cpu_affinity([process_info.cpu_affinity])
+                        logger.info(f"Set CPU affinity for '{name}' to core {process_info.cpu_affinity}")
+                    else:
+                        logger.warning(f"CPU affinity not supported on this platform for '{name}'")
+                except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError) as e:
                     logger.warning(f"Failed to set CPU affinity for '{name}': {e}")
                     if self.error_handler:
                         self.error_handler.handle_error(
