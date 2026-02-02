@@ -405,7 +405,7 @@ class ConfigurationManager:
         
         if process_name == 'datalogger':
             return {
-                **base_config,
+                'data_dir': base_config['data_dir'],
                 'batch_size': self.config["datalogger"]["batch_size"],
                 'batch_interval_ms': self.config["datalogger"]["batch_interval_ms"],
                 'retention_days': self.config["datalogger"]["retention_days"],

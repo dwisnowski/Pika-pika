@@ -43,7 +43,7 @@ enable_sags_swells = true
 
 [multiprocessing]
 # Multiprocessing mode settings
-enable_multiprocessing = false
+enable_multiprocessing = true
 shared_memory_names = { sample_buffer = "pika_samples", analysis_buffer = "pika_analysis", config_buffer = "pika_config" }
 heartbeat_interval = 5.0
 restart_delay = 2.0

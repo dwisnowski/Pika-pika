@@ -7,7 +7,7 @@ else
   UV := uv
 endif
 
-.PHONY: help setup sync fresh-install run dev diagnose check-running docs docs-sync docs-serve icons clean stop stop-restart verify verify-full status
+.PHONY: help setup sync fresh-install run dev diagnose check-running docs docs-sync docs-serve icons clean stop stop-restart verify verify-full status run-full
 # Default target
 help:
 	@echo "Pika-pika Makefile"
@@ -20,8 +20,9 @@ help:
 	@echo "                      - Prevents starting if another instance is already running on port 8000"
 	@echo ""
 	@echo "Development targets:"
-	@echo "  make dev            - Run the app in development mode with auto-reload"
+	@echo "  make dev            - Run FastAPI in development mode with auto-reload (single process)"
 	@echo "                      - Prevents starting if another instance is already running on port 8000"
+	@echo "  make run-full       - Run complete multiprocessing system (datalogger + FastAPI + event logger)"
 	@echo "  make verify         - Quick health check of core infrastructure (30 seconds)"
 	@echo "  make verify-full    - Comprehensive validation including property-based tests (5+ minutes)"
 	@echo "  make status         - Check multiprocessing system status (processes and shared memory)"
@@ -38,9 +39,11 @@ help:
 	@echo "Quick start (development):"
 	@echo "  make sync           # Sync dependencies and install package"
 	@echo "  make verify         # Quick health check (recommended before development)"
-	@echo "  make dev            # Run with auto-reload"
-	@echo "  make stop-restart   # Stop and restart the app"
-	@echo "  make stop           # Stop any running pika-pika app"
+	@echo "  make dev            # Run FastAPI with auto-reload (single process)"
+	@echo "  make run-full       # Run complete multiprocessing system (all processes)"
+	@echo "  make status         # Check system status"
+	@echo "  make stop           # Stop any running pika-pika app (graceful)"
+	@echo "  make force-stop     # Force stop any running pika-pika app (when stuck)"
 	@echo ""
 	@echo "Useful for development when you want to ensure a clean restart"
 	@echo ""
@@ -96,6 +99,12 @@ status: sync
 	@echo "Checking multiprocessing system status..."
 	$(UV) run python scripts/process_status.py
 
+# Run complete multiprocessing system (all processes)
+run-full: sync check-running
+	@echo "Starting complete multiprocessing system..."
+	@echo "Note: This requires enable_multiprocessing=true in config.toml"
+	$(UV) run python -m pika.main
+
 # Build the MkDocs documentation site
 docs: docs-sync
 	$(UV) sync --extra docs
@@ -118,26 +127,19 @@ icons:
 clean:
 	rm -rf $(VENV) build dist *.egg-info
 
-# Stop and restart target
-stop-restart:
-	@echo "Stopping any running pika-pika processes..."
-	@$(UV) run python scripts/check_app_running.py
-	@if errorlevel 1 (
-		echo "pika-pika application is already running"
-		exit /b 1
-	) else (
-		echo "No pika-pika application found running"
-	)
-	@echo "Waiting 2 seconds for processes to fully stop..."
-	@timeout /t 2 >nul 2>&1 || echo "Timeout command not available, continuing..."
-	@echo "Restarting pika-pika application..."
-	@$(MAKE) dev
-
-# Stop target
+# Stop target - works on both macOS and Linux
 stop:
 	@echo "Stopping any running pika-pika processes..."
-	@$(UV) run python scripts/check_app_running.py && echo "No pika-pika application found running" || echo "pika-pika application is already running"
-	@echo "Waiting 2 seconds for processes to fully stop..."
-	@timeout /t 2 >nul 2>&1 || echo "Timeout command not available, continuing..."
-	@echo "Stopping pika-pika application..."
-	@taskkill /F /IM uvicorn.exe 2>NUL || echo "No uvicorn processes found"
+	@$(UV) run python scripts/stop_multiprocessing.py
+
+# Force stop target - for when processes are stuck
+force-stop:
+	@echo "Force stopping any running pika-pika processes..."
+	@$(UV) run python scripts/stop_multiprocessing.py --force
+
+# Stop and restart target
+stop-restart: stop
+	@echo "Waiting 3 seconds for complete shutdown..."
+	@sleep 3 2>/dev/null || timeout 3 2>NUL || echo "Sleep command not available, continuing..."
+	@echo "Restarting pika-pika application..."
+	@$(MAKE) dev

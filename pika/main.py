@@ -25,10 +25,62 @@ from .performance_optimizer import PerformanceOptimizer, create_optimized_proces
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,  # Reduced from INFO to WARNING to reduce spam
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def run_event_logger_process(sample_buffer_name: str, analysis_buffer_name: str, 
+                           config_buffer_name: str, data_dir: str) -> None:
+    """Entry point for event logger process."""
+    try:
+        # Set up logging for the process
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - EventLogger - %(levelname)s - %(message)s'
+        )
+        
+        # Create and run event logger
+        event_logger = EventLoggerProcess(
+            sample_buffer_name=sample_buffer_name,
+            analysis_buffer_name=analysis_buffer_name,
+            config_buffer_name=config_buffer_name,
+            data_dir=data_dir
+        )
+        
+        event_logger.run()
+        
+    except Exception as e:
+        logger.error(f"Event logger process error: {e}")
+        raise
+
+
+def run_fastapi_process(port: int) -> None:
+    """Entry point for FastAPI process."""
+    try:
+        # Set up logging for the process
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - FastAPI - %(levelname)s - %(message)s'
+        )
+        
+        # Import and run FastAPI app
+        # The FastAPI app will load its own configuration from config.toml
+        # and use the shared memory names from there
+        import uvicorn
+        
+        uvicorn.run(
+            "pika.app:app",
+            host="0.0.0.0",
+            port=port,
+            log_level="info",
+            access_log=False  # Reduce log noise
+        )
+        
+    except Exception as e:
+        logger.error(f"FastAPI process error: {e}")
+        raise
 
 
 class MultiprocessingApplication:
@@ -246,7 +298,7 @@ class MultiprocessingApplication:
             event_logger_config = self.config_manager.get_process_config('event_logger')
             self.process_supervisor.register_process(
                 name='event_logger',
-                target=self._run_event_logger_process,
+                target=run_event_logger_process,
                 args=(
                     self.shared_sample_buffer.shm.name,
                     self.shared_analysis_buffer.shm.name,
@@ -261,7 +313,7 @@ class MultiprocessingApplication:
             fastapi_config = self.config_manager.get_process_config('fastapi')
             self.process_supervisor.register_process(
                 name='fastapi',
-                target=self._run_fastapi_process,
+                target=run_fastapi_process,
                 args=(fastapi_config['port'],),
                 cpu_affinity=2,  # Core 3
                 max_restarts=3  # Fewer restarts for web server
@@ -277,56 +329,6 @@ class MultiprocessingApplication:
             
         except Exception as e:
             logger.error(f"Failed to start processes: {e}")
-            raise
-    
-    def _run_event_logger_process(self, sample_buffer_name: str, analysis_buffer_name: str, 
-                                 config_buffer_name: str, data_dir: str) -> None:
-        """Entry point for event logger process."""
-        try:
-            # Set up logging for the process
-            logging.basicConfig(
-                level=logging.INFO,
-                format='%(asctime)s - EventLogger - %(levelname)s - %(message)s'
-            )
-            
-            # Create and run event logger
-            event_logger = EventLoggerProcess(
-                sample_buffer_name=sample_buffer_name,
-                analysis_buffer_name=analysis_buffer_name,
-                config_buffer_name=config_buffer_name,
-                data_dir=data_dir
-            )
-            
-            event_logger.run()
-            
-        except Exception as e:
-            logger.error(f"Event logger process error: {e}")
-            raise
-    
-    def _run_fastapi_process(self, port: int) -> None:
-        """Entry point for FastAPI process."""
-        try:
-            # Set up logging for the process
-            logging.basicConfig(
-                level=logging.INFO,
-                format='%(asctime)s - FastAPI - %(levelname)s - %(message)s'
-            )
-            
-            # Import and run FastAPI app
-            # The FastAPI app will load its own configuration from config.toml
-            # and use the shared memory names from there
-            import uvicorn
-            
-            uvicorn.run(
-                "pika.app:app",
-                host="0.0.0.0",
-                port=port,
-                log_level="info",
-                access_log=False  # Reduce log noise
-            )
-            
-        except Exception as e:
-            logger.error(f"FastAPI process error: {e}")
             raise
     
     def run_supervision_loop(self) -> None:
@@ -507,21 +509,42 @@ def main(config_path: str = "config.toml") -> None:
     """
     # Set up signal handlers for graceful shutdown
     app = None
+    shutdown_requested = False
     
     def signal_handler(signum, frame):
+        nonlocal shutdown_requested
+        if shutdown_requested:
+            print("\n💥 Force shutdown requested!")
+            os._exit(1)  # Force exit if already shutting down
+        
+        shutdown_requested = True
+        print(f"\n🛑 Shutdown signal received (signal {signum})")
         if app:
-            logger.info(f"Received signal {signum}, shutting down")
+            print("   Initiating graceful shutdown...")
             app.shutdown()
-        sys.exit(0)
+        else:
+            print("   Application not started yet, exiting...")
+            sys.exit(0)
     
+    # Register signal handlers
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
     
     try:
+        print("🚀 Starting Pika-pika multiprocessing system...")
+        print("   Press Ctrl+C to stop gracefully")
+        print("   Press Ctrl+C twice to force stop")
+        print()
+        
         # Create and start application
         app = MultiprocessingApplication(config_path)
         app.start()
         
+    except KeyboardInterrupt:
+        if not shutdown_requested:
+            print("\n🛑 Keyboard interrupt received")
+            if app:
+                app.shutdown()
     except Exception as e:
         logger.error(f"Failed to start application: {e}")
         sys.exit(1)
