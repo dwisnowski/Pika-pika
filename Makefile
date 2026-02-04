@@ -67,6 +67,9 @@ doctor:
 
 # Sync dependencies and install of package (creates venv if needed)
 sync:
+	$(UV) sync
+	
+sync-rpi:
 	@if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then \
 		echo "[pika-pika] Detected Raspberry Pi, installing rpi extras..."; \
 		$(UV) sync --extra rpi || echo "[pika-pika] Warning: rpi extras could not be installed"; \

@@ -19,7 +19,7 @@ dependencies = [
   "sdnotify>=0.3.2",
   "tomli>=1.2.0; python_version < '3.11'",
   "tomli-w>=1.0.0",
-  "Pillow>=10.0",
+  "Pillow>=10.0,<12.0",
   "jinja2>=3.0.0",
   "psutil>=5.9.0",
   "requests>=2.32.5",
@@ -53,6 +53,12 @@ torch = [
 [[tool.uv.index]]
 name = "piwheels"
 url = "https://piwheels.org/simple"
+# Only use piwheels for Linux platforms
+default = false
+
+[tool.uv]
+# Ensure compatibility across platforms
+index-strategy = "first-index"
 
 [dependency-groups]
 test = [
