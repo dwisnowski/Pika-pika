@@ -141,11 +141,25 @@ class ConfigurationManager:
                 "refresh_rate": 30,
                 "qr_size": 60
             },
+            "execution": {
+                "mode": "multiprocessing"
+            },
             "multiprocessing": {
+                "shared_memory_names": {
+                    "sample_buffer": "pika_samples",
+                    "analysis_buffer": "pika_analysis", 
+                    "config_buffer": "pika_config"
+                },
                 "heartbeat_interval": 5.0,
                 "restart_delay": 2.0,
                 "max_restarts": 5,
                 "shutdown_timeout": 30.0
+            },
+            "threading": {
+                "heartbeat_interval": 2.0,
+                "restart_delay": 1.0,
+                "max_restarts": 3,
+                "shutdown_timeout": 15.0
             },
             "systemd": {
                 "enable_watchdog": True,
@@ -184,9 +198,17 @@ class ConfigurationManager:
             if "display" in self.config:
                 self._validate_display_section(self.config["display"])
             
+            # Validate execution section
+            if "execution" in self.config:
+                self._validate_execution_section(self.config["execution"])
+            
             # Validate multiprocessing section
             if "multiprocessing" in self.config:
                 self._validate_multiprocessing_section(self.config["multiprocessing"])
+            
+            # Validate threading section
+            if "threading" in self.config:
+                self._validate_threading_section(self.config["threading"])
             
         except Exception as e:
             self._validation_errors.append(f"Validation error: {e}")
@@ -357,6 +379,40 @@ class ConfigurationManager:
         if not isinstance(qr_size, int) or not (20 <= qr_size <= 200):
             self._validation_errors.append(f"qr_size must be integer between 20-200, got: {qr_size}")
             display_config["qr_size"] = 60
+    
+    def _validate_execution_section(self, execution_config: Dict[str, Any]) -> None:
+        """Validate execution configuration section."""
+        # Execution mode validation
+        mode = execution_config.get("mode", "multiprocessing")
+        if mode not in ["multiprocessing", "threading"]:
+            self._validation_errors.append(f"execution mode must be 'multiprocessing' or 'threading', got: {mode}")
+            execution_config["mode"] = "multiprocessing"
+    
+    def _validate_threading_section(self, threading_config: Dict[str, Any]) -> None:
+        """Validate threading configuration section."""
+        # Heartbeat interval validation
+        heartbeat_interval = threading_config.get("heartbeat_interval", 2.0)
+        if not isinstance(heartbeat_interval, (int, float)) or not (0.5 <= heartbeat_interval <= 30.0):
+            self._validation_errors.append(f"threading heartbeat_interval must be number between 0.5-30.0, got: {heartbeat_interval}")
+            threading_config["heartbeat_interval"] = 2.0
+        
+        # Restart delay validation
+        restart_delay = threading_config.get("restart_delay", 1.0)
+        if not isinstance(restart_delay, (int, float)) or not (0.1 <= restart_delay <= 10.0):
+            self._validation_errors.append(f"threading restart_delay must be number between 0.1-10.0, got: {restart_delay}")
+            threading_config["restart_delay"] = 1.0
+        
+        # Max restarts validation
+        max_restarts = threading_config.get("max_restarts", 3)
+        if not isinstance(max_restarts, int) or not (0 <= max_restarts <= 10):
+            self._validation_errors.append(f"threading max_restarts must be integer between 0-10, got: {max_restarts}")
+            threading_config["max_restarts"] = 3
+        
+        # Shutdown timeout validation
+        shutdown_timeout = threading_config.get("shutdown_timeout", 15.0)
+        if not isinstance(shutdown_timeout, (int, float)) or not (5.0 <= shutdown_timeout <= 120.0):
+            self._validation_errors.append(f"threading shutdown_timeout must be number between 5.0-120.0, got: {shutdown_timeout}")
+            threading_config["shutdown_timeout"] = 15.0
     
     def _validate_multiprocessing_section(self, mp_config: Dict[str, Any]) -> None:
         """Validate multiprocessing configuration section."""

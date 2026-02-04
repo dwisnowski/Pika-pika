@@ -41,14 +41,24 @@ enable_rms = true
 enable_freq = true
 enable_sags_swells = true
 
+[execution]
+# Execution mode: "multiprocessing" or "threading"
+mode = "threading"
+
 [multiprocessing]
 # Multiprocessing mode settings
-enable_multiprocessing = true
 shared_memory_names = { sample_buffer = "pika_samples", analysis_buffer = "pika_analysis", config_buffer = "pika_config" }
 heartbeat_interval = 5.0
 restart_delay = 2.0
 max_restarts = 5
 shutdown_timeout = 30.0
+
+[threading]
+# Threading mode settings
+heartbeat_interval = 2.0
+restart_delay = 1.0
+max_restarts = 3
+shutdown_timeout = 15.0
 
 [systemd]
 # Systemd watchdog settings

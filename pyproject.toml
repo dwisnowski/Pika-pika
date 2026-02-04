@@ -45,18 +45,14 @@ test = ["pytest>=7.0.0", "hypothesis>=6.0.0"]
 [tool.setuptools]
 packages = ["pika"]
 
+[tool.uv.sources]
+torch = [
+  { index = "piwheels", marker = "sys_platform == 'linux'"},
+]
+
 [[tool.uv.index]]
 name = "piwheels"
 url = "https://piwheels.org/simple"
-explicit = true
-
-[tool.uv.sources]
-adafruit-circuitpython-ads1x15 = { index = "piwheels" }
-spidev = { index = "piwheels" }
-"RPi.GPIO" = { index = "piwheels" }
-st7789 = { index = "piwheels" }
-adafruit-circuitpython-rgb-display = { index = "piwheels" }
-adafruit-blinka = { index = "piwheels" }
 
 [dependency-groups]
 test = [

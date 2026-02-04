@@ -54,7 +54,7 @@ help:
 
 # Check if app is already running on port 8000
 check-running:
-	$(UV) run python scripts/check_app_running.py
+	$(UV) run python scripts/pika_status.py --check
 
 # Run initial setup script on Raspberry Pi
 setup:
@@ -67,14 +67,17 @@ doctor:
 
 # Sync dependencies and install of package (creates venv if needed)
 sync:
-	$(UV) sync
-
-# Run the app in production mode (single worker for low-powered devices)
-run: check-running
 	@if [ -f "/proc/device-tree/model" ] && grep -q "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then \
 		echo "[pika-pika] Detected Raspberry Pi, installing rpi extras..."; \
 		$(UV) sync --extra rpi || echo "[pika-pika] Warning: rpi extras could not be installed"; \
+	else
+		echo "Not on a RPi..."; \
+		$(UV) sync
 	fi
+	
+
+# Run the app in production mode (single worker for low-powered devices)
+run: sync check-running
 	$(UV) run uvicorn pika.app:app --host 0.0.0.0 --port 8000 --workers 1
 
 # ============================================================================
@@ -97,12 +100,12 @@ verify-full: sync
 # Check multiprocessing system status (processes and shared memory)
 status: sync
 	@echo "Checking multiprocessing system status..."
-	$(UV) run python scripts/process_status.py
+	$(UV) run python scripts/pika_status.py
 
 # Run complete multiprocessing system (all processes)
 run-full: sync check-running
-	@echo "Starting complete multiprocessing system..."
-	@echo "Note: This requires enable_multiprocessing=true in config.toml"
+	@echo "Starting complete system..."
+	@echo "Note: This requires either mode threading or multiprocessing in config.toml"
 	$(UV) run python -m pika.main
 
 # Build the MkDocs documentation site
