@@ -20,7 +20,7 @@ Goals
 
 Directory Structure
 
-bbb-ad7606/
+pika/
 ├── Makefile                # Top-level orchestrator (mostly empty for now)
 ├── README.md
 

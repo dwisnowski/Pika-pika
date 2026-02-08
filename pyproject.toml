@@ -1,56 +1,13 @@
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "pika-pika"
-version = "0.1.0"
+version = "0.0.1"
 description = "Python-based Raspberry Pi voltage logger and live web viewer"
 authors = [ { name = "dwisnowski" } ]
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
-  "fastapi>=0.95.0",
-  "uvicorn[standard]>=0.22.0",
-  "aiofiles>=23.1.0",
-  "python-dotenv>=1.0.0",
-  "qrcode>=8.1",
-  "sdnotify>=0.3.2",
-  "tomli>=1.2.0; python_version < '3.11'",
-  "tomli-w>=1.0.0",
-  "Pillow>=10.0",
-  "jinja2>=3.0.0",
-  "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
-# ADS1115 library is optional for non-Pi testing or when hardware is present
-rpi = [
-  "adafruit-circuitpython-ads1x15>=3.0.0",
-  "spidev",
-  "RPi.GPIO",
-  "st7789",
-  "adafruit-circuitpython-rgb-display",
-  "adafruit-blinka"
-]
 docs = ["mkdocs>=1.4", "mkdocs-material>=9.0", "mkdocs-glightbox>=0.4.0"]
-
-[project.urls]
-"Home" = "https://github.com/dwisnowski/Pika-pika"
-
-[tool.setuptools]
-packages = ["pika"]
-
-[[tool.uv.index]]
-name = "piwheels"
-url = "https://piwheels.org/simple"
-# explicit = true
-
-[tool.uv.sources]
-adafruit-circuitpython-ads1x15 = { index = "piwheels" }
-spidev = { index = "piwheels" }
-"RPi.GPIO" = { index = "piwheels" }
-st7789 = { index = "piwheels" }
-adafruit-circuitpython-rgb-display = { index = "piwheels" }
-adafruit-blinka = { index = "piwheels" }
