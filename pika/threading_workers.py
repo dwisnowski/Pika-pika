@@ -92,22 +92,22 @@ class ThreadingDatalogger:
         """Initialize ADC adapter with fallback."""
         try:
             # Try to import and initialize ADS1115 adapter
-            from .adapters.ads1115_adapter import ADS1115Adapter
+            from .adapters import create_adc_adapter
             
             adc_config = self.config.get('adc_config', {})
-            self.adc_adapter = ADS1115Adapter(
-                address=adc_config.get('address', 0x48),
-                channel=adc_config.get('channel', 0)
-            )
-            logger.info("Using ADS1115 ADC adapter")
+            adc_type = self.config.get('adc_type', 'mock')
+            
+            self.adc_adapter = create_adc_adapter(adc_type, adc_config)
+            logger.info(f"Using {type(self.adc_adapter).__name__} ADC adapter")
             
         except Exception as e:
-            logger.warning(f"Failed to initialize ADS1115 adapter: {e}")
-            logger.info("Falling back to mock ADC adapter")
-            
-            # Fallback to mock adapter
-            from .adapters.mock_adc_adapter import MockADCAdapter
+            logger.error(f"Failed to initialize ADC adapter: {e}")
+            # This should not happen due to fallback in create_adc_adapter,
+            # but provide additional safety
+            from .adapters import MockADCAdapter
             self.adc_adapter = MockADCAdapter()
+            self.adc_adapter.initialize(self.config.get('adc_config', {}))
+            logger.warning("Using MockADC as final fallback")
     
     def run(self):
         """Main datalogger loop."""

@@ -14,8 +14,16 @@ display_auto_ip = true
 
 [pins]
 # ADC Settings (ADS1115)
+adc_type = "mock"  # Options: "ads1115", "mock"
 adc_address = 0x48
 adc_channel = 0
+
+# Mock ADC Settings (for development/testing)
+mock_signal_type = "ac"  # Options: "ac", "dc", "sine", "noise"
+mock_amplitude = 1.0
+mock_frequency = 60.0
+mock_dc_offset = 1.5
+mock_noise_level = 0.02
 
 # LCD Settings (ST7789)
 lcd_port = 0

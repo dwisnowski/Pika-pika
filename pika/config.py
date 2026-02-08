@@ -468,7 +468,14 @@ class ConfigurationManager:
                 'filename_prefix': self.config["datalogger"]["filename_prefix"],
                 'adc_config': {
                     'address': self.config["pins"]["adc_address"],
-                    'channel': self.config["pins"]["adc_channel"]
+                    'channel': self.config["pins"]["adc_channel"],
+                    'sample_rate': base_config['sample_hz'],
+                    # Mock ADC specific settings
+                    'signal_type': self.config["pins"].get("mock_signal_type", "ac"),
+                    'amplitude': self.config["pins"].get("mock_amplitude", 1.0),
+                    'frequency': self.config["pins"].get("mock_frequency", 60.0),
+                    'dc_offset': self.config["pins"].get("mock_dc_offset", 1.5),
+                    'noise_level': self.config["pins"].get("mock_noise_level", 0.02)
                 },
                 'display_config': {
                     'enabled': True,

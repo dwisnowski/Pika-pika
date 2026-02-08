@@ -330,7 +330,11 @@ class MultiprocessingApplication:
         
         # Register datalogger process (Core 1)
         datalogger_config = self.config_manager.get_process_config('datalogger')
-        datalogger_config['adc_type'] = 'ads1115'  # Default to ADS1115, will fallback to mock if needed
+        
+        # Get ADC type from configuration, default to 'mock' for development
+        pins_config = self.config_manager.config.get('pins', {})
+        adc_type = pins_config.get('adc_type', 'mock')
+        datalogger_config['adc_type'] = adc_type
         
         self.process_supervisor.register_process(
             name='datalogger',
