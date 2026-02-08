@@ -1,10 +1,3 @@
-Absolutely — below are two clean, copy-paste-ready Markdown plans, written to be Cursor-friendly and execution-oriented.
-They are intentionally structured so ChatGPT-in-Cursor can follow them mechanically without drifting.
-
-No fluff, no mixed concerns.
-
-⸻
-
 📦 Plan 1 — Project Shell & Top-Level Orchestration
 
 Purpose: establish the project skeleton and integration boundaries
