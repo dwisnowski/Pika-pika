@@ -44,42 +44,43 @@ Web UI (Plan 5)
 
 FastAPI Subproject Structure
 
-web/
-├── Makefile
-├── app/
-│   ├── main.py
-│   ├── api/
-│   │   ├── health.py
-│   │   ├── realtime.py
-│   │   ├── history.py
-│   │   └── events.py
-│   │
-│   ├── core/
-│   │   ├── config.py
-│   │   ├── lifecycle.py
-│   │   └── permissions.py
-│   │
-│   ├── services/
-│   │   ├── shared_memory.py
-│   │   ├── decimated_reader.py
-│   │   ├── event_reader.py
-│   │   ├── index_reader.py
-│   │   └── cache.py
-│   │
-│   ├── models/
-│   │   ├── events.py
-│   │   ├── samples.py
-│   │   └── responses.py
-│   │
-│   └── utils/
-│       ├── binary_parse.py
-│       ├── time_convert.py
-│       └── throttling.py
-│
-├── config/
-│   └── web.yaml
-│
-└── tests/
+pika/
+└── web/
+	├── Makefile
+	├── app/
+	│   ├── main.py
+	│   ├── api/
+	│   │   ├── health.py
+	│   │   ├── realtime.py
+	│   │   ├── history.py
+	│   │   └── events.py
+	│   │
+	│   ├── core/
+	│   │   ├── config.py
+	│   │   ├── lifecycle.py
+	│   │   └── permissions.py
+	│   │
+	│   ├── services/
+	│   │   ├── shared_memory.py
+	│   │   ├── decimated_reader.py
+	│   │   ├── event_reader.py
+	│   │   ├── index_reader.py
+	│   │   └── cache.py
+	│   │
+	│   ├── models/
+	│   │   ├── events.py
+	│   │   ├── samples.py
+	│   │   └── responses.py
+	│   │
+	│   └── utils/
+	│       ├── binary_parse.py
+	│       ├── time_convert.py
+	│       └── throttling.py
+	│
+	├── config/
+	│   └── web.yaml
+	│
+	└── tests/
 
 
 ⸻

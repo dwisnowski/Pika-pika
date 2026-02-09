@@ -44,34 +44,35 @@ Efficient On-Disk Storage
 
 Datalogger Subproject Structure
 
-datalogger/
-├── Makefile
-├── src/
-│   ├── main.c
-│   ├── shm_reader.c
-│   ├── ring_buffer.c
-│   ├── decimator.c
-│   ├── anomaly_detector.c
-│   ├── event_window.c
-│   ├── writer.c
-│   ├── time_utils.c
-│   └── config.c
-│
-├── include/
-│   ├── shm_layout.h        # Copied from PRU project (single source of truth)
-│   ├── logger_config.h
-│   ├── event_types.h
-│   └── storage_format.h
-│
-├── config/
-│   └── logger.yaml
-│
-├── data/
-│   ├── events/
-│   ├── decimated/
-│   └── index/
-│
-└── tests/
+pika/
+└── datalogger/
+    ├── Makefile
+    ├── src/
+    │   ├── main.c
+    │   ├── shm_reader.c
+    │   ├── ring_buffer.c
+    │   ├── decimator.c
+    │   ├── anomaly_detector.c
+    │   ├── event_window.c
+    │   ├── writer.c
+    │   ├── time_utils.c
+    │   └── config.c
+    │
+    ├── include/
+    │   ├── shm_layout.h        # Copied from PRU project (single source of truth)
+    │   ├── logger_config.h
+    │   ├── event_types.h
+    │   └── storage_format.h
+    │
+    ├── config/
+    │   └── logger.yaml
+    │
+    ├── data/
+    │   ├── events/
+    │   ├── decimated/
+    │   └── index/
+    │
+    └── tests/
 
 
 ⸻
