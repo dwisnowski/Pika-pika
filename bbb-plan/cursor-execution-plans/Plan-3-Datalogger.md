@@ -59,7 +59,8 @@ pika/
     │   └── config.c
     │
     ├── include/
-    │   ├── shm_layout.h        # Copied from PRU project (single source of truth)
+    │   ├── shm_layout.h        # MUST match PRU project (single source of truth)
+    │   │                       # Contains: shm_header, block_desc from mmap-plan.md
     │   ├── logger_config.h
     │   ├── event_types.h
     │   └── storage_format.h
@@ -73,6 +74,9 @@ pika/
     │   └── index/
     │
     └── tests/
+
+⚠️  CRITICAL: shm_layout.h must be kept in sync with PRU firmware.
+    Consider symlinking or copying from pika/pru/include/shm_layout.h
 
 
 ⸻
@@ -186,6 +190,53 @@ No thread is allowed to block PRU consumption
 
 ⸻
 
+Implementation Language & Dependencies
+
+Language: C (for performance and zero-copy memory access)
+
+Required Libraries:
+- libyaml (for config parsing)
+- pthread (for threading)
+- Standard POSIX (mmap, clock_gettime)
+
+Build System: GNU Make
+
+⸻
+
+Shared Memory Contract (Reference)
+
+The PRU ↔ Linux interface is fully specified in:
+📄 bbb-plan/Data-logger/mmap-plan.md
+
+Key structures to implement in shm_layout.h:
+
+struct shm_header {
+    uint32_t magic;              // 0xAD7606DA
+    uint32_t version;
+    uint32_t sample_rate_hz;
+    uint32_t sample_period_cycles;
+    uint32_t block_samples;
+    uint8_t  channel_mask;
+    uint8_t  num_channels;
+    uint16_t reserved0;
+    uint32_t ring_blocks;
+    uint32_t samples_per_block;
+    volatile uint32_t run;
+    volatile uint32_t write_block_idx;
+    volatile uint32_t error_flags;
+};
+
+struct block_desc {
+    uint64_t t_start_cycles;
+    uint32_t sample_count;
+    uint32_t flags;
+};
+
+Memory Layout:
+[shm_header][block_desc array][sample ring buffer]
+
+⸻
+
 Plan 3 Tasks (Cursor-Ready)
 
 ⸻
@@ -199,11 +250,18 @@ Cursor Prompt
 Write code to read PRU shared DDR ring buffer.
 
 Requirements:
-- Map PRU shared memory via /dev/mem
-- Detect new blocks via write_block_idx
+- Map PRU shared memory via /dev/mem (see mmap-plan.md for exact layout)
+- Use the exact structures from mmap-plan.md:
+  * shm_header with MAGIC 0xAD7606DA
+  * block_desc table
+  * Ring buffer ownership rules
+- Detect new blocks via write_block_idx polling
 - Never overwrite unread data
+- Implement zero-copy memoryview access pattern
 - Expose blocks to the processing pipeline
 - No signal processing here
+
+Reference: bbb-plan/Data-logger/mmap-plan.md sections 2-9
 
 
 ⸻
@@ -328,10 +386,12 @@ Cursor Prompt
 Implement datalogger main program.
 
 Requirements:
-- Load config from YAML
-- Start worker threads
-- Handle shutdown cleanly
-- Validate PRU firmware compatibility
+- Load config from YAML (using libyaml)
+- Validate shm_header.magic == 0xAD7606DA
+- Validate shm_header.version compatibility
+- Start worker threads (reader, processor, writer)
+- Handle shutdown cleanly (SIGINT/SIGTERM)
+- Validate PRU firmware compatibility via version field
 
 
 ⸻
@@ -348,7 +408,38 @@ Validation Rules
 Deliverables After Plan 3
 
 You will have:
-	•	A production-grade logger
+	•	A production-grade C logger
 	•	Indexed anomaly events
 	•	Efficient historical storage
 	•	Clean input for FastAPI visualization
+	•	Zero-copy shared memory reader
+	•	Lock-free ring buffer implementation
+
+⸻
+
+Testing Strategy
+
+Unit Tests:
+- Ring buffer wrapping
+- Decimation accuracy
+- Anomaly threshold detection
+- Time conversion accuracy
+
+Integration Tests:
+- Mock PRU shared memory
+- End-to-end data flow
+- File format validation
+
+Performance Tests:
+- CPU usage at 180 kSPS
+- Memory footprint
+- Disk write batching efficiency
+
+⸻
+
+Reference Documents
+
+This plan builds on:
+- bbb-plan/Data-logger/High-level-plan.md (architecture)
+- bbb-plan/Data-logger/mmap-plan.md (memory contract)
+- pika/pru/include/shm_layout.h (shared structures)

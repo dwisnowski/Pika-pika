@@ -28,15 +28,15 @@ You are answering very specific yes/no questions at each step.
 
 With an 8-channel analyzer, use these:
 
-Analyzer Ch	Signal	Why
-CH0	CONVST	Conversion timing
-CH1	BUSY	ADC status
-CH2	RD	Data latch timing
-CH3	CS	Chip select
-CH4	DB0	Data stability
-CH5	DB7	Data stability
-CH6	DB15	MSB check
-CH7	(optional) RESET	Bring-up sanity
+Analyzer Ch	Signal	BBB Pin	Why
+CH0	CONVST	P9.31	Conversion timing
+CH1	BUSY	P9.29	ADC status
+CH2	DB0	P9.27	Data stability (LSB)
+CH3	DB7	P9.41	Data stability (mid)
+CH4	DB15	P8.40	MSB check
+CH5	(optional)	-	Reserved
+CH6	(optional)	-	Reserved
+CH7	(optional)	-	Reserved
 
 This gives you control + data visibility.
 
@@ -99,24 +99,25 @@ BUSY jitter	Clock/power issue
 
 ⸻
 
-4️⃣ Step 3 – Verify Read Strobe Timing
+4️⃣ Step 3 – Verify Read Timing
 
-Now add RD + CS.
+Now verify data read timing.
 
 Expected Pattern
 
-CS  ↓--------------------↓
-RD      ↓   ↓   ↓   ↓
+CONVST ↑ ↓
+     BUSY ↑........↓
+     (PRU reads data after BUSY low)
 DB  === stable ===
 
 Key Checks
-	•	DB lines stable before RD goes low
-	•	RD pulse width matches datasheet minimum
-	•	Data changes only between RD pulses
+	•	DB lines stable when PRU reads (after BUSY goes low)
+	•	Data changes only between samples
+	•	No glitches during read
 
-If DB changes during RD:
+If DB changes during read:
 
-→ You are violating setup/hold
+→ You are violating timing constraints
 
 ⸻
 
@@ -149,22 +150,26 @@ Only MSB noisy	Input near threshold
 
 Goal
 
-Confirm 180 kSPS timing
+Confirm configured sample rate timing
 
 How
 	•	Measure period between CONVST pulses
 
 Expected:
 
-~5.55 µs ± small error
+Period matches sample_period_cycles / 200 MHz
+
+Example for 10 kHz:
+sample_period_cycles = 20000
+Expected period = 20000 / 200 MHz = 100 µs
 
 PulseView math cursor:
 
-1 / Δt ≈ 180 kHz
+1 / Δt ≈ configured sample rate
 
 If off:
-	•	Check sample_period_cycles
-	•	Check wait loop math
+	•	Check sample_period_cycles calculation
+	•	Check wait loop implementation
 
 ⸻
 
@@ -173,17 +178,19 @@ If off:
 Enable more channels.
 
 What to Look For
-	•	RD pulses increase per sample
-	•	BUSY still only once per sample
-	•	DB bits update per RD
+	•	BUSY only once per sample (all channels read simultaneously)
+	•	DB bits update between samples
+	•	Sample timing remains consistent
 
 Pattern:
 
-CONVST
-BUSY
-RD RD RD RD (one per channel)
+CONVST ↑ ↓
+BUSY   ↑....↓
+(PRU reads all enabled channels from parallel bus)
 
-If BUSY repeats → wrong ADC mode.
+Note: AD7606 in parallel mode presents all 8 channels sequentially
+on the same 16-bit bus. The PRU must read each channel in sequence
+after a single conversion completes.
 
 ⸻
 

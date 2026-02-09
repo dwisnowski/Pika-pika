@@ -52,13 +52,9 @@ void main(void) {
      * Half period (time between toggles) = 500 µs
      * Cycles = 500 µs × 200 cycles/µs = 100,000 cycles
      * 
-     * However, task details specify 200,000 cycles which gives:
-     * 200,000 cycles / 200 cycles/µs = 1000 µs = 1 ms toggle interval
-     * This creates a 500 Hz square wave (2 ms period)
-     * 
-     * Using task-specified value of 200,000 cycles for 1 ms toggle
+     * This creates a 1 kHz square wave (1 ms period, 500 µs high, 500 µs low)
      */
-    uint32_t toggle_period = 200000;  // 1 ms @ 200 MHz = 1 kHz toggle rate
+    uint32_t toggle_period = 100000;  // 500 µs @ 200 MHz = 1 kHz square wave
     
     /* Infinite loop: toggle CONVST pin at regular intervals */
     while (1) {

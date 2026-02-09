@@ -189,30 +189,38 @@ cd ~/pika/pika
 make pru-overlay
 ```
 
-### Load Overlay
+### Load Overlay at Boot
 
-```bash
-# Check current overlays
-sudo cat /sys/devices/platform/bone_capemgr/slots
-
-# Load PRU overlay
-sudo sh -c "echo 'BB-PRU0-AD7606' > /sys/devices/platform/bone_capemgr/slots"
-
-# Verify it loaded
-sudo cat /sys/devices/platform/bone_capemgr/slots
-# Should see BB-PRU0-AD7606 in the list
-```
-
-### Make Overlay Load at Boot (Optional)
+Modern BeagleBone images load overlays via `/boot/uEnv.txt`:
 
 ```bash
 sudo nano /boot/uEnv.txt
 
-# Add to the cape_enable line:
-cape_enable=bone_capemgr.enable_partno=BB-PRU0-AD7606
+# Find the line with uboot_overlay_addr4 (or similar unused overlay slot)
+# Uncomment and set it to:
+uboot_overlay_addr4=/lib/firmware/BB-PRU0-AD7606.dtbo
+
+# Or add to the dtb_overlay line:
+# dtb_overlay=/lib/firmware/BB-PRU0-AD7606.dtbo
 
 # Save and reboot
 sudo reboot
+```
+
+### Verify Overlay Loaded
+
+After reboot, check if the overlay is active:
+
+```bash
+# Check loaded overlays
+sudo cat /proc/device-tree/chosen/overlays/name
+
+# Or check for PRU pins in pinmux
+cat /sys/kernel/debug/pinctrl/44e10800.pinmux/pins | grep -i pru
+
+# Verify PRU is available
+ls /sys/class/remoteproc/
+# Should see remoteproc1 and remoteproc2
 ```
 
 ## Step 7: Load and Run PRU Firmware

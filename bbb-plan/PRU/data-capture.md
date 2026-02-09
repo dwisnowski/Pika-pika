@@ -80,14 +80,16 @@ PRU never stops sampling unless:
 
 ⸻
 
-6. Memory Layout (Shared DDR)
+6. Memory Layout (Shared Memory)
 
 Config Structure (written by Linux)
 
 struct pru_config {
+    uint32_t magic;                 // Verification magic number
+    uint32_t version;               // Layout version
     uint32_t sample_rate_hz;
     uint32_t sample_period_cycles;
-    uint8_t  channel_mask;      // bit per channel
+    uint8_t  channel_mask;          // bit per channel
     uint8_t  num_channels;
     uint16_t reserved;
     uint32_t block_samples;
@@ -97,6 +99,9 @@ struct pru_config {
 
 Linux computes sample_period_cycles
 PRU trusts it (no division in PRU)
+
+Memory is a single contiguous region at 0x00010000 (PRU address space)
+Linux mmaps this for zero-copy access
 
 ⸻
 
@@ -122,21 +127,22 @@ samples[n][0..7]
 
 7. PRU Local RAM Strategy
 
-PRU local RAM is only 8 KB, so:
+PRU local RAM is only 8 KB, so we use a staging buffer strategy:
 
-Local buffer = small staging area
-DDR = real storage
+Local buffer = small staging area (32 samples)
+Shared memory = ring buffer storage
 
 Example:
 
-uint16_t local_buf[32][8];  // ~512 bytes
+uint16_t local_buf[32][8];  // ~512 bytes in PRU RAM
 
 Flow:
-	1.	Fill local buffer
-	2.	Copy burst → DDR
+	1.	Fill local buffer (fast, no DDR access)
+	2.	Burst copy → shared memory ring buffer
 	3.	Repeat
 
-This avoids DDR stalls mid-sample.
+This avoids DDR stalls during time-critical sampling.
+Burst writes are much more efficient than per-sample writes.
 
 ⸻
 

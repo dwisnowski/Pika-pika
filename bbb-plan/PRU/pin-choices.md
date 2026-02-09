@@ -51,37 +51,34 @@ STBY	Standby
 
 🔹 Parallel Data Bus (16-bit)
 
-PRU0 R31 inputs
+PRU0 R31 inputs (bits 1-16)
 
 AD7606	BBB Pin	PRU Signal
-DB0	P8_45	pr1_pru0_r31_0
-DB1	P8_46	pr1_pru0_r31_1
-DB2	P8_43	pr1_pru0_r31_2
-DB3	P8_44	pr1_pru0_r31_3
-DB4	P8_41	pr1_pru0_r31_4
-DB5	P8_42	pr1_pru0_r31_5
-DB6	P8_39	pr1_pru0_r31_6
-DB7	P8_40	pr1_pru0_r31_7
-DB8	P8_27	pr1_pru0_r31_8
-DB9	P8_29	pr1_pru0_r31_9
-DB10	P8_28	pr1_pru0_r31_10
-DB11	P8_30	pr1_pru0_r31_11
-DB12	P8_21	pr1_pru0_r31_12
-DB13	P8_20	pr1_pru0_r31_13
-DB14	P8_23	pr1_pru0_r31_14
-DB15	P8_22	pr1_pru0_r31_15
+DB0	P9.27	pr1_pru0_r31_1
+DB1	P9.25	pr1_pru0_r31_2
+DB2	P9.28	pr1_pru0_r31_3
+DB3	P9.30	pr1_pru0_r31_4
+DB4	P9.92	pr1_pru0_r31_5
+DB5	P9.42	pr1_pru0_r31_6
+DB6	P9.91	pr1_pru0_r31_7
+DB7	P9.41	pr1_pru0_r31_8
+DB8	P8.45	pr1_pru0_r31_9
+DB9	P8.46	pr1_pru0_r31_10
+DB10	P8.43	pr1_pru0_r31_11
+DB11	P8.44	pr1_pru0_r31_12
+DB12	P8.41	pr1_pru0_r31_13
+DB13	P8.42	pr1_pru0_r31_14
+DB14	P8.39	pr1_pru0_r31_15
+DB15	P8.40	pr1_pru0_r31_16
 
-✅ This gives you a contiguous 16-bit read from __R31 & 0xFFFF
+✅ This gives you a contiguous 16-bit read from (__R31 >> 1) & 0xFFFF
 
 ⸻
 
 🔹 Control Signals (PRU0 R30 outputs)
 
 AD7606	BBB Pin	PRU Signal
-CONVST	P8_11	pr1_pru0_r30_15
-CS	P8_12	pr1_pru0_r30_14
-RD	P8_15	pr1_pru0_r30_13
-RESET	P8_16	pr1_pru0_r30_12
+CONVST	P9.31	pr1_pru0_r30_0
 
 
 ⸻
@@ -89,7 +86,7 @@ RESET	P8_16	pr1_pru0_r30_12
 🔹 Status Input
 
 AD7606	BBB Pin	PRU Signal
-BUSY	P8_26	pr1_pru0_r31_16
+BUSY	P9.29	pr1_pru0_r31_0
 
 
 ⸻

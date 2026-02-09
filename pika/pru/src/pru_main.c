@@ -56,6 +56,18 @@ static inline uint8_t count_enabled_channels(uint32_t channel_mask) {
 }
 
 /**
+ * Local staging buffer size
+ * 
+ * Using a small local buffer (32 samples) allows us to:
+ * 1. Minimize DDR access during time-critical sampling
+ * 2. Burst-write to DDR when buffer is full (better efficiency)
+ * 3. Keep buffer small enough to fit in PRU local memory
+ * 
+ * 32 samples × 8 channels × 2 bytes = 512 bytes (well within 8KB PRU RAM)
+ */
+#define LOCAL_BUFFER_SAMPLES 32
+
+/**
  * Main entry point for PRU firmware
  * 
  * This function:
@@ -117,6 +129,11 @@ void main(void) {
     uint32_t block_data_size = block_size * num_channels * sizeof(uint16_t);
     uint32_t block_total_size = sizeof(block_descriptor_t) + block_data_size;
     
+    // Allocate local staging buffer in PRU RAM (avoids DDR stalls during sampling)
+    // This buffer holds samples temporarily before burst-writing to shared memory
+    uint16_t local_buffer[LOCAL_BUFFER_SAMPLES][MAX_CHANNELS];
+    uint32_t local_buffer_idx = 0;
+    
     // Initialize sampling state variables (Requirement 6.3)
     uint32_t current_block = 0;           // Start with block 0
     uint32_t sample_in_block = 0;         // No samples in current block yet
@@ -144,41 +161,58 @@ void main(void) {
             __halt();
         }
         
-        // Calculate pointers to current block descriptor and data buffer
-        // Memory layout: [header][block0_desc][block0_data][block1_desc][block1_data]...
-        uint8_t *block_base = ((uint8_t *)shm) + 
-                              sizeof(pru_shared_memory_t) +
-                              (current_block * block_total_size);
-        block_descriptor_t *desc = (block_descriptor_t *)block_base;
-        uint16_t *data = (uint16_t *)(block_base + sizeof(block_descriptor_t));
-        
-        // Read enabled channels using channel_mask and store to ring buffer (Requirements 5.5, 5.6)
-        uint32_t data_idx = sample_in_block * num_channels;
+        // Read enabled channels using channel_mask and store to local buffer (Requirements 5.5, 5.6)
+        // Using local buffer avoids DDR access during time-critical sampling
+        uint32_t ch_idx = 0;
         for (uint8_t ch = 0; ch < NUM_ADC_CHANNELS; ch++) {
             if (channel_mask & (1 << ch)) {
-                data[data_idx++] = adc_read_channel(ch);
+                local_buffer[local_buffer_idx][ch_idx++] = adc_read_channel(ch);
             }
         }
         
-        // Increment sample_in_block and sample_count
+        // Increment counters
+        local_buffer_idx++;
         sample_in_block++;
         shm->sample_count++;
         
-        // Check for block completion and finalize descriptor (Requirements 5.7, 5.8)
-        if (sample_in_block >= block_size) {
-            // Finalize block descriptor
-            desc->num_samples = block_size;
-            desc->timestamp_cycles = next_sample_time - (block_size * sample_period);
-            desc->flags = 0;
+        // Flush local buffer to shared memory when full or block complete
+        if (local_buffer_idx >= LOCAL_BUFFER_SAMPLES || sample_in_block >= block_size) {
+            // Calculate pointers to current block descriptor and data buffer
+            // Memory layout: [header][block0_desc][block0_data][block1_desc][block1_data]...
+            uint8_t *block_base = ((uint8_t *)shm) + 
+                                  sizeof(pru_shared_memory_t) +
+                                  (current_block * block_total_size);
+            block_descriptor_t *desc = (block_descriptor_t *)block_base;
+            uint16_t *data = (uint16_t *)(block_base + sizeof(block_descriptor_t));
             
-            // Move to next block and wrap to block 0 when reaching num_blocks (Requirement 5.9)
-            current_block = (current_block + 1) % num_blocks;
+            // Burst-write local buffer to shared memory
+            uint32_t start_sample = sample_in_block - local_buffer_idx;
+            for (uint32_t i = 0; i < local_buffer_idx; i++) {
+                uint32_t data_idx = (start_sample + i) * num_channels;
+                for (uint8_t ch = 0; ch < num_channels; ch++) {
+                    data[data_idx + ch] = local_buffer[i][ch];
+                }
+            }
             
-            // Update write_block_idx atomically on block completion (Requirements 1.7, 5.7)
-            shm->write_block_idx = current_block;
+            // Reset local buffer index
+            local_buffer_idx = 0;
             
-            // Reset sample counter for new block
-            sample_in_block = 0;
+            // Check for block completion and finalize descriptor (Requirements 5.7, 5.8)
+            if (sample_in_block >= block_size) {
+                // Finalize block descriptor
+                desc->num_samples = block_size;
+                desc->timestamp_cycles = next_sample_time - (block_size * sample_period);
+                desc->flags = 0;
+                
+                // Move to next block and wrap to block 0 when reaching num_blocks (Requirement 5.9)
+                current_block = (current_block + 1) % num_blocks;
+                
+                // Update write_block_idx atomically on block completion (Requirements 1.7, 5.7)
+                shm->write_block_idx = current_block;
+                
+                // Reset sample counter for new block
+                sample_in_block = 0;
+            }
         }
         
         // Schedule next sample by incrementing next_sample_time (Requirement 5.10)

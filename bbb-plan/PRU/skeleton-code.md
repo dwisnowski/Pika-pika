@@ -15,16 +15,17 @@ Target:
 
 1️⃣ Memory Map Assumptions
 
-We assume:
-	•	PRU DRAM for config + control
-	•	DDR (shared) for sample blocks
+We use a single contiguous shared memory region accessible by both PRU and Linux:
+	•	Base address: 0x00010000 (PRU address space)
+	•	Contains: config header + ring buffer blocks
+	•	Linux mmaps this region for zero-copy access
 
-Typical layout (example addresses):
+Typical layout (example address):
 
-#define PRU_SHARED_RAM   0x00010000
-#define PRU_DDR_BASE     0x80000000
+#define SHM_BASE_ADDRESS 0x00010000
 
-Linux will mmap the DDR region and write config into shared RAM.
+Linux will mmap this region and write config into the header.
+Ring buffer data follows immediately after the header structure.
 
 ⸻
 
@@ -77,10 +78,10 @@ You’ll refine these later when we map BBB pins.
 #define PIN_RESET    (1 << 1)
 
 // Status pin
-#define PIN_BUSY     (1 << 8)
+#define PIN_BUSY     (1 << 0)
 
-// Parallel data assumed on R31 bits 16–31
-#define DATA_SHIFT   16
+// Parallel data on R31 bits 1-16 (D0 on bit 1, D15 on bit 16)
+#define DATA_SHIFT   1
 #define DATA_MASK    0xFFFF
 
 
@@ -144,14 +145,15 @@ This is the heart of the design.
 void main(void) {
 
     volatile pru_config_t *cfg =
-        (volatile pru_config_t *)(PRU_SHARED_RAM);
+        (volatile pru_config_t *)(SHM_BASE_ADDRESS);
 
     uint16_t local_buf[LOCAL_BUF_SAMPLES][MAX_CHANNELS];
     uint32_t local_idx = 0;
     uint32_t block_id = 0;
 
-    volatile uint16_t *ddr_ptr =
-        (volatile uint16_t *)(PRU_DDR_BASE);
+    // Ring buffer data follows config header in same memory region
+    volatile uint16_t *ring_buf_ptr =
+        (volatile uint16_t *)(SHM_BASE_ADDRESS + sizeof(pru_config_t));
 
     // Enable cycle counter
     CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
@@ -184,10 +186,10 @@ void main(void) {
             samples_taken++;
 
             if (local_idx == LOCAL_BUF_SAMPLES) {
-                // Burst copy to DDR
+                // Burst copy to shared memory ring buffer
                 for (uint32_t s = 0; s < LOCAL_BUF_SAMPLES; s++) {
                     for (uint8_t c = 0; c < cfg->num_channels; c++) {
-                        *ddr_ptr++ = local_buf[s][c];
+                        *ring_buf_ptr++ = local_buf[s][c];
                     }
                 }
                 local_idx = 0;
@@ -199,7 +201,7 @@ void main(void) {
         // Flush remaining samples
         for (uint32_t s = 0; s < local_idx; s++) {
             for (uint8_t c = 0; c < cfg->num_channels; c++) {
-                *ddr_ptr++ = local_buf[s][c];
+                *ring_buf_ptr++ = local_buf[s][c];
             }
         }
 
