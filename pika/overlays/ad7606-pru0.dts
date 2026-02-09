@@ -1,0 +1,15 @@
+// Device Tree Overlay for AD7606 with PRU0
+// 
+// Purpose: Configure PRU0 for interfacing with the AD7606 ADC
+// 
+// This overlay will define:
+// - Pin multiplexing configuration for PRU0 GPIO pins
+// - PRU resource allocation (PRU0, PRUSS memory regions)
+// - Hardware setup for AD7606 control signals (CONVST, BUSY, CS, RD)
+// - Interrupt configuration for data-ready signaling
+//
+// TODO: Implement complete device tree overlay with:
+//   - Pin configuration for AD7606 interface signals
+//   - PRU0 resource reservation
+//   - Memory region definitions for PRU/Linux communication
+//   - Clock and timing configurations
