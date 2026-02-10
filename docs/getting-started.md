@@ -114,6 +114,8 @@ sudo apt install -y build-essential git device-tree-compiler
 ```bash
 sudo dpkg-reconfigure tzdata
 sudo dpkg-reconfigure locales
+
+sudo timedatectl set-timezone America/Chicago
 ```
 
 ## Step 4: Install PRU Development Tools
@@ -157,7 +159,7 @@ sudo reboot
 
 ```bash
 cd ~
-git clone <repository-url> pika
+git clone https://github.com/dwisnowski/Pika-pika.git pika
 cd pika
 ```
 

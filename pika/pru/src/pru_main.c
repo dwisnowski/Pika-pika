@@ -47,7 +47,8 @@
  */
 static inline uint8_t count_enabled_channels(uint32_t channel_mask) {
     uint8_t count = 0;
-    for (int i = 0; i < NUM_ADC_CHANNELS; i++) {
+    int i;
+    for (i = 0; i < NUM_ADC_CHANNELS; i++) {
         if (channel_mask & (1 << i)) {
             count++;
         }
@@ -164,7 +165,8 @@ void main(void) {
         // Read enabled channels using channel_mask and store to local buffer (Requirements 5.5, 5.6)
         // Using local buffer avoids DDR access during time-critical sampling
         uint32_t ch_idx = 0;
-        for (uint8_t ch = 0; ch < NUM_ADC_CHANNELS; ch++) {
+        uint8_t ch;
+        for (ch = 0; ch < NUM_ADC_CHANNELS; ch++) {
             if (channel_mask & (1 << ch)) {
                 local_buffer[local_buffer_idx][ch_idx++] = adc_read_channel(ch);
             }
@@ -186,9 +188,11 @@ void main(void) {
             uint16_t *data = (uint16_t *)(block_base + sizeof(block_descriptor_t));
             
             // Burst-write local buffer to shared memory
-            uint32_t start_sample = sample_in_block - local_buffer_idx;
-            for (uint32_t i = 0; i < local_buffer_idx; i++) {
+            uint32_t i;
+            uint8_t ch;
+            for (i = 0; i < local_buffer_idx; i++) {
                 uint32_t data_idx = (start_sample + i) * num_channels;
+                for (_idx = (start_sample + i) * num_channels;
                 for (uint8_t ch = 0; ch < num_channels; ch++) {
                     data[data_idx + ch] = local_buffer[i][ch];
                 }
