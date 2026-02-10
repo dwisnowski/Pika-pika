@@ -33,30 +33,6 @@
 #define SHM_BASE_ADDRESS 0x00010000
 
 /**
- * PRU halt instruction
- * 
- * Stops PRU execution. Used when fatal errors are detected.
- */
-#define __halt() __asm__ __volatile__("HALT\n")
-
-/**
- * Count the number of enabled channels in a channel mask
- * 
- * @param channel_mask Bit mask where bit N represents channel N
- * @return Number of bits set in the mask (0-8)
- */
-static inline uint8_t count_enabled_channels(uint32_t channel_mask) {
-    uint8_t count = 0;
-    int i;
-    for (i = 0; i < NUM_ADC_CHANNELS; i++) {
-        if (channel_mask & (1 << i)) {
-            count++;
-        }
-    }
-    return count;
-}
-
-/**
  * Local staging buffer size
  * 
  * Using a small local buffer (32 samples) allows us to:
@@ -67,6 +43,23 @@ static inline uint8_t count_enabled_channels(uint32_t channel_mask) {
  * 32 samples × 8 channels × 2 bytes = 512 bytes (well within 8KB PRU RAM)
  */
 #define LOCAL_BUFFER_SAMPLES 32
+
+/**
+ * Count the number of enabled channels in a channel mask
+ * 
+ * @param channel_mask Bit mask where bit N represents channel N
+ * @return Number of bits set in the mask (0-8)
+ */
+static inline uint8_t count_enabled_channels(uint32_t channel_mask) {
+    uint8_t count = 0;
+    uint8_t i;
+    for (i = 0; i < NUM_ADC_CHANNELS; i++) {
+        if (channel_mask & (1 << i)) {
+            count++;
+        }
+    }
+    return count;
+}
 
 /**
  * Main entry point for PRU firmware
@@ -189,12 +182,12 @@ void main(void) {
             
             // Burst-write local buffer to shared memory
             uint32_t i;
-            uint8_t ch;
+            uint8_t j;
             uint32_t start_sample = sample_in_block - local_buffer_idx;
             for (i = 0; i < local_buffer_idx; i++) {
                 uint32_t data_idx = (start_sample + i) * num_channels;
-                for (ch = 0; ch < num_channels; ch++) {
-                    data[data_idx + ch] = local_buffer[i][ch];
+                for (j = 0; j < num_channels; j++) {
+                    data[data_idx + j] = local_buffer[i][j];
                 }
             }
             
