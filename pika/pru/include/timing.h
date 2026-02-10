@@ -16,23 +16,15 @@
 /**
  * Read the current PRU cycle counter value
  * 
- * Uses inline assembly to read the CTRL.CYCLE register which provides
- * a free-running 32-bit cycle counter.
+ * Reads the CTRL.CYCLE register which provides a free-running 32-bit cycle counter.
  * 
  * @return Current cycle count (wraps at 2^32)
  * 
  * Requirement 3.1: Provide function to read cycle counter
  */
 static inline uint32_t get_cycle_count(void) {
-    uint32_t count;
-    __asm__ __volatile__ (
-        "MVI R0.w0, 0x22000\n"    // CTRL register base address
-        "LBBO %0, R0, 0x0C, 4\n"  // Read CYCLE register at offset 0x0C
-        : "=r"(count)              // Output: count variable
-        :                          // No inputs
-        : "r0"                     // Clobbers R0
-    );
-    return count;
+    volatile uint32_t *cycle_reg = (volatile uint32_t *)(0x22000 + 0x0C);
+    return *cycle_reg;
 }
 
 /**
@@ -54,13 +46,10 @@ static inline void wait_cycles(uint32_t cycles) {
     uint32_t start = get_cycle_count();
     uint32_t target = start + cycles;
     
-    // Handle counter wrap-around
     if (target < start) {
-        // Wait for wrap to occur
         while (get_cycle_count() >= start);
     }
     
-    // Wait until target cycle count is reached
     while (get_cycle_count() < target);
 }
 
@@ -79,7 +68,6 @@ static inline uint32_t elapsed_cycles(uint32_t start, uint32_t end) {
     if (end >= start) {
         return end - start;
     } else {
-        // Handle wrap-around: cycles from start to max + cycles from 0 to end
         return (0xFFFFFFFF - start) + end + 1;
     }
 }

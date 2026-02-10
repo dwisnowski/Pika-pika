@@ -190,10 +190,10 @@ void main(void) {
             // Burst-write local buffer to shared memory
             uint32_t i;
             uint8_t ch;
+            uint32_t start_sample = sample_in_block - local_buffer_idx;
             for (i = 0; i < local_buffer_idx; i++) {
                 uint32_t data_idx = (start_sample + i) * num_channels;
-                for (_idx = (start_sample + i) * num_channels;
-                for (uint8_t ch = 0; ch < num_channels; ch++) {
+                for (ch = 0; ch < num_channels; ch++) {
                     data[data_idx + ch] = local_buffer[i][ch];
                 }
             }
