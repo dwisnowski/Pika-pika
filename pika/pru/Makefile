@@ -95,10 +95,10 @@ PRU0_FIRMWARE := /sys/class/remoteproc/remoteproc1/firmware
 # Targets
 # =============================================================================
 
-.PHONY: all build bringup load load-bringup clean overlay install-overlay test test-unit test-property test-mocks help
+.PHONY: all build bringup load load-bringup clean overlay install-overlay test test-unit test-property test-mocks help build_dir firmware_dir
 
 # Default target
-all: build
+all: build_dir firmware_dir build
 
 # Build main sampling firmware (Requirement 9.1)
 build: $(MAIN_FIRMWARE)
@@ -117,7 +117,7 @@ firmware_dir:
 # Main Firmware Build Rules
 # =============================================================================
 
-$(MAIN_FIRMWARE): $(MAIN_OBJECTS) firmware_dir
+$(MAIN_FIRMWARE): $(MAIN_OBJECTS) $(FIRMWARE_DIR)
 	@echo "Linking main firmware: $@"
 	@$(PRU_LD) $(PRU_LDFLAGS) -o $@ $(MAIN_OBJECTS) \
 		--library=$(PRU_CGT)/lib/libc.a \
@@ -128,7 +128,7 @@ $(MAIN_FIRMWARE): $(MAIN_OBJECTS) firmware_dir
 # Bringup Firmware Build Rules
 # =============================================================================
 
-$(BRINGUP_FIRMWARE): $(BRINGUP_OBJECTS) firmware_dir
+$(BRINGUP_FIRMWARE): $(BRINGUP_OBJECTS) $(FIRMWARE_DIR)
 	@$(PRU_LD) $(PRU_LDFLAGS) -o $@ $(BRINGUP_OBJECTS) \
 		--library=$(PRU_CGT)/lib/libc.a \
 		$(if $(wildcard $(PRU_LINKER_CMD)),--cmd_file=$(PRU_LINKER_CMD),)
@@ -138,7 +138,7 @@ $(BRINGUP_FIRMWARE): $(BRINGUP_OBJECTS) firmware_dir
 # Compilation Rules
 # =============================================================================
 
-$(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) build_dir
+$(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) | $(BUILD_DIR)
 	@echo "Compiling: $<"
 	@$(PRU_CC) $(PRU_CFLAGS) -c $< -o $@
 
