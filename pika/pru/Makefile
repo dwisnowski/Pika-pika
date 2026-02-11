@@ -112,7 +112,7 @@ firmware_dir:
 # =============================================================================
 $(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) | build_dir
 	@echo "Compiling: $<"
-	@$(PRU_CC) $(PRU_CFLAGS) -c $< -o $@
+	@$(PRU_CC) $(PRU_CFLAGS) -c $< -o $@ --define=AM335x_PRU0
 
 # =============================================================================
 # Linking Rules
