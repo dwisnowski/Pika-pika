@@ -141,38 +141,54 @@ bringup: $(BRINGUP_FIRMWARE)
 # =============================================================================
 # Load Firmware to PRU
 # =============================================================================
+# Load main sampling firmware safely
 load: $(MAIN_FIRMWARE)
 	@echo "Loading main firmware to PRU0..."
 	@if [ ! -d /sys/class/remoteproc/remoteproc1 ]; then \
-		echo "Error: PRU remoteproc not found"; exit 1; \
+	    echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; \
+	    exit 1; \
 	fi
 	@echo "Stopping PRU0..."
-	@sudo sh -c "echo 'stop' > $(PRU0_STATE)" || true
+	@$(MAKE) stop
 	@echo "Copying firmware to /lib/firmware..."
 	@sudo cp $(MAIN_FIRMWARE) $(PRU0_FIRMWARE_PATH)
 	@echo "Starting PRU0..."
-	@sudo sh -c "echo 'start' > $(PRU0_STATE)"
+	@if [ -f $(PRU0_STATE) ]; then \
+	    echo "start" | sudo tee $(PRU0_STATE) > /dev/null || true; \
+	else \
+	    echo "PRU0 state file not found, cannot start"; \
+	fi
 	@echo "PRU0 firmware loaded and started"
 
-# Load bringup test firmware
+# Load bringup firmware safely
 load-bringup: $(BRINGUP_FIRMWARE)
 	@echo "Loading bringup firmware to PRU0..."
 	@if [ ! -d /sys/class/remoteproc/remoteproc1 ]; then \
-		echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; exit 1; \
+	    echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; \
+	    exit 1; \
 	fi
 	@echo "Stopping PRU0..."
-	@sudo sh -c "echo 'stop' > $(PRU0_STATE)" || true
+	@$(MAKE) stop
 	@echo "Copying firmware to /lib/firmware..."
 	@sudo cp $(BRINGUP_FIRMWARE) $(PRU0_FIRMWARE_PATH)
 	@echo "Starting PRU0..."
-	@sudo sh -c "echo 'start' > $(PRU0_STATE)"
+	@if [ -f $(PRU0_STATE) ]; then \
+	    echo "start" | sudo tee $(PRU0_STATE) > /dev/null || true; \
+	else \
+	    echo "PRU0 state file not found, cannot start"; \
+	fi
 	@echo "PRU0 bringup firmware loaded and started"
 
 # Stop PRU0
 stop:
 	@echo "Stopping PRU0..."
-	@sudo sh -c "echo 'stop' > $(PRU0_STATE)" || true
+	@if [ -f $(PRU0_STATE) ]; then \
+	    echo "stop" | sudo tee $(PRU0_STATE) > /dev/null || true; \
+	else \
+	    echo "PRU0 state file not found, skipping"; \
+	fi
 	@echo "PRU0 stopped"
+
 
 # =============================================================================
 # Test Targets
