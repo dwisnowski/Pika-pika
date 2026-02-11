@@ -105,7 +105,7 @@ PRU0_FIRMWARE := /sys/class/remoteproc/remoteproc1/firmware
 all: build
 
 # Build main sampling firmware (Requirement 9.1)
-build: $(MAIN_FIRMWARE)
+build: $(BUILD_DIR) $(FIRMWARE_DIR) $(MAIN_FIRMWARE)
 
 # Build bringup test firmware (Requirement 9.2)
 bringup: $(BRINGUP_FIRMWARE)
