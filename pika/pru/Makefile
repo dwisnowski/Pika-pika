@@ -95,12 +95,12 @@ PRU0_FIRMWARE := /sys/class/remoteproc/remoteproc1/firmware
 # Targets
 # =============================================================================
 
-.PHONY: all build_all bringup load load-bringup clean overlay install-overlay test test-unit test-property test-mocks help build_dir firmware_dir
+.PHONY: all build_all bringup load load-bringup clean overlay install-overlay test test-unit test-property test-mocks help
 
 # Default target
 all: 
 	mkdir -p $(BUILD_DIR) $(FIRMWARE_DIR)
-	$(make build_all)
+	$(MAKE) build_all
 
 # Build main sampling firmware (Requirement 9.1)
 build_all: $(MAIN_FIRMWARE)
