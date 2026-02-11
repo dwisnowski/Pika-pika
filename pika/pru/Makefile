@@ -112,6 +112,7 @@ bringup: $(BRINGUP_FIRMWARE)
 
 # Create directories
 $(BUILD_DIR) $(FIRMWARE_DIR):
+	@echo "Creating directory: $@"
 	@mkdir -p $@
 
 # =============================================================================
