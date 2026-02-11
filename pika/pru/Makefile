@@ -35,7 +35,7 @@ PRU_CFLAGS := -v3 \
               --include_path=$(INC_DIR) \
               --include_path=$(PRU_CGT)/include \
               --include_path=$(PRU_SSP)/include \
-              --include_path=$(PRU_SSP)/include/am335x
+              --include_path=$(PRU_SSP)/include/am335x \
 			  --obj_directory=$(BUILD_DIR)
 
 # Linker flags
