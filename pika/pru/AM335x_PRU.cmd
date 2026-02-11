@@ -12,5 +12,3 @@ SECTIONS
     .data : > PRU0_DRAM
     .bss  : > PRU0_DRAM
 }
-
-ENTRY(main);

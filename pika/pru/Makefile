@@ -42,7 +42,8 @@ PRU_CFLAGS := -v3 \
 PRU_LDFLAGS := --reread_libs \
                --warn_sections \
                --stack_size=0x100 \
-               --heap_size=0x100
+               --heap_size=0x100 \
+               --entry main
 
 # Linker command file (if needed)
 PRU_LINKER_CMD := AM335x_PRU.cmd
