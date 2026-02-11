@@ -70,8 +70,8 @@ MAIN_FIRMWARE := $(FIRMWARE_DIR)/ad7606_sampler.out
 BRINGUP_FIRMWARE := $(FIRMWARE_DIR)/bringup_test.out
 
 # Object files
-# MAIN_OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.obj,$(MAIN_SOURCES))
-# BRINGUP_OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.obj,$(BRINGUP_SOURCES))
+MAIN_OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.obj,$(MAIN_SOURCES))
+BRINGUP_OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.obj,$(BRINGUP_SOURCES))
 
 
 # =============================================================================
