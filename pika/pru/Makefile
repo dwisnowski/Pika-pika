@@ -124,13 +124,12 @@ $(MAIN_FIRMWARE): $(MAIN_OBJECTS) firmware_dir $(PRU_LINKER_CMD)
 	@$(PRU_LD) $(PRU_LDFLAGS) -o $@ $(MAIN_OBJECTS) --library=$(PRU_CGT)/lib/libc.a $(PRU_LINKER_CMD)
 	@echo "Main firmware built successfully: $@"
 
-$(BRINGUP_FIRMWARE): $(BRINGUP_OBJECTS) firmware_dir $(PRU_LINKER_CMD)
+$(BRINGUP_FIRMWARE): $(BRINGUP_OBJECTS) firmware_dir
 	@echo "Linking bringup firmware: $@"
-	@$(PRU_LD) $(BRINGUP_OBJECTS) \
-	    --library=$(PRU_CGT)/lib/libc.a \
-	    $(PRU_LINKER_CMD) \
-	    -o $@
+	@$(PRU_LD) $(PRU_LDFLAGS) --entry_point main -o $@ $(BRINGUP_OBJECTS) \
+		--library=$(PRU_CGT)/lib/libc.a
 	@echo "Bringup firmware built successfully: $@"
+
 
 
 # =============================================================================
