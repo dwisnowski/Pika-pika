@@ -118,15 +118,22 @@ $(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) | build_dir
 # =============================================================================
 # Linking Rules
 # =============================================================================
-$(MAIN_FIRMWARE): $(MAIN_OBJECTS) firmware_dir
+$(MAIN_FIRMWARE): $(MAIN_OBJECTS) firmware_dir $(PRU_LINKER_CMD)
 	@echo "Linking main firmware: $@"
-	@$(PRU_LD) $(PRU_LDFLAGS) -o $@ $(MAIN_OBJECTS) $(PRU_CGT)/lib/libc.a $(PRU_LINKER_CMD)
+	@$(PRU_LD) $(MAIN_OBJECTS) \
+	    --library=$(PRU_CGT)/lib/libc.a \
+	    $(PRU_LINKER_CMD) \
+	    -o $@
 	@echo "Main firmware built successfully: $@"
 
-$(BRINGUP_FIRMWARE): $(BRINGUP_OBJECTS) firmware_dir
+$(BRINGUP_FIRMWARE): $(BRINGUP_OBJECTS) firmware_dir $(PRU_LINKER_CMD)
 	@echo "Linking bringup firmware: $@"
-	@$(PRU_LD) $(PRU_LDFLAGS) -o $@ $(BRINGUP_OBJECTS) $(PRU_CGT)/lib/libc.a $(PRU_LINKER_CMD)
+	@$(PRU_LD) $(BRINGUP_OBJECTS) \
+	    --library=$(PRU_CGT)/lib/libc.a \
+	    $(PRU_LINKER_CMD) \
+	    -o $@
 	@echo "Bringup firmware built successfully: $@"
+
 
 # =============================================================================
 # Build Targets

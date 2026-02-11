@@ -1,14 +1,16 @@
-ENTRY(main);
+/* AM335x_PRU.cmd */
 
 MEMORY
 {
-    IRAM : origin = 0x00000, length = 0x8000
-    DRAM : origin = 0x8000, length = 0x8000
+    PRU0_IRAM (RWX) : origin = 0x00000000, length = 0x2000
+    PRU0_DRAM (RWX) : origin = 0x00002000, length = 0x1000
 }
 
 SECTIONS
 {
-    .text : > IRAM
-    .data : > DRAM
-    .bss  : > DRAM
+    .text : > PRU0_IRAM
+    .data : > PRU0_DRAM
+    .bss  : > PRU0_DRAM
 }
+
+ENTRY(main);
