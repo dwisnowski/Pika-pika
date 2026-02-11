@@ -164,13 +164,18 @@ load-bringup: $(BRINGUP_FIRMWARE)
 		echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; \
 		exit 1; \
 	fi
+	@echo "Stopping PRU0 if running..."
+	@if [ "$$(cat /sys/class/remoteproc/remoteproc1/state)" != "offline" ]; then \
+		echo stop | sudo tee /sys/class/remoteproc/remoteproc1/state; \
+	fi
 	@echo "Copying firmware to /lib/firmware..."
-	@sudo cp $< /lib/firmware/
+	@sudo cp $(BRINGUP_FIRMWARE) /lib/firmware/
 	@echo "Pointing PRU0 to bringup firmware..."
-	@echo $(notdir $<) | sudo tee /sys/class/remoteproc/remoteproc1/firmware
+	@echo $(notdir $(BRINGUP_FIRMWARE)) | sudo tee /sys/class/remoteproc/remoteproc1/firmware
 	@echo "Starting PRU0..."
 	@echo start | sudo tee /sys/class/remoteproc/remoteproc1/state
 	@echo "PRU0 bringup firmware loaded and started"
+
 
 # Stop PRU0 safely
 stop:
