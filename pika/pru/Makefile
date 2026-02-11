@@ -121,10 +121,7 @@ $(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) | build_dir
 # =============================================================================
 $(MAIN_FIRMWARE): $(MAIN_OBJECTS) firmware_dir $(PRU_LINKER_CMD)
 	@echo "Linking main firmware: $@"
-	@$(PRU_LD) $(MAIN_OBJECTS) \
-	    --library=$(PRU_CGT)/lib/libc.a \
-	    $(PRU_LINKER_CMD) \
-	    -o $@
+	@$(PRU_LD) $(PRU_LDFLAGS) -o $@ $(MAIN_OBJECTS) --library=$(PRU_CGT)/lib/libc.a $(PRU_LINKER_CMD)
 	@echo "Main firmware built successfully: $@"
 
 $(BRINGUP_FIRMWARE): $(BRINGUP_OBJECTS) firmware_dir $(PRU_LINKER_CMD)
