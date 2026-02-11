@@ -160,34 +160,39 @@ load: $(MAIN_FIRMWARE)
 	fi
 	@echo "PRU0 firmware loaded and started"
 
-# Load bringup firmware safely
+# Stop PRU0 safely
+stop:
+	@echo "Stopping PRU0..."
+	@if [ -f $(PRU0_STATE) ]; then \
+	    echo stop | sudo tee $(PRU0_STATE) > /dev/null || true; \
+	else \
+	    echo "PRU0 state file not found, skipping"; \
+	fi
+	@echo "PRU0 stopped"
+
+# Start PRU0 safely
+start:
+	@echo "Starting PRU0..."
+	@if [ -f $(PRU0_STATE) ]; then \
+	    echo start | sudo tee $(PRU0_STATE) > /dev/null || true; \
+	else \
+	    echo "PRU0 state file not found, cannot start"; \
+	fi
+	@echo "PRU0 started"
+
+# Load bringup firmware using the safe stop/start
 load-bringup: $(BRINGUP_FIRMWARE)
 	@echo "Loading bringup firmware to PRU0..."
 	@if [ ! -d /sys/class/remoteproc/remoteproc1 ]; then \
 	    echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; \
 	    exit 1; \
 	fi
-	@echo "Stopping PRU0..."
 	@$(MAKE) stop
 	@echo "Copying firmware to /lib/firmware..."
 	@sudo cp $(BRINGUP_FIRMWARE) $(PRU0_FIRMWARE_PATH)
-	@echo "Starting PRU0..."
-	@if [ -f $(PRU0_STATE) ]; then \
-	    echo "start" | sudo tee $(PRU0_STATE) > /dev/null || true; \
-	else \
-	    echo "PRU0 state file not found, cannot start"; \
-	fi
+	@$(MAKE) start
 	@echo "PRU0 bringup firmware loaded and started"
 
-# Stop PRU0
-stop:
-	@echo "Stopping PRU0..."
-	@if [ -f $(PRU0_STATE) ]; then \
-	    echo "stop" | sudo tee $(PRU0_STATE) > /dev/null || true; \
-	else \
-	    echo "PRU0 state file not found, skipping"; \
-	fi
-	@echo "PRU0 stopped"
 
 
 # =============================================================================
