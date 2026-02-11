@@ -68,8 +68,9 @@ HEADERS := $(wildcard $(INC_DIR)/*.h)
 # Output Files
 # =============================================================================
 
-MAIN_FIRMWARE := $(FIRMWARE_DIR)/ad7606_sampler.out
-BRINGUP_FIRMWARE := $(FIRMWARE_DIR)/bringup_test.out
+MAIN_FIRMWARE := $(FIRMWARE_DIR)/ad7606_sampler.fw
+BRINGUP_FIRMWARE := $(FIRMWARE_DIR)/bringup_test.fw
+
 
 # Object files
 MAIN_OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.obj,$(MAIN_SOURCES))
@@ -119,16 +120,19 @@ $(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) | build_dir
 # =============================================================================
 # Linking Rules
 # =============================================================================
-$(MAIN_FIRMWARE): $(MAIN_OBJECTS) firmware_dir $(PRU_LINKER_CMD)
-	@echo "Linking main firmware: $@"
-	@$(PRU_LD) $(PRU_LDFLAGS) -o $@ $(MAIN_OBJECTS) --library=$(PRU_CGT)/lib/libc.a $(PRU_LINKER_CMD)
+
+# Main firmware
+$(FIRMWARE_DIR)/ad7606_sampler.fw: $(MAIN_OBJECTS) firmware_dir
+	@echo "Linking main firmware (binary .fw): $@"
+	@$(PRU_LD) --entry_point=main -b binary -o $@ $(MAIN_OBJECTS)
 	@echo "Main firmware built successfully: $@"
 
-$(BRINGUP_FIRMWARE): $(BRINGUP_OBJECTS) firmware_dir
-	@echo "Linking bringup firmware: $@"
-	@$(PRU_LD) $(PRU_LDFLAGS) --entry_point main -o $@ $(BRINGUP_OBJECTS) \
-		--library=$(PRU_CGT)/lib/libc.a
+# Bringup firmware
+$(FIRMWARE_DIR)/bringup_test.fw: $(BRINGUP_OBJECTS) firmware_dir
+	@echo "Linking bringup firmware (binary .fw): $@"
+	@$(PRU_LD) --entry_point=main -b binary -o $@ $(BRINGUP_OBJECTS)
 	@echo "Bringup firmware built successfully: $@"
+
 
 
 
