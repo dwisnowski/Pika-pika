@@ -142,57 +142,35 @@ bringup: $(BRINGUP_FIRMWARE)
 # Load Firmware to PRU
 # =============================================================================
 # Load main sampling firmware safely
+# Load main sampling firmware
 load: $(MAIN_FIRMWARE)
 	@echo "Loading main firmware to PRU0..."
 	@if [ ! -d /sys/class/remoteproc/remoteproc1 ]; then \
-	    echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; \
-	    exit 1; \
+		echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; \
+		exit 1; \
 	fi
-	@echo "Stopping PRU0..."
-	@$(MAKE) stop
 	@echo "Copying firmware to /lib/firmware..."
-	@sudo cp $(MAIN_FIRMWARE) $(PRU0_FIRMWARE_PATH)
+	@sudo cp $< /lib/firmware/
+	@echo "Pointing PRU0 to firmware..."
+	@echo $(notdir $<) | sudo tee /sys/class/remoteproc/remoteproc1/firmware
 	@echo "Starting PRU0..."
-	@if [ -f $(PRU0_STATE) ]; then \
-	    echo "start" | sudo tee $(PRU0_STATE) > /dev/null || true; \
-	else \
-	    echo "PRU0 state file not found, cannot start"; \
-	fi
+	@echo start | sudo tee /sys/class/remoteproc/remoteproc1/state
 	@echo "PRU0 firmware loaded and started"
 
-# Stop PRU0 safely
-stop:
-	@echo "Stopping PRU0..."
-	@if [ -f $(PRU0_STATE) ]; then \
-	    echo stop | sudo tee $(PRU0_STATE) > /dev/null || true; \
-	else \
-	    echo "PRU0 state file not found, skipping"; \
-	fi
-	@echo "PRU0 stopped"
-
-# Start PRU0 safely
-start:
-	@echo "Starting PRU0..."
-	@if [ -f $(PRU0_STATE) ]; then \
-	    echo start | sudo tee $(PRU0_STATE) > /dev/null || true; \
-	else \
-	    echo "PRU0 state file not found, cannot start"; \
-	fi
-	@echo "PRU0 started"
-
-# Load bringup firmware using the safe stop/start
+# Load bringup test firmware
 load-bringup: $(BRINGUP_FIRMWARE)
 	@echo "Loading bringup firmware to PRU0..."
 	@if [ ! -d /sys/class/remoteproc/remoteproc1 ]; then \
-	    echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; \
-	    exit 1; \
+		echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; \
+		exit 1; \
 	fi
-	@$(MAKE) stop
 	@echo "Copying firmware to /lib/firmware..."
-	@sudo cp $(BRINGUP_FIRMWARE) $(PRU0_FIRMWARE_PATH)
-	@$(MAKE) start
+	@sudo cp $< /lib/firmware/
+	@echo "Pointing PRU0 to bringup firmware..."
+	@echo $(notdir $<) | sudo tee /sys/class/remoteproc/remoteproc1/firmware
+	@echo "Starting PRU0..."
+	@echo start | sudo tee /sys/class/remoteproc/remoteproc1/state
 	@echo "PRU0 bringup firmware loaded and started"
-
 
 
 # =============================================================================
