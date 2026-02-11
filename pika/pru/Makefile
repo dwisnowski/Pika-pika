@@ -34,9 +34,6 @@ PRU_CFLAGS := -v3 \
               --display_error_number \
               --endian=little \
               --hardware_mac=on \
-              --obj_directory=$(BUILD_DIR) \
-              --pp_directory=$(BUILD_DIR) \
-              --asm_directory=$(BUILD_DIR) \
               --include_path=$(INC_DIR) \
               --include_path=$(PRU_CGT)/include \
               --include_path=$(PRU_SSP)/include \
