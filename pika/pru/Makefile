@@ -140,7 +140,7 @@ $(BRINGUP_FIRMWARE): $(BRINGUP_OBJECTS) | $(FIRMWARE_DIR)
 # Compilation Rules
 # =============================================================================
 
-$(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) | $(BUILD_DIR)
+$(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) $(BUILD_DIR)
 	@echo "Compiling: $<"
 	@$(PRU_CC) $(PRU_CFLAGS) -c $< -o $@
 
