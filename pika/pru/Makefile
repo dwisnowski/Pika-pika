@@ -122,16 +122,27 @@ $(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) | build_dir
 # =============================================================================
 
 # Main firmware
-$(FIRMWARE_DIR)/ad7606_sampler.fw: $(MAIN_OBJECTS) firmware_dir
-	@echo "Linking main firmware (binary .fw): $@"
-	@$(PRU_LD) --entry_point=main -b binary -o $@ $(MAIN_OBJECTS)
-	@echo "Main firmware built successfully: $@"
+$(FIRMWARE_DIR)/ad7606_sampler.out: $(MAIN_OBJECTS) firmware_dir
+	@echo "Linking main firmware: $@"
+	@$(PRU_LD) --entry_point=main -o $@ $(MAIN_OBJECTS)
+	@echo "Main firmware linked successfully: $@"
+
+$(FIRMWARE_DIR)/ad7606_sampler.fw: $(FIRMWARE_DIR)/ad7606_sampler.out
+	@echo "Converting main firmware to raw .fw: $@"
+	@hexpru -o $@ $<
+	@echo "Main firmware .fw created successfully: $@"
 
 # Bringup firmware
-$(FIRMWARE_DIR)/bringup_test.fw: $(BRINGUP_OBJECTS) firmware_dir
-	@echo "Linking bringup firmware (binary .fw): $@"
-	@$(PRU_LD) --entry_point=main -b binary -o $@ $(BRINGUP_OBJECTS)
-	@echo "Bringup firmware built successfully: $@"
+$(FIRMWARE_DIR)/bringup_test.out: $(BRINGUP_OBJECTS) firmware_dir
+	@echo "Linking bringup firmware: $@"
+	@$(PRU_LD) --entry_point=main -o $@ $(BRINGUP_OBJECTS)
+	@echo "Bringup firmware linked successfully: $@"
+
+$(FIRMWARE_DIR)/bringup_test.fw: $(FIRMWARE_DIR)/bringup_test.out
+	@echo "Converting bringup firmware to raw .fw: $@"
+	@hexpru -o $@ $<
+	@echo "Bringup firmware .fw created successfully: $@"
+
 
 
 
