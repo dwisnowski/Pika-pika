@@ -124,7 +124,9 @@ $(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) | build_dir
 # Main firmware
 $(FIRMWARE_DIR)/ad7606_sampler.out: $(MAIN_OBJECTS) firmware_dir
 	@echo "Linking main firmware: $@"
-	@$(PRU_LD) --entry_point=main -o $@ $(MAIN_OBJECTS)
+	@$(PRU_LD) --entry_point=main \
+	--library=/usr/lib/ti/pru-cgt/lib/libc.a \
+	-o $@ $(MAIN_OBJECTS)
 	@echo "Main firmware linked successfully: $@"
 
 $(FIRMWARE_DIR)/ad7606_sampler.fw: $(FIRMWARE_DIR)/ad7606_sampler.out
