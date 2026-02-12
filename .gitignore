@@ -1,0 +1,14 @@
+# Build artifacts
+/build/
+/firmware/
+
+# PRU outputs
+*.out
+*.obj
+*.o
+*.ko
+
+# DKMS / kernel junk (if any ends up in repo)
+*.mod
+*.cmd
+*.symvers
