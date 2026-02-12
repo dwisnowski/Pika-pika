@@ -126,9 +126,9 @@ $(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) | build_dir
 $(FIRMWARE_DIR)/ad7606_sampler.out: $(MAIN_OBJECTS) firmware_dir
 	@echo "Linking main firmware: $@"
 	@$(PRU_LD) -z --entry_point=main \
-	$(PRU_LIBS) \
 	$(MAIN_OBJECTS) \
 	AM335x_PRU.cmd \
+	$(PRU_LIBS) \
 	-o $@
 	@echo "Main firmware linked successfully: $@"
 
