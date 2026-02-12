@@ -25,6 +25,9 @@
 /* PRU R30 register - GPIO outputs */
 #define PRU0_R30 (*((volatile uint32_t *)0x00000000))
 
+/* PRU remoteproc resource table */
+extern const uint32_t pru_remoteproc_ResourceTable[];
+
 /**
  * Main entry point for bring-up test firmware
  * 
@@ -55,6 +58,9 @@ void main(void) {
      * This creates a 1 kHz square wave (1 ms period, 500 µs high, 500 µs low)
      */
     uint32_t toggle_period = 100000;  // 500 µs @ 200 MHz = 1 kHz square wave
+    
+
+    (void)pru_remoteproc_ResourceTable;  /* prevent linker from discarding resource table */ 
     
     /* Infinite loop: toggle CONVST pin at regular intervals */
     while (1) {

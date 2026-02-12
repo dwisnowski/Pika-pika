@@ -44,6 +44,9 @@
  */
 #define LOCAL_BUFFER_SAMPLES 32
 
+/* PRU remoteproc resource table */
+extern const uint32_t pru_remoteproc_ResourceTable[];
+
 /**
  * Count the number of enabled channels in a channel mask
  * 
@@ -74,6 +77,9 @@ static inline uint8_t count_enabled_channels(uint32_t channel_mask) {
  * On any error, sets appropriate error flag and halts.
  */
 void main(void) {
+    /* prevent linker from discarding resource table */
+    (void)pru_remoteproc_ResourceTable;  
+
     // Map shared memory to PRU address space (Requirement 5.1)
     volatile pru_shared_memory_t *shm = 
         (volatile pru_shared_memory_t *)SHM_BASE_ADDRESS;
