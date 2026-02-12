@@ -7,12 +7,13 @@
 
 # TI PRU C Compiler
 PRU_CC := clpru
-PRU_LD := lnkpru
+PRU_LD := clpru
 
 # PRU Software Support Package paths (adjust as needed)
 # These paths may need to be configured based on installation
 PRU_SSP ?= /usr/lib/ti/pru-software-support-package
 PRU_CGT ?= /usr/share/ti/cgt-pru
+PRU_LIBS := --library=$(PRU_CGT)/lib/libc.a
 
 # =============================================================================
 # Directories
@@ -124,9 +125,11 @@ $(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) | build_dir
 # Main firmware
 $(FIRMWARE_DIR)/ad7606_sampler.out: $(MAIN_OBJECTS) firmware_dir
 	@echo "Linking main firmware: $@"
-	@$(PRU_LD) --entry_point=main \
-	--library=/usr/lib/ti/pru-cgt/lib/libc.a \
-	-o $@ $(MAIN_OBJECTS)
+	@$(PRU_LD) -z --entry_point=main \
+	$(PRU_LIBS) \
+	$(MAIN_OBJECTS) \
+	AM335x_PRU.cmd \
+	-o $@
 	@echo "Main firmware linked successfully: $@"
 
 $(FIRMWARE_DIR)/ad7606_sampler.fw: $(FIRMWARE_DIR)/ad7606_sampler.out
