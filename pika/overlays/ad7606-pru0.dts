@@ -1,6 +1,3 @@
-/dts-v1/;
-/plugin/;
-
 /*
  * Device Tree Overlay for AD7606 ADC with PRU0
  * 
@@ -38,114 +35,83 @@
  * - Pin offsets are from AM335x TRM Table 9-10 (Control Module Registers)
  */
 
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/pinctrl/am33xx.h>
+
 / {
     compatible = "ti,beaglebone", "ti,beaglebone-black";
-    
-    /* Identification */
     part-number = "BB-PRU0-AD7606";
     version = "00A0";
-    
-    /* Exclusive use declaration - prevents conflicts with other overlays */
-    exclusive-use =
-        /* PRU0 output pins */
-        "P9.31",    /* PRU0 R30.0 - CONVST */
-        
-        /* PRU0 input pins */
-        "P9.29",    /* PRU0 R31.0 - BUSY */
-        "P9.27",    /* PRU0 R31.1 - D0 */
-        "P9.25",    /* PRU0 R31.2 - D1 */
-        "P9.28",    /* PRU0 R31.3 - D2 */
-        "P9.30",    /* PRU0 R31.4 - D3 */
-        "P9.92",    /* PRU0 R31.5 - D4 */
-        "P9.42",    /* PRU0 R31.6 - D5 */
-        "P9.91",    /* PRU0 R31.7 - D6 */
-        "P9.41",    /* PRU0 R31.8 - D7 */
-        "P8.45",    /* PRU0 R31.9 - D8 */
-        "P8.46",    /* PRU0 R31.10 - D9 */
-        "P8.43",    /* PRU0 R31.11 - D10 */
-        "P8.44",    /* PRU0 R31.12 - D11 */
-        "P8.41",    /* PRU0 R31.13 - D12 */
-        "P8.42",    /* PRU0 R31.14 - D13 */
-        "P8.39",    /* PRU0 R31.15 - D14 */
-        "P8.40",    /* PRU0 R31.16 - D15 */
-        
-        /* PRU subsystem */
-        "pru0";
-    
+
     /*
-     * Fragment 0: Disable HDMI (LCD controller)
-     * 
-     * The BeagleBone Black HDMI cape uses many pins that overlap with PRU0.
-     * We must disable the LCD controller to free these pins for PRU use.
+     * Fragment 0 – Disable McASP (audio steals PRU pins)
      */
     fragment@0 {
+        target = <&mcasp0>;
+        __overlay__ {
+            status = "disabled";
+        };
+    };
+
+    /*
+     * Fragment 1 – Disable HDMI (LCD controller)
+     */
+    fragment@1 {
         target = <&lcdc>;
         __overlay__ {
             status = "disabled";
         };
     };
-    
+
     /*
-     * Fragment 1: PRU0 Pin Multiplexing Configuration
-     * 
-     * Configure AM335x pin multiplexing to route PRU0 signals to header pins.
-     * Each entry format: <register_offset pin_mode>
-     * 
-     * Pin modes:
-     * - 0x05: Mode 5, output, pull-down disabled (for PRU outputs)
-     * - 0x26: Mode 6, input, pull-down enabled (for PRU inputs)
-     * 
-     * Register offsets from AM335x TRM Table 9-10:
-     * - Add 0x800 base offset for control module
-     * - Offsets listed are from control module base
+     * Fragment 2 – PRU pinmux
      */
-    fragment@1 {
+    fragment@2 {
         target = <&am33xx_pinmux>;
         __overlay__ {
-            pru0_ad7606_pins: pinmux_pru0_ad7606_pins {
+            pinmux_pru0_ad7606_pins: pinmux_pru0_ad7606_pins {
                 pinctrl-single,pins = <
-                    /* PRU0 R30.0 - CONVST output (P9.31) */
-                    0x190 0x05  /* mcasp0_aclkx.pr1_pru0_pru_r30_0, MODE5 | OUTPUT */
-                    
-                    /* PRU0 R31.0 - BUSY input (P9.29) */
-                    0x194 0x26  /* mcasp0_fsx.pr1_pru0_pru_r31_0, MODE6 | INPUT_PULLDOWN */
-                    
-                    /* PRU0 R31.1-8 - Data bits D0-D7 (P9 header) */
-                    0x1a4 0x26  /* mcasp0_fsr.pr1_pru0_pru_r31_1, MODE6 | INPUT_PULLDOWN (P9.27 - D0) */
-                    0x1ac 0x26  /* mcasp0_ahclkx.pr1_pru0_pru_r31_2, MODE6 | INPUT_PULLDOWN (P9.25 - D1) */
-                    0x19c 0x26  /* mcasp0_ahclkr.pr1_pru0_pru_r31_3, MODE6 | INPUT_PULLDOWN (P9.28 - D2) */
-                    0x198 0x26  /* mcasp0_axr0.pr1_pru0_pru_r31_4, MODE6 | INPUT_PULLDOWN (P9.30 - D3) */
-                    0x1a0 0x26  /* mcasp0_aclkr.pr1_pru0_pru_r31_5, MODE6 | INPUT_PULLDOWN (P9.92 - D4) */
-                    0x164 0x26  /* eCAP0_in_PWM0_out.pr1_pru0_pru_r31_6, MODE6 | INPUT_PULLDOWN (P9.42 - D5) */
-                    0x1a8 0x26  /* mcasp0_axr1.pr1_pru0_pru_r31_7, MODE6 | INPUT_PULLDOWN (P9.91 - D6) */
-                    0x1b4 0x26  /* xdma_event_intr1.pr1_pru0_pru_r31_8, MODE6 | INPUT_PULLDOWN (P9.41 - D7) */
-                    
-                    /* PRU0 R31.9-16 - Data bits D8-D15 (P8 header) */
-                    0x0a0 0x26  /* lcd_data0.pr1_pru0_pru_r31_9, MODE6 | INPUT_PULLDOWN (P8.45 - D8) */
-                    0x0a4 0x26  /* lcd_data1.pr1_pru0_pru_r31_10, MODE6 | INPUT_PULLDOWN (P8.46 - D9) */
-                    0x0a8 0x26  /* lcd_data2.pr1_pru0_pru_r31_11, MODE6 | INPUT_PULLDOWN (P8.43 - D10) */
-                    0x0ac 0x26  /* lcd_data3.pr1_pru0_pru_r31_12, MODE6 | INPUT_PULLDOWN (P8.44 - D11) */
-                    0x0b0 0x26  /* lcd_data4.pr1_pru0_pru_r31_13, MODE6 | INPUT_PULLDOWN (P8.41 - D12) */
-                    0x0b4 0x26  /* lcd_data5.pr1_pru0_pru_r31_14, MODE6 | INPUT_PULLDOWN (P8.42 - D13) */
-                    0x0b8 0x26  /* lcd_data6.pr1_pru0_pru_r31_15, MODE6 | INPUT_PULLDOWN (P8.39 - D14) */
-                    0x0bc 0x26  /* lcd_data7.pr1_pru0_pru_r31_16, MODE6 | INPUT_PULLDOWN (P8.40 - D15) */
+                    /* CONVST  (P9.31) PRU0_R30_0 */
+                    0x190 (PIN_OUTPUT | MUX_MODE5)
+
+                    /* BUSY    (P9.29) PRU0_R31_0 */
+                    0x194 (PIN_INPUT_PULLDOWN | MUX_MODE6)
+
+                    /* D0–D7 */
+                    0x1a4 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.27 */
+                    0x1ac (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.25 */
+                    0x19c (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.28 */
+                    0x198 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.30 */
+                    0x1a0 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.92 */
+                    0x164 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.42 */
+                    0x1a8 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.91 */
+                    0x1b4 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.41 */
+
+                    /* D8–D15 */
+                    0x0a0 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.45 */
+                    0x0a4 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.46 */
+                    0x0a8 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.43 */
+                    0x0ac (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.44 */
+                    0x0b0 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.41 */
+                    0x0b4 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.42 */
+                    0x0b8 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.39 */
+                    0x0bc (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.40 */
                 >;
             };
         };
     };
-    
+
     /*
-     * Fragment 2: Enable PRU Subsystem
-     * 
-     * Enable the PRU subsystem and apply the pin configuration.
-     * The PRU subsystem includes both PRU cores, shared memory, and interrupt controller.
+     * Fragment 3 – Enable PRU and apply pins
      */
-    fragment@2 {
+    fragment@3 {
         target = <&pruss>;
         __overlay__ {
             status = "okay";
             pinctrl-names = "default";
-            pinctrl-0 = <&pru0_ad7606_pins>;
+            pinctrl-0 = <&pinmux_pru0_ad7606_pins>;
         };
     };
 };
