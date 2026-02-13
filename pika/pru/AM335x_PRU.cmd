@@ -8,7 +8,8 @@ MEMORY
 
 SECTIONS
 {
-    .text : > PRU0_IRAM
-    .data : > PRU0_DRAM
-    .bss  : > PRU0_DRAM
+    .text           : > PRU0_IRAM
+    .data           : > PRU0_DRAM
+    .bss            : > PRU0_DRAM
+    .resource_table : > PRU0_DRAM
 }

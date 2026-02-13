@@ -55,11 +55,13 @@ PRU_LINKER_CMD := AM335x_PRU.cmd
 
 # Main sampling firmware sources
 MAIN_SOURCES := $(SRC_DIR)/pru_main.c \
+                $(SRC_DIR)/resource_table.c \
                 $(SRC_DIR)/timing.c \
                 $(SRC_DIR)/adc_parallel.c
 
 # Bringup test firmware sources
 BRINGUP_SOURCES := $(SRC_DIR)/pru_bringup.c \
+                   $(SRC_DIR)/resource_table.c \
                    $(SRC_DIR)/timing.c
 
 # Header dependencies
@@ -126,6 +128,7 @@ $(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) | build_dir
 $(FIRMWARE_DIR)/ad7606_sampler.out: $(MAIN_OBJECTS) firmware_dir
 	@echo "Linking main firmware: $@"
 	@$(PRU_LD) -z --entry_point=main \
+	-u pru_remoteproc_ResourceTable \
 	$(MAIN_OBJECTS) \
 	AM335x_PRU.cmd \
 	$(PRU_LIBS) \
@@ -140,7 +143,12 @@ $(FIRMWARE_DIR)/ad7606_sampler.fw: $(FIRMWARE_DIR)/ad7606_sampler.out
 # Bringup firmware
 $(FIRMWARE_DIR)/bringup_test.out: $(BRINGUP_OBJECTS) firmware_dir
 	@echo "Linking bringup firmware: $@"
-	@$(PRU_LD) --entry_point=main -o $@ $(BRINGUP_OBJECTS)
+	@$(PRU_LD) -z --entry_point=main \
+	-u pru_remoteproc_ResourceTable \
+	$(BRINGUP_OBJECTS) \
+	AM335x_PRU.cmd \
+	$(PRU_LIBS) \
+	-o $@
 	@echo "Bringup firmware linked successfully: $@"
 
 $(FIRMWARE_DIR)/bringup_test.fw: $(FIRMWARE_DIR)/bringup_test.out
@@ -169,10 +177,10 @@ load: $(MAIN_FIRMWARE)
 		echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; \
 		exit 1; \
 	fi
-	@echo "Copying firmware to /lib/firmware..."
-	@sudo cp $< /lib/firmware/
+	@echo "Copying firmware to $(PRU0_FIRMWARE_PATH)..."
+	@sudo cp $(FIRMWARE_DIR)/ad7606_sampler.out $(PRU0_FIRMWARE_PATH)
 	@echo "Pointing PRU0 to firmware..."
-	@echo $(notdir $<) | sudo tee /sys/class/remoteproc/remoteproc1/firmware
+	@echo $(notdir $(PRU0_FIRMWARE_PATH)) | sudo tee $(PRU0_FIRMWARE) > /dev/null
 	@echo "Starting PRU0..."
 	@echo start | sudo tee /sys/class/remoteproc/remoteproc1/state
 	@echo "PRU0 firmware loaded and started"
@@ -188,10 +196,10 @@ load-bringup: $(BRINGUP_FIRMWARE)
 	@if [ "$$(cat /sys/class/remoteproc/remoteproc1/state)" != "offline" ]; then \
 		echo stop | sudo tee /sys/class/remoteproc/remoteproc1/state; \
 	fi
-	@echo "Copying firmware to /lib/firmware..."
-	@sudo cp $(BRINGUP_FIRMWARE) /lib/firmware/
+	@echo "Copying firmware to $(PRU0_FIRMWARE_PATH)..."
+	@sudo cp $(FIRMWARE_DIR)/bringup_test.out $(PRU0_FIRMWARE_PATH)
 	@echo "Pointing PRU0 to bringup firmware..."
-	@echo $(notdir $(BRINGUP_FIRMWARE)) | sudo tee /sys/class/remoteproc/remoteproc1/firmware
+	@echo $(notdir $(PRU0_FIRMWARE_PATH)) | sudo tee $(PRU0_FIRMWARE) > /dev/null
 	@echo "Starting PRU0..."
 	@echo start | sudo tee /sys/class/remoteproc/remoteproc1/state
 	@echo "PRU0 bringup firmware loaded and started"

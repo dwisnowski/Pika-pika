@@ -7,8 +7,12 @@
 *.obj
 *.o
 *.ko
+*.fw
 
 # DKMS / kernel junk (if any ends up in repo)
 *.mod
 *.cmd
 *.symvers
+
+# hexpru intermediate hex files
+*.x0?
