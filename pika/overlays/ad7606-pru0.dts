@@ -1,9 +1,12 @@
+/dts-v1/;
+/plugin/;
+
 /*
  * Device Tree Overlay for AD7606 ADC with PRU0
- * 
+ *
  * This overlay configures the BeagleBone Black PRU0 pins for interfacing
  * with the AD7606 16-bit, 8-channel simultaneous sampling ADC.
- * 
+ *
  * Pin Mapping (BeagleBone Black P9 Header):
  * ==========================================
  * Signal    | BBB Pin | PRU Pin      | Direction | Description
@@ -26,19 +29,14 @@
  * D13       | P8.42   | PRU0 R31.14  | Input     | Data bit 13
  * D14       | P8.39   | PRU0 R31.15  | Input     | Data bit 14
  * D15       | P8.40   | PRU0 R31.16  | Input     | Data bit 15 (MSB)
- * 
+ *
  * Notes:
- * - HDMI must be disabled to free up pins for PRU use
- * - PRU0 R30 register is used for outputs (CONVST)
- * - PRU0 R31 register is used for inputs (BUSY and 16-bit parallel data)
- * - Pin mode 0x05 = PRU output, mode 0x26 = PRU input with pull-down
- * - Pin offsets are from AM335x TRM Table 9-10 (Control Module Registers)
+ * - McASP (audio) must be disabled so it releases PRU pins (e.g. PIN100).
+ * - HDMI (LCD controller) must be disabled to free P8 LCD data pins.
+ * - PRU0 R30 register is used for outputs (CONVST).
+ * - PRU0 R31 register is used for inputs (BUSY and 16-bit parallel data).
+ * - Uses U-Boot overlays; no bone_capemgr.
  */
-
-/dts-v1/;
-/plugin/;
-
-#include <dt-bindings/pinctrl/am33xx.h>
 
 / {
     compatible = "ti,beaglebone", "ti,beaglebone-black";
@@ -46,7 +44,7 @@
     version = "00A0";
 
     /*
-     * Fragment 0 – Disable McASP (audio steals PRU pins)
+     * Fragment 0 – Disable McASP (audio steals PRU pins, e.g. PIN100)
      */
     fragment@0 {
         target = <&mcasp0>;
@@ -66,47 +64,57 @@
     };
 
     /*
-     * Fragment 2 – PRU pinmux
+     * Fragment 2 – Release P9.31 from ocp:P9_31_pinmux so PRU can claim PIN100
      */
     fragment@2 {
+        target = <&P9_31_pinmux>;
+        __overlay__ {
+            status = "disabled";
+        };
+    };
+
+    /*
+     * Fragment 3 – PRU pinmux (0x05 = output, 0x26 = input pull-down, MODE5/6 = PRU)
+     */
+    fragment@3 {
         target = <&am33xx_pinmux>;
         __overlay__ {
             pinmux_pru0_ad7606_pins: pinmux_pru0_ad7606_pins {
                 pinctrl-single,pins = <
                     /* CONVST  (P9.31) PRU0_R30_0 */
-                    0x190 (PIN_OUTPUT | MUX_MODE5)
+                    0x190 0x05
 
                     /* BUSY    (P9.29) PRU0_R31_0 */
-                    0x194 (PIN_INPUT_PULLDOWN | MUX_MODE6)
+                    0x194 0x26
 
                     /* D0–D7 */
-                    0x1a4 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.27 */
-                    0x1ac (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.25 */
-                    0x19c (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.28 */
-                    0x198 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.30 */
-                    0x1a0 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.92 */
-                    0x164 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.42 */
-                    0x1a8 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.91 */
-                    0x1b4 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P9.41 */
+                    0x1a4 0x26  /* P9.27 */
+                    0x1ac 0x26  /* P9.25 */
+                    0x19c 0x26  /* P9.28 */
+                    0x198 0x26  /* P9.30 */
+                    0x1a0 0x26  /* P9.92 */
+                    0x164 0x26  /* P9.42 */
+                    0x1a8 0x26  /* P9.91 */
+                    0x1b4 0x26  /* P9.41 */
 
                     /* D8–D15 */
-                    0x0a0 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.45 */
-                    0x0a4 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.46 */
-                    0x0a8 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.43 */
-                    0x0ac (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.44 */
-                    0x0b0 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.41 */
-                    0x0b4 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.42 */
-                    0x0b8 (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.39 */
-                    0x0bc (PIN_INPUT_PULLDOWN | MUX_MODE6)  /* P8.40 */
+                    0x0a0 0x26  /* P8.45 */
+                    0x0a4 0x26  /* P8.46 */
+                    0x0a8 0x26  /* P8.43 */
+                    0x0ac 0x26  /* P8.44 */
+                    0x0b0 0x26  /* P8.41 */
+                    0x0b4 0x26  /* P8.42 */
+                    0x0b8 0x26  /* P8.39 */
+                    0x0bc 0x26  /* P8.40 */
                 >;
             };
         };
     };
 
     /*
-     * Fragment 3 – Enable PRU and apply pins
+     * Fragment 4 – Enable PRU and apply pins
      */
-    fragment@3 {
+    fragment@4 {
         target = <&pruss>;
         __overlay__ {
             status = "okay";
