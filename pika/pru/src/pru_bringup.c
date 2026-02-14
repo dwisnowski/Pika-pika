@@ -21,12 +21,15 @@
 #include <stdint.h>
 #include "timing.h"
 #include "pru_config.h"
+#include <pru_cfg.h>
+#include "resource_table.h"
+
+
+/* Just tell the compiler the table exists in another file */
+extern const struct my_resource_table pru_remoteproc_ResourceTable;
 
 /* PRU R30 register - GPIO outputs */
-#define PRU0_R30 (*((volatile uint32_t *)0x00000000))
-
-/* PRU remoteproc resource table */
-extern const uint32_t pru_remoteproc_ResourceTable[];
+volatile register uint32_t __R30; // Output register
 
 /**
  * Main entry point for bring-up test firmware
@@ -49,6 +52,14 @@ extern const uint32_t pru_remoteproc_ResourceTable[];
  * - 7.3: Use simple cycle-based delays
  */
 void main(void) {
+
+    /* Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
+    /* This ensures the PRU can actually talk to the outside world */
+    (*(volatile uint32_t *)0x26004) &= ~(1 << 4);
+
+    /* Use it once so the linker doesn't throw it away */
+    (void)pru_remoteproc_ResourceTable; 
+
     /* Calculate toggle period for 1 kHz square wave
      * 1 kHz = 1000 Hz frequency
      * Period = 1/1000 = 1 ms = 1000 µs
@@ -59,15 +70,13 @@ void main(void) {
      */
     uint32_t toggle_period = 100000;  // 500 µs @ 200 MHz = 1 kHz square wave
     
-
-    (void)pru_remoteproc_ResourceTable;  /* prevent linker from discarding resource table */ 
     
     /* Infinite loop: toggle CONVST pin at regular intervals */
     while (1) {
         /* Toggle CONVST pin (XOR with bit mask) */
-        PRU0_R30 ^= (1 << PIN_CONVST);
+        __R30 ^= (1 << PIN_CONVST); 
         
-        /* Wait for next toggle time */
+        /* Wait for next toggle time  uses __delay_cycles(cycles) internally which is a busy-wait */
         wait_cycles(toggle_period);
     }
     

@@ -53,16 +53,37 @@
 
 /* ============================================================================
  * PRU Pin Assignments (Requirement 2.4)
+
+
+This mapping avoids the eMMC (P9.42) and HDMI Video/Audio pins.
+
+Signal	BBB Pin	PRU Register	Mode
+---------------------------------------
+CONVST	P9.27	R30.5	pruout
+BUSY	P8.40	R31.7	pruin
+Data 0	P8.45	R31.0	pruin
+Data 1	P8.46	R31.1	pruin
+Data 2	P8.43	R31.2	pruin
+Data 3	P8.44	R31.3	pruin
+Data 4	P8.41	R31.4	pruin
+Data 5	P8.42	R31.5	pruin
+Data 6	P8.39	R31.6	pruin
+...to Data 15	(See P8 R31 Map)	R31.8-15	pruin
+---------------------------------------
  * ============================================================================ */
 
-/** CONVST output pin (PRU0 R30.0) */
-#define PIN_CONVST 0
+/** CONVST output pin (PRU0 R30.5) -> Physical P9.27 */
+#define PIN_CONVST 5 
 
-/** BUSY input pin (PRU0 R31.0) */
-#define PIN_BUSY 0
+/** BUSY input pin (PRU0 R31.7) -> Physical P8.40 */
+#define PIN_BUSY 7
 
-/** Base pin for 16-bit parallel data (PRU0 R31.1-16) */
-#define PIN_DATA_BASE 1
+/** 
+ * Base pin for 16-bit parallel data (PRU0 R31.0-15)
+ * Using P8 cluster: P8.45, 46, 43, 44, 41, 42, 39, 40, 27, 28, 29, 30, 21, 20, 16, 15
+ * This maps to R31 bits 0 through 15 sequentially.
+ */
+#define PIN_DATA_BASE 0 
 
 /* ============================================================================
  * Channel Configuration (Requirement 2.3)

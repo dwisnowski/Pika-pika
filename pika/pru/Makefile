@@ -204,6 +204,57 @@ load-bringup: $(BRINGUP_FIRMWARE)
 	@echo start | sudo tee /sys/class/remoteproc/remoteproc1/state
 	@echo "PRU0 bringup firmware loaded and started"
 
+# Dynamically find the remoteproc index for PRU0 and PRU1
+PRU0_RPROC := $(shell grep -l "4a334000.pru" /sys/class/remoteproc/remoteproc*/name | cut -d '/' -f 5)
+PRU1_RPROC := $(shell grep -l "4a338000.pru" /sys/class/remoteproc/remoteproc*/name | cut -d '/' -f 5)
+
+# Example usage for your load command
+load-pru0:
+	@echo "Loading PRU0 via $(PRU0_RPROC)..."
+	@echo stop | sudo tee /sys/class/remoteproc/$(PRU0_RPROC)/state || true
+	@sudo cp firmware/bringup_test.out /lib/firmware/am335x-pru0-fw
+	@echo am335x-pru0-fw | sudo tee /sys/class/remoteproc/$(PRU0_RPROC)/firmware
+	@echo start | sudo tee /sys/class/remoteproc/$(PRU0_RPROC)/state
+
+
+
+wakeup-pru:
+	@ls /sys/class/remoteproc/
+	@echo "Waking up PRU0..."
+	@sudo modprobe pru_rproc
+	@echo "PRU0 waked up"
+	@ls /sys/class/remoteproc/
+
+pru-info:
+	@grep -H . /sys/class/remoteproc/remoteproc*/state
+
+bringup-pins:
+	@sudo config-pin P9.27 pruout  # CONVST
+
+uart-pulse:
+	@echo "Logic Analyzer Sanity Check" | sudo tee /dev/ttyS0
+
+# Variables for P9.27 (Chip 3, Line 19)
+CHIP = 3
+LINE = 19
+ITERATIONS = 10
+# Duration in milliseconds (2000ms = 2s)
+MS_DELAY = 250
+# Duration in seconds for the "off" period
+SEC_DELAY = .2
+
+pin-test:
+	@echo "Configuring P9.27 as GPIO..."
+	config-pin P9.27 gpio
+	@echo "Toggling P9.27 $(ITERATIONS) times..."
+	@for i in $$(seq 1 $(ITERATIONS)); do \
+		echo "Iteration $$i: HIGH (Holding for $(MS_DELAY)ms)"; \
+		gpioset --mode time --sec 0 --usec $$(($(MS_DELAY) * 1000)) $(CHIP) $(LINE)=1; \
+		echo "Iteration $$i: LOW (Holding for $(MS_DELAY)ms)"; \
+		gpioset --mode time --sec 0 --usec $$(($(MS_DELAY) * 1000)) $(CHIP) $(LINE)=0; \
+	done
+	@echo "Done."
+	
 
 # Stop PRU0 safely
 stop:
