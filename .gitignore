@@ -1,6 +1,7 @@
 # Build artifacts
 /build/
 /firmware/
+.git-backup/
 
 # PRU outputs
 *.out
