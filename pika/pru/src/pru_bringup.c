@@ -19,7 +19,6 @@
  */
 
 #include <stdint.h>
-#include "timing.h"
 #include "pru_config.h"
 #include <pru_cfg.h>
 #include "resource_table.h"
@@ -41,15 +40,6 @@ volatile register uint32_t __R30; // Output register
  * - Period: 1 ms = 1000 µs
  * - Half period (toggle interval): 500 µs
  * - Cycles per toggle: 500 µs × 200 cycles/µs = 100,000 cycles
- * 
- * Note: The task description mentions 200,000 cycles which would give
- * 1 ms toggle interval = 500 Hz square wave. Using 100,000 cycles for
- * 1 kHz as specified in requirements 7.1.
- * 
- * Requirements:
- * - 7.1: Toggle GPIO pins at known frequency (1 kHz)
- * - 7.2: No shared memory dependencies
- * - 7.3: Use simple cycle-based delays
  */
 void main(void) {
 
@@ -59,25 +49,13 @@ void main(void) {
 
     /* Use it once so the linker doesn't throw it away */
     (void)pru_remoteproc_ResourceTable; 
-
-    /* Calculate toggle period for 1 kHz square wave
-     * 1 kHz = 1000 Hz frequency
-     * Period = 1/1000 = 1 ms = 1000 µs
-     * Half period (time between toggles) = 500 µs
-     * Cycles = 500 µs × 200 cycles/µs = 100,000 cycles
-     * 
-     * This creates a 1 kHz square wave (1 ms period, 500 µs high, 500 µs low)
-     */
-    uint32_t toggle_period = 100000;  // 500 µs @ 200 MHz = 1 kHz square wave
     
     
     /* Infinite loop: toggle CONVST pin at regular intervals */
     while (1) {
         /* Toggle CONVST pin (XOR with bit mask) */
         __R30 ^= (1 << PIN_CONVST); 
-        
-        /* Wait for next toggle time  uses __delay_cycles(cycles) internally which is a busy-wait */
-        wait_cycles(toggle_period);
+        __delay_cycles(100000); 
     }
     
     /* This point is never reached - firmware runs forever */

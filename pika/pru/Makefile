@@ -185,24 +185,41 @@ load: $(MAIN_FIRMWARE)
 	@echo start | sudo tee /sys/class/remoteproc/remoteproc1/state
 	@echo "PRU0 firmware loaded and started"
 
-# Load bringup test firmware
+
+# Dynamically discover the index for PRU0 (4a334000)
+PRU0_ID := $(shell grep -l "4a334000.pru" /sys/class/remoteproc/remoteproc*/name | cut -d '/' -f 5)
+
 load-bringup: $(BRINGUP_FIRMWARE)
-	@echo "Loading bringup firmware to PRU0..."
-	@if [ ! -d /sys/class/remoteproc/remoteproc1 ]; then \
-		echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; \
-		exit 1; \
+	@config-pin P9.27 pruout
+	@echo "Loading to $(PRU0_ID) (PRU0)..."
+	@if [ "$$(cat /sys/class/remoteproc/$(PRU0_ID)/state)" != "offline" ]; then \
+		echo stop | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state; \
 	fi
-	@echo "Stopping PRU0 if running..."
-	@if [ "$$(cat /sys/class/remoteproc/remoteproc1/state)" != "offline" ]; then \
-		echo stop | sudo tee /sys/class/remoteproc/remoteproc1/state; \
-	fi
-	@echo "Copying firmware to $(PRU0_FIRMWARE_PATH)..."
-	@sudo cp $(FIRMWARE_DIR)/bringup_test.out $(PRU0_FIRMWARE_PATH)
-	@echo "Pointing PRU0 to bringup firmware..."
-	@echo $(notdir $(PRU0_FIRMWARE_PATH)) | sudo tee $(PRU0_FIRMWARE) > /dev/null
-	@echo "Starting PRU0..."
-	@echo start | sudo tee /sys/class/remoteproc/remoteproc1/state
-	@echo "PRU0 bringup firmware loaded and started"
+	@sudo cp firmware/bringup_test.out /lib/firmware/am335x-pru0-fw
+	@echo am335x-pru0-fw | sudo tee /sys/class/remoteproc/$(PRU0_ID)/firmware
+	@echo start | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state
+
+
+# # Load bringup test firmware
+# load-bringup: $(BRINGUP_FIRMWARE)
+# 	@echo "Configuring P9.27 as pruout..."
+# 	@config-pin P9.27 pruout
+# 	@echo "Loading bringup firmware to PRU0..."
+# 	@if [ ! -d /sys/class/remoteproc/remoteproc1 ]; then \
+# 		echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; \
+# 		exit 1; \
+# 	fi
+# 	@echo "Stopping PRU0 if running..."
+# 	@if [ "$$(cat /sys/class/remoteproc/remoteproc1/state)" != "offline" ]; then \
+# 		echo stop | sudo tee /sys/class/remoteproc/remoteproc1/state; \
+# 	fi
+# 	@echo "Copying firmware to $(PRU0_FIRMWARE_PATH)..."
+# 	@sudo cp $(FIRMWARE_DIR)/bringup_test.out $(PRU0_FIRMWARE_PATH)
+# 	@echo "Pointing PRU0 to bringup firmware..."
+# 	@echo $(notdir $(PRU0_FIRMWARE_PATH)) | sudo tee $(PRU0_FIRMWARE) > /dev/null
+# 	@echo "Starting PRU0..."
+# 	@echo start | sudo tee /sys/class/remoteproc/remoteproc1/state
+# 	@echo "PRU0 bringup firmware loaded and started"
 
 # Dynamically find the remoteproc index for PRU0 and PRU1
 PRU0_RPROC := $(shell grep -l "4a334000.pru" /sys/class/remoteproc/remoteproc*/name | cut -d '/' -f 5)
@@ -228,9 +245,6 @@ wakeup-pru:
 pru-info:
 	@grep -H . /sys/class/remoteproc/remoteproc*/state
 
-bringup-pins:
-	@sudo config-pin P9.27 pruout  # CONVST
-
 uart-pulse:
 	@echo "Logic Analyzer Sanity Check" | sudo tee /dev/ttyS0
 
@@ -245,7 +259,7 @@ SEC_DELAY = .2
 
 pin-test:
 	@echo "Configuring P9.27 as GPIO..."
-	config-pin P9.27 gpio
+	@config-pin P9.27 gpio
 	@echo "Toggling P9.27 $(ITERATIONS) times..."
 	@for i in $$(seq 1 $(ITERATIONS)); do \
 		echo "Iteration $$i: HIGH (Holding for $(MS_DELAY)ms)"; \
