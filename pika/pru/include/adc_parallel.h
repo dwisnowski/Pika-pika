@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 #include "pru_config.h"
-#include "timing.h"
 
 /**
  * ADC Parallel Interface
@@ -73,7 +72,7 @@ static inline uint16_t adc_read_channel(uint8_t channel) {
 static inline int adc_trigger_and_wait(void) {
     // Assert CONVST pulse
     adc_assert_convst();
-    wait_cycles(CONVST_PULSE_CYCLES);
+    __delay_cycles(CONVST_PULSE_CYCLES);
     adc_deassert_convst();
     
     // Wait for BUSY to go high (conversion started)

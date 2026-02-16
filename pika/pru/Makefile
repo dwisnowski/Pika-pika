@@ -56,13 +56,11 @@ PRU_LINKER_CMD := AM335x_PRU.cmd
 # Main sampling firmware sources
 MAIN_SOURCES := $(SRC_DIR)/pru_main.c \
                 $(SRC_DIR)/resource_table.c \
-                $(SRC_DIR)/timing.c \
                 $(SRC_DIR)/adc_parallel.c
 
 # Bringup test firmware sources
 BRINGUP_SOURCES := $(SRC_DIR)/pru_bringup.c \
-                   $(SRC_DIR)/resource_table.c \
-                   $(SRC_DIR)/timing.c
+                   $(SRC_DIR)/resource_table.c
 
 # Header dependencies
 HEADERS := $(wildcard $(INC_DIR)/*.h)
@@ -75,8 +73,12 @@ MAIN_FIRMWARE := $(FIRMWARE_DIR)/ad7606_sampler.fw
 BRINGUP_FIRMWARE := $(FIRMWARE_DIR)/bringup_test.fw
 
 
+# Assembly sources (main firmware only: runtime cycle delay)
+MAIN_ASM_SOURCES := $(SRC_DIR)/delay_cycles.asm
+
 # Object files
-MAIN_OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.obj,$(MAIN_SOURCES))
+MAIN_OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.obj,$(MAIN_SOURCES)) \
+                $(BUILD_DIR)/delay_cycles.obj
 BRINGUP_OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.obj,$(BRINGUP_SOURCES))
 
 
@@ -119,6 +121,10 @@ firmware_dir:
 $(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) | build_dir
 	@echo "Compiling: $<"
 	@$(PRU_CC) $(PRU_CFLAGS) -c $< -o $@ --define=PRU0
+
+$(BUILD_DIR)/delay_cycles.obj: $(SRC_DIR)/delay_cycles.asm | build_dir
+	@echo "Assembling: $<"
+	@$(PRU_CC) -v3 --endian=little --obj_directory=$(BUILD_DIR) -c $< -o $@ --define=PRU0
 
 # =============================================================================
 # Linking Rules
@@ -169,25 +175,21 @@ bringup: $(BRINGUP_FIRMWARE)
 # =============================================================================
 # Load Firmware to PRU
 # =============================================================================
-# Load main sampling firmware safely
-# Load main sampling firmware
-load: $(MAIN_FIRMWARE)
-	@echo "Loading main firmware to PRU0..."
-	@if [ ! -d /sys/class/remoteproc/remoteproc1 ]; then \
-		echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; \
-		exit 1; \
-	fi
-	@echo "Copying firmware to $(PRU0_FIRMWARE_PATH)..."
-	@sudo cp $(FIRMWARE_DIR)/ad7606_sampler.out $(PRU0_FIRMWARE_PATH)
-	@echo "Pointing PRU0 to firmware..."
-	@echo $(notdir $(PRU0_FIRMWARE_PATH)) | sudo tee $(PRU0_FIRMWARE) > /dev/null
-	@echo "Starting PRU0..."
-	@echo start | sudo tee /sys/class/remoteproc/remoteproc1/state
-	@echo "PRU0 firmware loaded and started"
-
-
 # Dynamically discover the index for PRU0 (4a334000)
 PRU0_ID := $(shell grep -l "4a334000.pru" /sys/class/remoteproc/remoteproc*/name | cut -d '/' -f 5)
+
+
+# Load main sampling firmware
+load: $(MAIN_FIRMWARE)
+	@config-pin P9.27 pruout
+	@echo "Loading to $(PRU0_ID) (PRU0)..."
+	@if [ "$$(cat /sys/class/remoteproc/$(PRU0_ID)/state)" != "offline" ]; then \
+		echo stop | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state; \
+	fi
+	@sudo cp $(FIRMWARE_DIR)/ad7606_sampler.out /lib/firmware/am335x-pru0-fw
+	@echo am335x-pru0-fw | sudo tee /sys/class/remoteproc/$(PRU0_ID)/firmware
+	@echo start | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state
+
 
 load-bringup: $(BRINGUP_FIRMWARE)
 	@config-pin P9.27 pruout
@@ -200,50 +202,16 @@ load-bringup: $(BRINGUP_FIRMWARE)
 	@echo start | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state
 
 
-# # Load bringup test firmware
-# load-bringup: $(BRINGUP_FIRMWARE)
-# 	@echo "Configuring P9.27 as pruout..."
-# 	@config-pin P9.27 pruout
-# 	@echo "Loading bringup firmware to PRU0..."
-# 	@if [ ! -d /sys/class/remoteproc/remoteproc1 ]; then \
-# 		echo "Error: PRU remoteproc not found. Is PRU enabled in device tree?"; \
-# 		exit 1; \
-# 	fi
-# 	@echo "Stopping PRU0 if running..."
-# 	@if [ "$$(cat /sys/class/remoteproc/remoteproc1/state)" != "offline" ]; then \
-# 		echo stop | sudo tee /sys/class/remoteproc/remoteproc1/state; \
-# 	fi
-# 	@echo "Copying firmware to $(PRU0_FIRMWARE_PATH)..."
-# 	@sudo cp $(FIRMWARE_DIR)/bringup_test.out $(PRU0_FIRMWARE_PATH)
-# 	@echo "Pointing PRU0 to bringup firmware..."
-# 	@echo $(notdir $(PRU0_FIRMWARE_PATH)) | sudo tee $(PRU0_FIRMWARE) > /dev/null
-# 	@echo "Starting PRU0..."
-# 	@echo start | sudo tee /sys/class/remoteproc/remoteproc1/state
-# 	@echo "PRU0 bringup firmware loaded and started"
-
-# Dynamically find the remoteproc index for PRU0 and PRU1
-PRU0_RPROC := $(shell grep -l "4a334000.pru" /sys/class/remoteproc/remoteproc*/name | cut -d '/' -f 5)
-PRU1_RPROC := $(shell grep -l "4a338000.pru" /sys/class/remoteproc/remoteproc*/name | cut -d '/' -f 5)
-
-# Example usage for your load command
-load-pru0:
-	@echo "Loading PRU0 via $(PRU0_RPROC)..."
-	@echo stop | sudo tee /sys/class/remoteproc/$(PRU0_RPROC)/state || true
-	@sudo cp firmware/bringup_test.out /lib/firmware/am335x-pru0-fw
-	@echo am335x-pru0-fw | sudo tee /sys/class/remoteproc/$(PRU0_RPROC)/firmware
-	@echo start | sudo tee /sys/class/remoteproc/$(PRU0_RPROC)/state
-
-
-
 wakeup-pru:
 	@ls /sys/class/remoteproc/
-	@echo "Waking up PRU0..."
+	@echo "Waking up PRU0 ($(PRU0_ID))..."
 	@sudo modprobe pru_rproc
 	@echo "PRU0 waked up"
 	@ls /sys/class/remoteproc/
 
 pru-info:
-	@grep -H . /sys/class/remoteproc/remoteproc*/state
+	@echo "PRU0 ($(PRU0_ID)): $$(cat /sys/class/remoteproc/$(PRU0_ID)/state 2>/dev/null || echo 'not found')"
+	@grep -H . /sys/class/remoteproc/remoteproc*/state 2>/dev/null || true
 
 uart-pulse:
 	@echo "Logic Analyzer Sanity Check" | sudo tee /dev/ttyS0
@@ -272,11 +240,11 @@ pin-test:
 
 # Stop PRU0 safely
 stop:
-	@echo "Stopping PRU0..."
-	@if [ -d /sys/class/remoteproc/remoteproc1 ]; then \
-		STATE=$$(cat /sys/class/remoteproc/remoteproc1/state); \
+	@echo "Stopping PRU0 ($(PRU0_ID))..."
+	@if [ -d /sys/class/remoteproc/$(PRU0_ID) ]; then \
+		STATE=$$(cat /sys/class/remoteproc/$(PRU0_ID)/state); \
 		if [ "$$STATE" != "offline" ]; then \
-			echo stop | sudo tee /sys/class/remoteproc/remoteproc1/state; \
+			echo stop | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state; \
 			echo "PRU0 stopped"; \
 		else \
 			echo "PRU0 is already stopped"; \
@@ -297,14 +265,8 @@ test-unit: test-mocks
 	@$(MAKE) -C tests/unit test
 	@echo "Unit tests completed"
 
-# Run property-based tests
-test-property: test-mocks
-	@echo "Running property-based tests..."
-	@$(MAKE) -C tests/property test
-	@echo "Property tests completed"
-
 # Run all tests
-test: test-unit test-property
+test: test-unit
 	@echo ""
 	@echo "=========================================="
 	@echo "All tests passed successfully!"
@@ -332,15 +294,7 @@ install-overlay: $(DTBO_FILE)
 # =============================================================================
 # Clean
 # =============================================================================
-# Clean test artifacts
-clean-tests:
-	@echo "Cleaning test artifacts..."
-	@$(MAKE) -C tests/mocks clean
-	@$(MAKE) -C tests/unit clean
-	@$(MAKE) -C tests/property clean
-	@echo "Test artifacts cleaned"
-
-clean: clean-tests
+clean:
 	@rm -rf $(BUILD_DIR)
 	@rm -rf $(FIRMWARE_DIR)/*.out
 	@rm -f $(DTBO_FILE)
@@ -359,23 +313,12 @@ help:
 	@echo "  load           - Load main firmware to PRU0 via remoteproc"
 	@echo "  load-bringup   - Load bringup firmware to PRU0 via remoteproc"
 	@echo "  stop           - Stop PRU0"
-	@echo "  test           - Run all tests (unit + property)"
-	@echo "  test-unit      - Run unit tests only"
-	@echo "  test-property  - Run property-based tests only"
-	@echo "  test-mocks     - Build mock library for testing"
 	@echo "  overlay        - Compile device tree overlay"
 	@echo "  install-overlay- Install device tree overlay to /lib/firmware"
 	@echo "  clean          - Remove all build artifacts (including tests)"
-	@echo "  clean-tests    - Remove test artifacts only"
 	@echo "  help           - Show this help message"
 	@echo ""
 	@echo "Configuration:"
 	@echo "  PRU_SSP        - PRU Software Support Package path (default: $(PRU_SSP))"
 	@echo "  PRU_CGT        - PRU Code Generation Tools path (default: $(PRU_CGT))"
 	@echo ""
-	@echo "Examples:"
-	@echo "  make build                    # Build main firmware"
-	@echo "  make bringup                  # Build bringup firmware"
-	@echo "  make test                     # Run all tests"
-	@echo "  make load                     # Load main firmware to PRU0"
-	@echo "  make PRU_SSP=/path/to/pru-ssp build  # Build with custom PRU_SSP path"

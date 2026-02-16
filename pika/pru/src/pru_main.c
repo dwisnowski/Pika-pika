@@ -8,7 +8,7 @@
  * 1. Validates shared memory initialization (magic number)
  * 2. Reads and validates configuration parameters
  * 3. Initializes sampling state
- * 4. Runs the main sampling loop with cycle-accurate timing
+ * 4. Runs the main sampling loop with __delay_cycles (P9.27 CONVST, same as pru_bringup.c)
  * 5. Manages ring buffer for continuous data streaming
  * 
  * Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8, 5.9, 5.10, 6.1, 6.3
@@ -17,7 +17,6 @@
 #include <stdint.h>
 #include "shm_layout.h"
 #include "pru_config.h"
-#include "timing.h"
 #include "adc_parallel.h"
 
 /**
@@ -46,6 +45,9 @@
 
 /* PRU remoteproc resource table */
 extern const uint32_t pru_remoteproc_ResourceTable[];
+
+/** Runtime variable-cycle delay (assembly). Argument = iterations; each iteration = 2 cycles. */
+extern void delay_cycles_runtime(uint32_t iterations);
 
 /**
  * Count the number of enabled channels in a channel mask
@@ -78,7 +80,10 @@ static inline uint8_t count_enabled_channels(uint32_t channel_mask) {
  */
 void main(void) {
     /* prevent linker from discarding resource table */
-    (void)pru_remoteproc_ResourceTable;  
+    (void)pru_remoteproc_ResourceTable;
+
+    /* Clear SYSCFG[STANDBY_INIT] to enable OCP master port (same as pru_bringup.c) */
+    (*(volatile uint32_t *)0x26004) &= ~(1 << 4);
 
     // Map shared memory to PRU address space (Requirement 5.1)
     volatile pru_shared_memory_t *shm = 
@@ -98,7 +103,7 @@ void main(void) {
     
     // Validate configuration (Requirements 6.3)
     // Check sample period is within valid range
-    if (!is_valid_sample_period(sample_period)) {
+    if (sample_period < MIN_SAMPLE_PERIOD_CYCLES || sample_period > MAX_SAMPLE_PERIOD_CYCLES) {
         shm->error_flags = ERROR_INVALID_CONFIG;
         __halt();
     }
@@ -137,23 +142,12 @@ void main(void) {
     // Initialize sampling state variables (Requirement 6.3)
     uint32_t current_block = 0;           // Start with block 0
     uint32_t sample_in_block = 0;         // No samples in current block yet
-    uint32_t next_sample_time = get_cycle_count() + sample_period;  // Schedule first sample
-    
+
     // Main sampling loop (Requirements 5.3-5.10, 1.7)
+    // Timing: wait sample_period cycles then trigger (P9.27 CONVST), same approach as pru_bringup.c
     while (1) {
-        // Calculate wait time until next_sample_time with drift compensation (Requirement 5.10)
-        uint32_t now = get_cycle_count();
-        uint32_t elapsed = elapsed_cycles(now, next_sample_time);
-        
-        // Check if we're behind schedule (drift compensation)
-        if (elapsed > sample_period) {
-            // We're behind schedule - skip to next interval to avoid accumulating drift
-            next_sample_time = now + sample_period;
-        } else {
-            // Wait until next sample time
-            while (get_cycle_count() < next_sample_time);
-        }
-        
+        delay_cycles_runtime(sample_period >> 1);  /* 2 cycles per iteration */
+
         // Trigger ADC conversion and wait for completion (Requirements 5.3, 5.4)
         if (adc_trigger_and_wait() != 0) {
             // BUSY timeout error (Requirement 6.2)
@@ -204,7 +198,7 @@ void main(void) {
             if (sample_in_block >= block_size) {
                 // Finalize block descriptor
                 desc->num_samples = block_size;
-                desc->timestamp_cycles = next_sample_time - (block_size * sample_period);
+                desc->timestamp_cycles = 0;  /* Not using cycle counter; delay-based timing */
                 desc->flags = 0;
                 
                 // Move to next block and wrap to block 0 when reaching num_blocks (Requirement 5.9)
@@ -217,8 +211,5 @@ void main(void) {
                 sample_in_block = 0;
             }
         }
-        
-        // Schedule next sample by incrementing next_sample_time (Requirement 5.10)
-        next_sample_time += sample_period;
     }
 }
