@@ -161,8 +161,13 @@ int main(void) {
         fprintf(stderr, "  - ERROR_CFG_MASK\n");
       if (err & ERROR_CFG_BLOCKSIZE)
         fprintf(stderr, "  - ERROR_CFG_BLOCKSIZE\n");
-      if (err & ERROR_CFG_NUMBLOCKS)
+      if (err & ERROR_CFG_NUMBLOCKS) {
         fprintf(stderr, "  - ERROR_CFG_NUMBLOCKS\n");
+        fprintf(stderr, "  - PRU echoed val_num_blocks: %u\n",
+                shm->write_block_idx);
+        fprintf(stderr, "  - PRU echoed val_block_size: %u\n",
+                shm->sample_count);
+      }
       break;
     }
 

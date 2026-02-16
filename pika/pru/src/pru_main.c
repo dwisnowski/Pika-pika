@@ -129,9 +129,11 @@ void main(void) {
     __halt();
   }
 
-  // Check num_blocks is reasonable (at least 2 for ring buffer)
+  // On error, dump these to the status area for the ARM to read
   if (num_blocks < 2) {
     shm->error_flags = ERROR_INVALID_CONFIG | ERROR_CFG_NUMBLOCKS;
+    shm->write_block_idx = num_blocks; // Echo back for debugging
+    shm->sample_count = block_size;    // Echo back for debugging
     __halt();
   }
 
