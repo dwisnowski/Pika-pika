@@ -16,14 +16,14 @@
 #   to maintain its own build logic while providing a unified interface
 #   at the top level.
 
-.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay help
+.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all help
 
 # Build all components
 all: pru datalogger web
 
 # Build PRU firmware - delegates to pru/Makefile
 pru:
-	$(MAKE) -C pru build
+	$(MAKE) -C pru load
 
 # Build PRU bringup firmware
 pru-bringup:
@@ -57,6 +57,15 @@ pru-stop:
 pru-overlay:
 	$(MAKE) -C pru overlay install-overlay
 
+# Run datalogger (builds first). PRU firmware must be installed: run make pru-load once.
+run-datalogger: datalogger
+	@sudo $(MAKE) -C datalogger run
+
+# Build PRU firmware and datalogger, then run datalogger (stops PRU, inits shm, starts PRU, reads blocks).
+# PRU firmware must be in /lib/firmware: run make pru-load once before first run-all.
+run-all: pru datalogger
+	@sudo $(MAKE) -C datalogger run
+
 # Clean all build artifacts - delegates to all subproject Makefiles
 clean:
 	$(MAKE) -C pru clean
@@ -72,8 +81,12 @@ help:
 	@echo "  all              - Build all components"
 	@echo "  pru              - Build PRU firmware"
 	@echo "  pru-bringup      - Build PRU bringup test firmware"
-	@echo "  datalogger       - Build data logger (planned)"
+	@echo "  datalogger       - Build data logger"
 	@echo "  web              - Build web application (planned)"
+	@echo ""
+	@echo "Run Targets:"
+	@echo "  run-datalogger   - Build and run datalogger (run make pru-load once first)"
+	@echo "  run-all          - Build pru + datalogger, then run datalogger"
 	@echo ""
 	@echo "PRU Targets:"
 	@echo "  test-pru         - Run PRU firmware tests"

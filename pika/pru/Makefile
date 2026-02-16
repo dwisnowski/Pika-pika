@@ -181,7 +181,10 @@ PRU0_ID := $(shell grep -l "4a334000.pru" /sys/class/remoteproc/remoteproc*/name
 
 # Load main sampling firmware
 load: $(MAIN_FIRMWARE)
+	@echo "Configuring pins..."
 	@config-pin P9.27 pruout
+	@config-pin P8.15 pruin
+	@config-pin P8.16 pruin
 	@echo "Loading to $(PRU0_ID) (PRU0)..."
 	@if [ "$$(cat /sys/class/remoteproc/$(PRU0_ID)/state)" != "offline" ]; then \
 		echo stop | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state; \

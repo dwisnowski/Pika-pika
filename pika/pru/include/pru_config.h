@@ -5,26 +5,28 @@
 
 /**
  * PRU Configuration Constants
- * 
+ *
  * This header defines hardware and timing constants for the PRU firmware
  * that performs deterministic data acquisition from an AD7606 ADC.
- * 
+ *
  * Requirements: 2.1, 2.2, 2.3, 2.4, 2.5
  */
 
 /* ============================================================================
  * PRU Hardware Constants (Requirement 2.1)
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /** PRU clock frequency in Hz (200 MHz) */
 #define PRU_CLOCK_HZ 200000000
 
 /** Number of PRU cycles per microsecond */
-#define CYCLES_PER_US (PRU_CLOCK_HZ / 1000000)  // 200 cycles/µs
+#define CYCLES_PER_US (PRU_CLOCK_HZ / 1000000) // 200 cycles/µs
 
 /* ============================================================================
  * Timing Constraints (Requirement 2.2)
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /** Minimum sample period in microseconds (10 µs = 100 kHz max rate) */
 #define MIN_SAMPLE_PERIOD_US 10
@@ -40,9 +42,11 @@
 
 /* ============================================================================
  * AD7606 Timing Constants (Requirement 2.4)
- * ============================================================================ */
+ * ============================================================================
+ */
 
-/** CONVST pulse width in cycles (250 ns minimum from datasheet = 50 cycles @ 200 MHz) */
+/** CONVST pulse width in cycles (250 ns minimum from datasheet = 50 cycles @
+ * 200 MHz) */
 #define CONVST_PULSE_CYCLES 50
 
 /** BUSY signal timeout in cycles (5 µs timeout for conversion) */
@@ -70,24 +74,25 @@ Data 5	P8.42	R31.5	pruin
 Data 6	P8.39	R31.6	pruin
 ...to Data 15	(See P8 R31 Map)	R31.8-15	pruin
 ---------------------------------------
- * ============================================================================ */
+ * ============================================================================
+*/
 
 /** CONVST output pin (PRU0 R30.5) -> Physical P9.27 */
-#define PIN_CONVST 5 
+#define PIN_CONVST 5
 
-/** BUSY input pin (PRU0 R31.7) -> Physical P8.40 */
-#define PIN_BUSY 7
+/** BUSY input pin (PRU0 R31.15) -> Physical P8.15 */
+#define PIN_BUSY 15
 
-/** 
- * Base pin for 16-bit parallel data (PRU0 R31.0-15)
- * Using P8 cluster: P8.45, 46, 43, 44, 41, 42, 39, 40, 27, 28, 29, 30, 21, 20, 16, 15
- * This maps to R31 bits 0 through 15 sequentially.
+/**
+ * Base bit for parallel data (1 channel = R31.14)
+ * Using P8 cluster: P8.16
  */
-#define PIN_DATA_BASE 0 
+#define PIN_DATA_BASE 14
 
 /* ============================================================================
  * Channel Configuration (Requirement 2.3)
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /** Number of ADC channels */
 #define NUM_ADC_CHANNELS 8
@@ -97,7 +102,8 @@ Data 6	P8.39	R31.6	pruin
 
 /* ============================================================================
  * Block Size Constants (Requirement 2.5)
- * ============================================================================ */
+ * ============================================================================
+ */
 
 /** Minimum block size (samples per block) - must be power of 2 */
 #define MIN_BLOCK_SIZE 64
@@ -110,21 +116,5 @@ Data 6	P8.39	R31.6	pruin
 
 /** Default number of ring buffer blocks */
 #define DEFAULT_NUM_BLOCKS 4
-
-/* ============================================================================
- * Error Flag Definitions (Requirement 2.4)
- * ============================================================================ */
-
-/** Error: Invalid magic number in shared memory */
-#define ERROR_INVALID_MAGIC    (1 << 0)
-
-/** Error: ADC BUSY signal timeout */
-#define ERROR_BUSY_TIMEOUT     (1 << 1)
-
-/** Error: Invalid configuration parameters */
-#define ERROR_INVALID_CONFIG   (1 << 2)
-
-/** Error: Ring buffer overrun */
-#define ERROR_BUFFER_OVERRUN   (1 << 3)
 
 #endif /* PRU_CONFIG_H */
