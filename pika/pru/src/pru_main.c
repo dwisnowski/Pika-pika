@@ -103,6 +103,9 @@ void main(void) {
     }
   }
 
+  // Diagnostic handshake: Write back to version so ARM knows we are alive
+  shm->version = 0xAAAA0001;
+
   // Read configuration fields (Requirement 5.1)
   uint32_t sample_period = shm->sample_period_cycles;
   uint32_t channel_mask = shm->channel_mask;

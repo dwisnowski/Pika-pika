@@ -57,11 +57,7 @@ typedef struct {
  * ...
  * [block_descriptor_t][block N-1 data]
  */
-#if defined(__TI_ARM__) || defined(__ti_pru__)
-#pragma pack(push, 1)
-#endif
-
-typedef struct {
+typedef struct __attribute__((packed)) {
   /* Header - read-only after initialization */
   volatile uint32_t magic;   /* Magic number for verification (SHM_MAGIC) */
   volatile uint32_t version; /* Layout version (SHM_VERSION) */
@@ -77,15 +73,7 @@ typedef struct {
   volatile uint32_t error_flags;     /* Error status bits */
   volatile uint32_t sample_count;    /* Total samples acquired */
 
-  /* Ring buffer follows this header in memory */
-}
-#ifndef __ti_pru__
-__attribute__((packed))
-#endif
-pru_shared_memory_t;
-
-#if defined(__TI_ARM__) || defined(__ti_pru__)
-#pragma pack(pop)
-#endif
+  /* Ring buffer data follows this header */
+} pru_shared_memory_t;
 
 #endif /* SHM_LAYOUT_H */

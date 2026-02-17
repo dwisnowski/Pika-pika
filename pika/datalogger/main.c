@@ -139,6 +139,8 @@ int main(void) {
     return 1;
   }
 
+  printf("datalogger: handshake version observed: 0x%08x\n", shm->version);
+
   uint32_t read_block = 0;
   int blocks_printed = 0;
   int total_blocks_read = 0;
@@ -152,6 +154,7 @@ int main(void) {
          (unsigned)num_channels, (unsigned)block_size, (unsigned)num_blocks);
 
   while (total_blocks_read < max_blocks_then_exit) {
+    fprintf(stderr, "datalogger: reading block %u\n", (unsigned)read_block);
     if (shm->error_flags != 0) {
       uint32_t err = shm->error_flags;
       fprintf(stderr, "PRU Error detected: 0x%x\n", err);
@@ -169,12 +172,16 @@ int main(void) {
                 shm->sample_count);
       }
       break;
+    } else {
+      fprintf(stderr, "datalogger: no error flags set\n");
     }
 
     uint32_t write_idx = shm->write_block_idx;
 
+    fprintf(stderr, "datalogger: write_idx=%u\n", (unsigned)write_idx);
     while (read_block != write_idx &&
            total_blocks_read < max_blocks_then_exit) {
+      fprintf(stderr, "datalogger: reading block %u\n", (unsigned)read_block);
       uint8_t *block_base = (uint8_t *)base + sizeof(pru_shared_memory_t) +
                             (size_t)read_block * block_total_size;
       block_descriptor_t *desc = (block_descriptor_t *)block_base;
@@ -190,12 +197,15 @@ int main(void) {
           printf(" %u", (unsigned)data[i]);
         printf("\n");
         blocks_printed++;
+      } else {
+        fprintf(stderr, "datalogger: skipping block %u\n", (unsigned)read_block);
       }
 
       read_block = (read_block + 1) % num_blocks;
       total_blocks_read++;
     }
 
+    fprintf(stderr, "datalogger: read_block=%u\n", (unsigned)read_block);
     usleep(5000);
   }
 
