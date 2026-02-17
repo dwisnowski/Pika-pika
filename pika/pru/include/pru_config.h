@@ -47,10 +47,12 @@
 
 /** CONVST pulse width in cycles (250 ns minimum from datasheet = 50 cycles @
  * 200 MHz) */
-/** CONVST pulse width in cycles (debug: 50us = 10000 cycles) */
-#define CONVST_PULSE_CYCLES 10000
+/** CONVST pulse width in cycles (250 ns minimum from datasheet = 50 cycles @
+ * 200 MHz). set to 200 (1us) for robust operation. */
+#define CONVST_PULSE_CYCLES 200
 
-/** BUSY signal timeout in cycles (debug: 1ms timeout) */
+/** BUSY signal timeout in cycles (unused with fixed delay, but kept for
+ * reference) */
 #define BUSY_TIMEOUT_CYCLES 200000
 
 /** Typical conversion time in cycles (~4 µs) */

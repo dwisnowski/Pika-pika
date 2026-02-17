@@ -167,17 +167,10 @@ void main(void) {
     delay_cycles_runtime(sample_period >> 1); /* 2 cycles per iteration */
 
     // Trigger ADC conversion and wait for completion (Requirements 5.3, 5.4)
+    // Note: With fixed delay workaround, this always returns 0 (success).
     if (adc_trigger_and_wait() != 0) {
       // BUSY timeout error (Requirement 6.2)
       shm->error_flags = ERROR_BUSY_TIMEOUT;
-
-      // Force write flush by reading back
-      volatile uint32_t dummy = shm->error_flags;
-      (void)dummy;
-
-      // Additional small delay to ensure OCP transaction completes
-      __delay_cycles(100);
-
       __halt();
     }
 

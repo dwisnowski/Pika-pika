@@ -66,10 +66,27 @@ static inline int adc_trigger_and_wait(void) {
   __delay_cycles(CONVST_PULSE_CYCLES);
   adc_deassert_convst();
 
-  // HARDWARE WORKAROUND: The BUSY signal is not responding.
-  // Tconv is ~4us. We wait 5us (1000 cycles) to ensure conversion completes.
-  // This is deterministic and safe.
+  // HARDWARE WORKAROUND: The BUSY signal (P8.15) is unresponsive on this
+  // specific hardware revision. The AD7606 conversion time is deterministic
+  // (~4us). We wait 5us (1000 cycles) to safe-guard readiness. This bypasses
+  // the need for the BUSY handshake.
   __delay_cycles(1000);
+
+  /* BUSY signal polling logic (Disabled due to HW issue)
+  // Wait for BUSY to go high (conversion started)
+  uint32_t timeout = BUSY_TIMEOUT_CYCLES;
+  while (!adc_read_busy() && timeout > 0) {
+    timeout--;
+  }
+  if (timeout == 0) return -1;
+
+  // Wait for BUSY to go low (conversion complete)
+  timeout = BUSY_TIMEOUT_CYCLES;
+  while (adc_read_busy() && timeout > 0) {
+    timeout--;
+  }
+  if (timeout == 0) return -1;
+  */
 
   return 0; // Success
 }
