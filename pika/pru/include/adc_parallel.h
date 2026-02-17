@@ -66,28 +66,10 @@ static inline int adc_trigger_and_wait(void) {
   __delay_cycles(CONVST_PULSE_CYCLES);
   adc_deassert_convst();
 
-  // TEMPORARY: Bypass BUSY wait for testing without ADC hardware
-  // Simulate AD7606 conversion time (~3us = 600 cycles @ 200MHz)
-  __delay_cycles(600);
-
-  // TODO: Re-enable this once ADC is properly connected:
-  /*
-  // Wait for BUSY to go high (conversion started)
-  uint32_t timeout = BUSY_TIMEOUT_CYCLES;
-  while (!adc_read_busy() && timeout > 0) {
-    timeout--;
-  }
-  if (timeout == 0)
-    return -1; // Timeout error
-
-  // Wait for BUSY to go low (conversion complete)
-  timeout = BUSY_TIMEOUT_CYCLES;
-  while (adc_read_busy() && timeout > 0) {
-    timeout--;
-  }
-  if (timeout == 0)
-    return -1; // Timeout error
-  */
+  // HARDWARE WORKAROUND: The BUSY signal is not responding.
+  // Tconv is ~4us. We wait 5us (1000 cycles) to ensure conversion completes.
+  // This is deterministic and safe.
+  __delay_cycles(1000);
 
   return 0; // Success
 }

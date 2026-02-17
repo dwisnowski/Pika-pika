@@ -25,6 +25,9 @@
 
 #define REMOTEPROC_STATE "/sys/class/remoteproc/remoteproc0/state"
 
+// Error flag definitions (must match pru_config.h)
+#define ERROR_BUSY_TIMEOUT 0x2
+
 static uint8_t count_channels(uint32_t mask) {
   uint8_t n = 0;
   for (int i = 0; i < MAX_CHANNELS; i++)
@@ -153,11 +156,25 @@ int main(void) {
          "num_blocks=%u)\n",
          (unsigned)num_channels, (unsigned)block_size, (unsigned)num_blocks);
 
+  int loop_iterations = 0;
   while (total_blocks_read < max_blocks_then_exit) {
-    fprintf(stderr, "datalogger: reading block %u\n", (unsigned)read_block);
+    loop_iterations++;
+
+    // Debug: Show status every 100 iterations
+    if (loop_iterations % 100 == 0) {
+      fprintf(stderr,
+              "DEBUG: Loop iteration %d, error_flags=0x%x, write_idx=%u, "
+              "read_block=%u, total_blocks_read=%d, sample_count=%u\n",
+              loop_iterations, shm->error_flags, shm->write_block_idx,
+              (unsigned)read_block, total_blocks_read, shm->sample_count);
+    }
+
     if (shm->error_flags != 0) {
       uint32_t err = shm->error_flags;
       fprintf(stderr, "PRU Error detected: 0x%x\n", err);
+      if (err & ERROR_BUSY_TIMEOUT)
+        fprintf(stderr,
+                "  - ERROR_BUSY_TIMEOUT (AD7606 BUSY signal not responding)\n");
       if (err & ERROR_CFG_PERIOD)
         fprintf(stderr, "  - ERROR_CFG_PERIOD\n");
       if (err & ERROR_CFG_MASK)
@@ -171,14 +188,13 @@ int main(void) {
         fprintf(stderr, "  - PRU echoed val_block_size: %u\n",
                 shm->sample_count);
       }
+      fprintf(stderr, "\nLikely cause: Check that AD7606 RST pin is connected "
+                      "to 3.3V (not GND)\n");
       break;
-    } else {
-      fprintf(stderr, "datalogger: no error flags set\n");
     }
 
     uint32_t write_idx = shm->write_block_idx;
 
-    fprintf(stderr, "datalogger: write_idx=%u\n", (unsigned)write_idx);
     while (read_block != write_idx &&
            total_blocks_read < max_blocks_then_exit) {
       fprintf(stderr, "datalogger: reading block %u\n", (unsigned)read_block);
@@ -198,14 +214,14 @@ int main(void) {
         printf("\n");
         blocks_printed++;
       } else {
-        fprintf(stderr, "datalogger: skipping block %u\n", (unsigned)read_block);
+        fprintf(stderr, "datalogger: skipping block %u\n",
+                (unsigned)read_block);
       }
 
       read_block = (read_block + 1) % num_blocks;
       total_blocks_read++;
     }
 
-    fprintf(stderr, "datalogger: read_block=%u\n", (unsigned)read_block);
     usleep(5000);
   }
 

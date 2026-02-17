@@ -136,7 +136,6 @@ void main(void) {
   if (num_blocks < 2) {
     shm->error_flags = ERROR_INVALID_CONFIG | ERROR_CFG_NUMBLOCKS;
     shm->write_block_idx = num_blocks; // Echo back for debugging
-    shm->sample_count = block_size;    // Echo back for debugging
     __halt();
   }
 
@@ -151,7 +150,9 @@ void main(void) {
   // Allocate local staging buffer in PRU RAM (avoids DDR stalls during
   // sampling) This buffer holds samples temporarily before burst-writing to
   // shared memory
-  uint16_t local_buffer[LOCAL_BUFFER_SAMPLES][MAX_CHANNELS];
+  // NOTE: Using static storage to avoid stack overflow (512 bytes is too large
+  // for PRU stack)
+  static uint16_t local_buffer[LOCAL_BUFFER_SAMPLES][MAX_CHANNELS];
   uint32_t local_buffer_idx = 0;
 
   // Initialize sampling state variables (Requirement 6.3)
@@ -161,6 +162,7 @@ void main(void) {
   // Main sampling loop (Requirements 5.3-5.10, 1.7)
   // Timing: wait sample_period cycles then trigger (P9.27 CONVST), same
   // approach as pru_bringup.c
+
   while (1) {
     delay_cycles_runtime(sample_period >> 1); /* 2 cycles per iteration */
 
@@ -168,6 +170,14 @@ void main(void) {
     if (adc_trigger_and_wait() != 0) {
       // BUSY timeout error (Requirement 6.2)
       shm->error_flags = ERROR_BUSY_TIMEOUT;
+
+      // Force write flush by reading back
+      volatile uint32_t dummy = shm->error_flags;
+      (void)dummy;
+
+      // Additional small delay to ensure OCP transaction completes
+      __delay_cycles(100);
+
       __halt();
     }
 

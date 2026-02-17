@@ -10,7 +10,7 @@ delay_cycles_runtime:
     QBEQ done, r14, 0    ; if iterations == 0, return
 delay_loop:
     SUB r14, r14, 1
-    QBNE delay_loop, r14, r0
+    QBNE delay_loop, r14, 0
 done:
     JMP r3.w2            ; return (r3.w2 = return address)
     .endasmfunc
