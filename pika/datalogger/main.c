@@ -25,8 +25,7 @@
 
 #define REMOTEPROC_STATE "/sys/class/remoteproc/remoteproc0/state"
 
-// Error flag definitions (must match pru_config.h)
-#define ERROR_BUSY_TIMEOUT 0x2
+// Error flags are defined in shm_layout.h
 
 static uint8_t count_channels(uint32_t mask) {
   uint8_t n = 0;
@@ -116,8 +115,14 @@ int main(void) {
   __sync_synchronize();
   msync(base, PRU_SHM_SIZE, MS_SYNC);
 
-  printf("datalogger: debug shm initialized (size=%zu)\n",
-         sizeof(pru_shared_memory_t));
+  printf("datalogger: memory layout debug:\n");
+  printf("  sizeof(pru_shm_t): %zu\n", sizeof(pru_shared_memory_t));
+  printf("  sizeof(block_desc_t): %zu\n", sizeof(block_descriptor_t));
+  printf("  block_data_size: %u\n", block_data_size);
+  printf("  block_total_size: %u\n", block_total_size);
+  printf("  block 0 offset: %zu\n", sizeof(pru_shared_memory_t));
+  printf("  block 1 offset: %u\n",
+         (uint32_t)sizeof(pru_shared_memory_t) + block_total_size);
   printf("  magic: 0x%08x\n", shm->magic);
   printf("  period: %u\n", shm->sample_period_cycles);
   printf("  mask: 0x%x\n", shm->channel_mask);
@@ -132,25 +137,18 @@ int main(void) {
     return 1;
   }
 
-  /* Give PRU a moment to start and pass magic check */
-  usleep(100000);
-
-  if (shm->magic != SHM_MAGIC) {
-    fprintf(stderr, "PRU did not accept magic (shm->magic=0x%08x)\n",
-            shm->magic);
-    munmap((void *)base, PRU_SHM_SIZE);
-    return 1;
-  }
-
-  printf("datalogger: handshake version observed: 0x%08x\n", shm->version);
+  printf("datalogger: memory layout debug:\n");
+  printf("  sizeof(pru_shm_t): %zu\n", sizeof(pru_shared_memory_t));
+  printf("  sizeof(block_desc_t): %zu\n", sizeof(block_descriptor_t));
+  printf("  block_data_size: %u\n", block_data_size);
+  printf("  block_total_size: %u\n", block_total_size);
 
   uint32_t read_block = 0;
   int blocks_printed = 0;
   int total_blocks_read = 0;
-  const int max_blocks_to_print = 4;
-  const int samples_per_block_to_print = 8;
-  const int max_blocks_then_exit =
-      20; /* exit after this many blocks for testing */
+  const int max_blocks_to_print = 32;
+  const int samples_per_block_to_print = 16;
+  const int max_blocks_then_exit = 64;
 
   printf("datalogger: reading blocks (channels=%u, block_size=%u, "
          "num_blocks=%u)\n",
@@ -160,13 +158,13 @@ int main(void) {
   while (total_blocks_read < max_blocks_then_exit) {
     loop_iterations++;
 
-    // Debug: Show status every 100 iterations
-    if (loop_iterations % 100 == 0) {
+    // Debug: Show status every 20 iterations
+    if (loop_iterations % 20 == 0) {
       fprintf(stderr,
-              "DEBUG: Loop iteration %d, error_flags=0x%x, write_idx=%u, "
-              "read_block=%u, total_blocks_read=%d, sample_count=%u\n",
-              loop_iterations, shm->error_flags, shm->write_block_idx,
-              (unsigned)read_block, total_blocks_read, shm->sample_count);
+              "DIAG: Loop %d | PRU blk=%u, off=%u, smp=%u, phys=%08x | ARM "
+              "read=%u\n",
+              loop_iterations, shm->reserved[0], shm->reserved[1],
+              shm->reserved[2], shm->reserved[3], (unsigned)read_block);
     }
 
     if (shm->error_flags != 0) {

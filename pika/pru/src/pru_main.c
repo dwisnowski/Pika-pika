@@ -103,14 +103,24 @@ void main(void) {
     }
   }
 
-  // Diagnostic handshake: Write back to version so ARM knows we are alive
-  shm->version = 0xAAAA0001;
-
   // Read configuration fields (Requirement 5.1)
   uint32_t sample_period = shm->sample_period_cycles;
   uint32_t channel_mask = shm->channel_mask;
   uint32_t block_size = shm->block_size;
   uint32_t num_blocks = shm->num_blocks;
+
+  // Diagnostic handshake: Write sizes back to ARM for verification
+  // shm->version: [pru_shm_size(16) | block_desc_size(16)]
+  // shm->reserved: [block_data_size(16) | block_total_size(16)]
+  shm->version = ((uint32_t)sizeof(pru_shared_memory_t) << 16) |
+                 (uint32_t)sizeof(block_descriptor_t);
+
+  // Count enabled channels to calculate sizes
+  uint8_t num_channels = count_enabled_channels(channel_mask);
+  uint32_t block_data_size = block_size * num_channels * sizeof(uint16_t);
+  uint32_t block_total_size = sizeof(block_descriptor_t) + block_data_size;
+
+  shm->reserved[0] = (block_data_size << 16) | (block_total_size & 0xFFFF);
 
   // Validate configuration (Requirements 6.3)
   // Check sample period is within valid range
@@ -139,14 +149,6 @@ void main(void) {
     __halt();
   }
 
-  // Count enabled channels from channel_mask (Requirement 6.1)
-  uint8_t num_channels = count_enabled_channels(channel_mask);
-
-  // Calculate block data size and total size (Requirement 6.1)
-  // Each sample is 16 bits (2 bytes), and we have num_channels per sample
-  uint32_t block_data_size = block_size * num_channels * sizeof(uint16_t);
-  uint32_t block_total_size = sizeof(block_descriptor_t) + block_data_size;
-
   // Allocate local staging buffer in PRU RAM (avoids DDR stalls during
   // sampling) This buffer holds samples temporarily before burst-writing to
   // shared memory
@@ -160,23 +162,13 @@ void main(void) {
   uint32_t sample_in_block = 0; // No samples in current block yet
 
   // Main sampling loop (Requirements 5.3-5.10, 1.7)
-  // Timing: wait sample_period cycles then trigger (P9.27 CONVST), same
-  // approach as pru_bringup.c
-
   while (1) {
     delay_cycles_runtime(sample_period >> 1); /* 2 cycles per iteration */
 
-    // Trigger ADC conversion and wait for completion (Requirements 5.3, 5.4)
-    // Note: With fixed delay workaround, this always returns 0 (success).
-    if (adc_trigger_and_wait() != 0) {
-      // BUSY timeout error (Requirement 6.2)
-      shm->error_flags = ERROR_BUSY_TIMEOUT;
-      __halt();
-    }
+    // Trigger ADC conversion and wait for completion (Requirement 5.3, 5.4)
+    adc_trigger_and_wait();
 
     // Read enabled channels using channel_mask and store to local buffer
-    // (Requirements 5.5, 5.6) Using local buffer avoids DDR access during
-    // time-critical sampling
     uint32_t ch_idx = 0;
     uint8_t ch;
     for (ch = 0; ch < NUM_ADC_CHANNELS; ch++) {
@@ -190,51 +182,56 @@ void main(void) {
     sample_in_block++;
     shm->sample_count++;
 
+    // Calculate base address of the current block
+    uint32_t block_offset =
+        sizeof(pru_shared_memory_t) + (current_block * block_total_size);
+    uint8_t *block_base = ((uint8_t *)shm) + block_offset;
+    block_descriptor_t *desc = (block_descriptor_t *)block_base;
+
+    // DEBUG: Push internal state to header so ARM can see it live
+    shm->reserved[0] = current_block;
+    shm->reserved[1] = block_offset;
+    shm->reserved[2] = sample_in_block;
+    shm->reserved[3] = local_buffer_idx;
+
     // Flush local buffer to shared memory when full or block complete
     if (local_buffer_idx >= LOCAL_BUFFER_SAMPLES ||
         sample_in_block >= block_size) {
-      // Calculate pointers to current block descriptor and data buffer
-      // Memory layout:
-      // [header][block0_desc][block0_data][block1_desc][block1_data]...
-      uint8_t *block_base = ((uint8_t *)shm) + sizeof(pru_shared_memory_t) +
-                            (current_block * block_total_size);
-      block_descriptor_t *desc = (block_descriptor_t *)block_base;
-      uint16_t *data = (uint16_t *)(block_base + sizeof(block_descriptor_t));
+
+      // Pointer to data (offset 16 in block - NEW DESCRIPTOR SIZE)
+      uint16_t *block_data =
+          (uint16_t *)(block_base + sizeof(block_descriptor_t));
 
       // Burst-write local buffer to shared memory
       uint32_t i;
       uint8_t j;
       uint32_t start_sample = sample_in_block - local_buffer_idx;
       for (i = 0; i < local_buffer_idx; i++) {
-        uint32_t data_idx = (start_sample + i) * num_channels;
+        uint32_t sample_offset = (start_sample + i) * num_channels;
         for (j = 0; j < num_channels; j++) {
-          data[data_idx + j] = local_buffer[i][j];
+          block_data[sample_offset + j] = local_buffer[i][j];
         }
       }
 
       // Reset local buffer index
       local_buffer_idx = 0;
+    }
 
-      // Check for block completion and finalize descriptor
-      // (Requirements 5.7, 5.8)
-      if (sample_in_block >= block_size) {
-        // Finalize block descriptor
-        desc->num_samples = block_size;
-        desc->timestamp_cycles =
-            0; /* Not using cycle counter; delay-based timing */
-        desc->flags = 0;
+    // Check for block completion and finalize descriptor
+    if (sample_in_block >= block_size) {
+      // Finalize block descriptor with 32-bit writes
+      desc->num_samples = (uint32_t)block_size;
+      desc->timestamp_cycles = shm->sample_count;
+      desc->flags = 0;
 
-        // Move to next block and wrap to block 0 when reaching num_blocks
-        // (Requirement 5.9)
-        current_block = (current_block + 1) % num_blocks;
+      // Move to next block and wrap
+      current_block = (current_block + 1) % num_blocks;
 
-        // Update write_block_idx atomically on block completion
-        // (Requirements 1.7, 5.7)
-        shm->write_block_idx = current_block;
+      // Update write_block_idx atomically
+      shm->write_block_idx = current_block;
 
-        // Reset sample counter for new block
-        sample_in_block = 0;
-      }
+      // Reset sample counter for new block
+      sample_in_block = 0;
     }
   }
 }

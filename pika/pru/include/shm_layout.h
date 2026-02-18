@@ -37,43 +37,43 @@
  *
  * Each ring buffer block has a descriptor containing metadata about
  * the samples in that block.
+ *
+ * All fields are 32-bit to ensure perfect PRU/ARM alignment.
+ * Total size: 16 bytes.
  */
 typedef struct {
-  uint32_t timestamp_cycles; /* Cycle count when block started */
-  uint16_t num_samples;      /* Number of samples in this block */
-  uint16_t flags;            /* Block status flags */
-} block_descriptor_t;
+  uint32_t timestamp_cycles; /* 4 bytes */
+  uint32_t num_samples;      /* 4 bytes */
+  uint32_t flags;            /* 4 bytes */
+  uint32_t reserved;         /* 4 bytes padding -> Total 16 bytes */
+} __attribute__((packed)) block_descriptor_t;
 
 /**
  * PRU shared memory structure
  *
- * This structure defines the layout of shared memory accessible by both
- * PRU and Linux userspace. The ring buffer data follows this header.
- *
- * Memory Layout:
- * [pru_shared_memory_t header]
- * [block_descriptor_t][block 0 data]
- * [block_descriptor_t][block 1 data]
- * ...
- * [block_descriptor_t][block N-1 data]
+ * Padded to exactly 64 bytes.
  */
-typedef struct __attribute__((packed)) {
+typedef struct {
   /* Header - read-only after initialization */
-  volatile uint32_t magic;   /* Magic number for verification (SHM_MAGIC) */
-  volatile uint32_t version; /* Layout version (SHM_VERSION) */
+  volatile uint32_t magic;   /* 4 bytes */
+  volatile uint32_t version; /* 4 bytes */
 
   /* Configuration - written by Linux, read by PRU */
-  volatile uint32_t sample_period_cycles; /* Cycles between samples */
-  volatile uint32_t channel_mask; /* Bit mask of enabled channels (0-7) */
-  volatile uint32_t block_size;   /* Samples per block (power of 2) */
-  volatile uint32_t num_blocks;   /* Number of ring buffer blocks */
+  volatile uint32_t sample_period_cycles; /* 4 bytes */
+  volatile uint32_t channel_mask;         /* 4 bytes */
+  volatile uint32_t block_size;           /* 4 bytes */
+  volatile uint32_t num_blocks;           /* 4 bytes */
 
   /* Status - written by PRU, read by Linux */
-  volatile uint32_t write_block_idx; /* Current block being written by PRU */
-  volatile uint32_t error_flags;     /* Error status bits */
-  volatile uint32_t sample_count;    /* Total samples acquired */
+  volatile uint32_t write_block_idx; /* 4 bytes */
+  volatile uint32_t error_flags;     /* 4 bytes */
+  volatile uint32_t sample_count;    /* 4 bytes */
 
-  /* Ring buffer data follows this header */
-} pru_shared_memory_t;
+  /* Padding to 64 bytes (16 words)
+   * Current: 9 words used. Need 7 more. */
+  uint32_t reserved[7];
+
+  /* Ring buffer data follows this header at offset 64 */
+} __attribute__((packed)) pru_shared_memory_t;
 
 #endif /* SHM_LAYOUT_H */
