@@ -59,38 +59,44 @@
 #define CONVERSION_TIME_CYCLES 800
 
 /* ============================================================================
- * PRU Pin Assignments (Requirement 2.4)
-
-
-This mapping avoids the eMMC (P9.42) and HDMI Video/Audio pins.
-
-Signal	BBB Pin	PRU Register	Mode
----------------------------------------
-CONVST	P9.27	R30.5	pruout
-BUSY	P8.40	R31.7	pruin
-Data 0	P8.45	R31.0	pruin
-Data 1	P8.46	R31.1	pruin
-Data 2	P8.43	R31.2	pruin
-Data 3	P8.44	R31.3	pruin
-Data 4	P8.41	R31.4	pruin
-Data 5	P8.42	R31.5	pruin
-Data 6	P8.39	R31.6	pruin
-...to Data 15	(See P8 R31 Map)	R31.8-15	pruin
----------------------------------------
+ * PRU Pin Assignments (Requirement 2.4 - 16-bit Parallel)
  * ============================================================================
-*/
+ */
 
-/** CONVST output pin (PRU0 R30.5) -> Physical P9.27 */
-#define PIN_CONVST 5
+/** PRU0 R30 Output Pins on P9 */
+#define PIN_CONVST 5 // P9.27
+#define PIN_RD 2     // P9.30
+#define PIN_CS 3     // P9.28
+#define PIN_RESET 1  // P9.29
 
-/** BUSY input pin (PRU0 R31.15) -> Physical P8.15 */
-#define PIN_BUSY 15
+/** PRU0 R31 Input Pins on P9 */
+#define PIN_BUSY 7 // P9.25
 
 /**
- * Base bit for parallel data (1 channel = R31.14)
- * Using P8 cluster: P8.16
+ * GPIO Bank Definitions for 16-bit Parallel Data (P8 Header)
+ *
+ * DB1 / DB0   : P8.7 / P8.8   -> GPIO2_2 / GPIO2_3
+ * DB3 / DB2   : P8.9 / P8.10  -> GPIO2_5 / GPIO2_4
+ * DB5 / DB4   : P8.11 / P8.12 -> GPIO1_13 / GPIO1_12
+ * DB7 / DB6   : P8.13 / P8.14 -> GPIO0_23 / GPIO0_26
+ * DB9 / DB8   : P8.15 / P8.16 -> GPIO1_15 / GPIO1_14
+ * DB11 / DB10 : P8.17 / P8.18 -> GPIO0_27 / GPIO2_1
+ * DB13 / DB12 : P8.19 / P8.26 -> GPIO0_22 / GPIO1_29
+ * DB15 / DB14 : P8.27 / P8.28 -> GPIO2_22 / GPIO2_24
  */
-#define PIN_DATA_BASE 14
+
+#define GPIO0_BASE 0x44E07000
+#define GPIO1_BASE 0x4804C000
+#define GPIO2_BASE 0x481AC000
+#define GPIO_DATAIN 0x138
+
+// Bank 0 Mask: DB7(23), DB6(26), DB11(27), DB13(22)
+#define BANK0_MASK ((1 << 23) | (1 << 26) | (1 << 27) | (1 << 22))
+// Bank 1 Mask: DB5(13), DB4(12), DB9(15), DB8(14), DB12(29)
+#define BANK1_MASK ((1 << 13) | (1 << 12) | (1 << 15) | (1 << 14) | (1 << 29))
+// Bank 2 Mask: DB1(2), DB0(3), DB3(5), DB2(4), DB10(1), DB15(22), DB14(24)
+#define BANK2_MASK                                                             \
+  ((1 << 2) | (1 << 3) | (1 << 5) | (1 << 4) | (1 << 1) | (1 << 22) | (1 << 24))
 
 /* ============================================================================
  * Channel Configuration (Requirement 2.3)

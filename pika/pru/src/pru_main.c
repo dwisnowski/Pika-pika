@@ -161,6 +161,12 @@ void main(void) {
   uint32_t current_block = 0;   // Start with block 0
   uint32_t sample_in_block = 0; // No samples in current block yet
 
+  // AD7606 Hardware Prep
+  adc_deassert_cs();
+  PRU0_R30 |= (1 << PIN_RD); // RD high (idle)
+  adc_reset();
+  adc_assert_cs(); // Keep CS low throughout operation for efficiency
+
   // Main sampling loop (Requirements 5.3-5.10, 1.7)
   while (1) {
     delay_cycles_runtime(sample_period >> 1); /* 2 cycles per iteration */

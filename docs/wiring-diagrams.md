@@ -8,42 +8,52 @@ This document contains wiring instructions for connecting the AD7606 ADC to the 
 
 ---
 
-## 1-Channel "Safe" Configuration
+## 16-Bit Parallel Configuration
 
-This configuration uses pins that avoid conflicts with the BeagleBone Black's HDMI and Audio drivers, allowing it to work without modifying `uEnv.txt`.
+This configuration uses 21 pins (16 data + 5 control) and requires disabling HDMI and Audio on the BeagleBone Black.
 
 ### Power Connections
 
 | AD7606 Pin      | BBB Pin | Description             |
 | :-------------- | :------ | :---------------------- |
-| **GND**         | **P9.1**| Common Ground           |
-| **+5V / AVCC**  | **P9.5**| Analog Supply Power     |
-| **VIO / VDRIVE**| **P9.3**| **Logic Supply (3.3V)** |
+| **GND**         | **P9.1**| Common Ground           | ✅
+| **+5V / AVCC**  | **P9.5**| Analog Supply Power     | ✅ 
+| **VIO / DRV**   | **P9.3**| **Logic Supply (3.3V)** | ✅ 
 
-### Control & Configuration
+### Control Connections
 
-| AD7606 Pin      | BBB Pin | Description                                        |
-| :-------------- | :------ | :------------------------------------------------- |
-| **CVA / CVB**   | **P9.27** | CONVST - Trigger Conversion (Tie CVA & CVB together) |
-| **BUSY**        | **P8.15** | Conversion Status Input                            |
-| **CS**          | **GND**  | Chip Select (Tie to GND for always active)         |
-| **RD**          | **GND**  | Read (Tie to GND for transparent mode)             |
-| **RST**         | **GND**  | Reset (Tie to GND for normal operation)            |
-| **OS0, OS1, OS2**| **GND** | Oversampling Mode (Tie all to GND for No OS)       |
-| **RANGE**       | **GND**  | Input Range (Tie to GND for +/- 5V)                |
+| AD7606 Pin | BBB Pin  | Mode    | Function              |
+| :--------- | :------- | :------ | :-------------------- |
+| **CONVST** | **P9.27**| pruout  | Trigger Conversion    | ✅ |
+| **BUSY**   | **P9.25**| pruin   | Conversion Status     | ✅ |
+| **RD**     | **P9.30**| pruout  | Read Strobe (PULSE)   | **REQUIRED** (Advances Channels) |
+| **CS**     | **P9.28**| pruout  | Chip Select           | ✅ |
+| **RESET**  | **P9.29**| pruout  | Reset Pulse           | P9.29 Preferred (GND works) |
+| **FRST**   | -        | -       | First Result Output   | **OPTIONAL** (Leave Floating) |
 
-### Data Connections
+### Data Connections (16-Bit Bus)
 
-| AD7606 Pin      | BBB Pin | Description             |
-| :-------------- | :------ | :---------------------- |
-| **DB0 (D0)**    | **P8.16** | Data Bit 0 (LSB)      |
+Configure these pins as `gpio` via `config-pin`.
+
+| AD7606 Pin | BBB Pin  | GPIO Register |
+| :--------- | :------- | :------------ |
+| **DB1 / DB0** | **P8.7 / P8.8** | GPIO2_2 / GPIO2_3 | ✅ ✅
+| **DB3 / DB2** | **P8.9 / P8.10** | GPIO2_5 / GPIO2_4 | ✅ ✅
+| **DB5 / DB4** | **P8.11 / P8.12** | GPIO1_13 / GPIO1_12 | ✅ ✅
+| **DB7 / DB6** | **P8.13 / P8.14** | GPIO0_23 / GPIO0_26 | ✅ ✅
+| **DB9 / DB8** | **P8.15 / P8.16** | GPIO1_15 / GPIO1_14 | ✅ ✅
+| **DB11 / DB10**| **P8.17 / P8.18** | GPIO0_27 / GPIO2_1 | ✅ ✅
+| **DB13 / DB12**| **P8.19 / P8.26** | GPIO0_22 / GPIO1_29 | ✅ ✅
+| **DB15 / DB14**| **P8.27 / P8.28** | GPIO2_22 / GPIO2_24 | ✅ ✅
 
 ---
 
 ## Operating Modes
 
-### Parallel Mode
-To use the parallel interface (required by this PRU firmware), ensure the **PAR/SER** (if present on your module) is connected to **GND**.
+### Parallel Mode Select
+Ensure the **PAR/SER** pin on your module is connected to **GND** to enable parallel mode.
 
-### Transparent Read
-By tying **CS** and **RD** to **GND**, the AD7606 operates in "transparent read" mode. As soon as the conversion is complete and **BUSY** goes low, the 16-bit data is immediately presented on the DB0-DB15 pins for the PRU to read.
+### Hardware Configuration
+- **OS[0:2]**: Tie to **GND** for no oversampling (highest speed).
+- **RANGE**: Tie to **GND** for +/- 5V range.
+- **VIO**: Must be **3.3V**.

@@ -1,0 +1,190 @@
+# ============================================================================
+# debian@beaglebone:~$ cat /boot/uEnv.txt 
+# This is the /boot/uEnv.txt file for the BBB
+# This file will disable HDMI, Audio, and ADC
+# This is needed in order to free up enough pins for the PRU to use
+# pin outs on the BBB https://vadl.github.io/beagleboneblack/2016/07/29/setting-up-bbb-gpio
+
+
+# By disabling video, audio, and ADC, you've freed up several high-demand pins—specifically the "LCD Data" pins on the P8 header and the analog inputs on P9.
+# 1. Newly Freed Pins (Formerly Reserved) 
+# Video (HDMI/LCD): Disabling video frees up P8_27 through P8_46. These are the LCD data pins (Mode 0: lcd_data0 to lcd_data15).
+# Audio: Frees up P9_25, P9_28, P9_29, and P9_31.
+# ADC: Frees up P9_33 through P9_40. Note: These are strictly 1.8V analog pins and cannot be used for 3.3V digital I/O. 
+
+
+# 2. PRU-Reachable Pins (Fast I/O) 
+# The PRUs (Programmable Real-Time Units) can access pins in two ways. "Enhanced GPIO" 
+# (using __R30 for output and __R31 for input) is the fastest, providing deterministic, 
+# single-cycle access. 
+#
+# Header Pin | PRU & Register Bit | Former Use (Now Free)
+# -----------|--------------------|----------------------
+# P8_45      | PRU1, Bit 0        | Video (LCD Data)
+# P8_46      | PRU1, Bit 1        | Video (LCD Data)
+# P8_43      | PRU1, Bit 2        | Video (LCD Data)
+# P8_44      | PRU1, Bit 3        | Video (LCD Data)
+# P8_41      | PRU1, Bit 4        | Video (LCD Data)
+# P8_42      | PRU1, Bit 5        | Video (LCD Data)
+# P8_39      | PRU1, Bit 6        | Video (LCD Data)
+# P8_40      | PRU1, Bit 7        | Video (LCD Data)
+# P9_31      | PRU0, Bit 0        | Audio
+# P9_29      | PRU0, Bit 1        | Audio
+# P9_30      | PRU0, Bit 2        | Audio
+# P9_28      | PRU0, Bit 3        | Audio
+
+
+# Install Show-pins:
+# debian@beaglebone:/opt/scripts/device/bone$ sudo ./show-pins-install.sh
+
+# Current state of BBB Show-Pins:
+# debian@beaglebone:/opt/scripts/device/bone$ sudo show-pins 
+# P8.25 / eMMC d0                    0 fast rx  up  1 mmc 1 d0         mmc@481d8000 (pinmux_emmc_pins)
+# P8.24 / eMMC d1                    1 fast rx  up  1 mmc 1 d1         mmc@481d8000 (pinmux_emmc_pins)
+# P8.05 / eMMC d2                    2 fast rx  up  1 mmc 1 d2         mmc@481d8000 (pinmux_emmc_pins)
+# P8.06 / eMMC d3                    3 fast rx  up  1 mmc 1 d3         mmc@481d8000 (pinmux_emmc_pins)
+# P8.23 / eMMC d4                    4 fast rx  up  1 mmc 1 d4         mmc@481d8000 (pinmux_emmc_pins)
+# P8.22 / eMMC d5                    5 fast rx  up  1 mmc 1 d5         mmc@481d8000 (pinmux_emmc_pins)
+# P8.03 / eMMC d6                    6 fast rx  up  1 mmc 1 d6         mmc@481d8000 (pinmux_emmc_pins)
+# P8.04 / eMMC d7                    7 fast rx  up  1 mmc 1 d7         mmc@481d8000 (pinmux_emmc_pins)
+# P8.19                              8 fast rx down 7 gpio 0.22 << lo  P8_19 (pinmux_P8_19_default_pin)
+# P8.13                              9 fast rx down 7 gpio 0.23 << lo  P8_13 (pinmux_P8_13_default_pin)
+# P8.14                             10 fast rx down 7 gpio 0.26 << lo  P8_14 (pinmux_P8_14_default_pin)
+# P8.17                             11 fast rx down 7 gpio 0.27 << lo  P8_17 (pinmux_P8_17_default_pin)
+# P8.12                             12 fast rx down 7 gpio 1.12 << lo  P8_12 (pinmux_P8_12_default_pin)
+# P8.11                             13 fast rx down 7 gpio 1.13 << lo  P8_11 (pinmux_P8_11_default_pin)
+# P8.16                             14 fast rx down 7 gpio 1.14 << lo  P8_16 (pinmux_P8_16_default_pin)
+# P8.15                             15 fast rx down 7 gpio 1.15 << lo  P8_15 (pinmux_P8_15_default_pin)
+# P9.15                             16 fast rx down 7 gpio 1.16 << hi  P9_15 (pinmux_P9_15_default_pin)
+# P9.23                             17 fast rx down 7 gpio 1.17 << lo  P9_23 (pinmux_P9_23_default_pin)
+# P9.14                             18 fast rx down 7 gpio 1.18 << lo  P9_14 (pinmux_P9_14_default_pin)
+# P9.16                             19 fast rx down 7 gpio 1.19 << lo  P9_16 (pinmux_P9_16_default_pin)
+# P9.11                             28 fast rx  up  7 gpio 0.30 << hi  P9_11 (pinmux_P9_11_default_pin)
+# P9.13                             29 fast rx  up  7 gpio 0.31 << hi  P9_13 (pinmux_P9_13_default_pin)
+# P9.12                             30 fast rx  up  7 gpio 1.28 << hi  P9_12 (pinmux_P9_12_default_pin)
+# P8.26                             31 fast rx  up  7 gpio 1.29 << hi  P8_26 (pinmux_P8_26_default_pin)
+# P8.21 / eMMC clk                  32 fast rx  up  2 mmc 1 clk        mmc@481d8000 (pinmux_emmc_pins)
+# P8.20 / eMMC cmd                  33 fast rx  up  2 mmc 1 cmd        mmc@481d8000 (pinmux_emmc_pins)
+# P9.15                             34 fast rx  up  7 gpio 2.00       
+# P8.18                             35 fast rx down 7 gpio 2.01 << lo  P8_18 (pinmux_P8_18_default_pin)
+# P8.07                             36 fast rx  up  7 gpio 2.02 << hi  P8_07 (pinmux_P8_07_default_pin)
+# P8.08                             37 fast rx  up  7 gpio 2.03 << hi  P8_08 (pinmux_P8_08_default_pin)
+# P8.10                             38 fast rx  up  7 gpio 2.04 << hi  P8_10 (pinmux_P8_10_default_pin)
+# P8.09                             39 fast rx  up  7 gpio 2.05 << hi  P8_09 (pinmux_P8_09_default_pin)
+# P8.45 / hdmi / sysboot 0          40 fast rx down 7 gpio 2.06 << lo  P8_45 (pinmux_P8_45_default_pin)
+# P8.46 / hdmi / sysboot 1          41 fast rx down 7 gpio 2.07 << lo  P8_46 (pinmux_P8_46_default_pin)
+# P8.43 / hdmi / sysboot 2          42 fast rx down 7 gpio 2.08 << lo  P8_43 (pinmux_P8_43_default_pin)
+# P8.44 / hdmi / sysboot 3          43 fast rx down 7 gpio 2.09 << lo  P8_44 (pinmux_P8_44_default_pin)
+# P8.41 / hdmi / sysboot 4          44 fast rx down 7 gpio 2.10 << lo  P8_41 (pinmux_P8_41_default_pin)
+# P8.42 / hdmi / sysboot 5          45 fast rx down 7 gpio 2.11 << lo  P8_42 (pinmux_P8_42_default_pin)
+# P8.39 / hdmi / sysboot 6          46 fast rx down 7 gpio 2.12 << lo  P8_39 (pinmux_P8_39_default_pin)
+# P8.40 / hdmi / sysboot 7          47 fast rx down 7 gpio 2.13 << lo  P8_40 (pinmux_P8_40_default_pin)
+# P8.37 / hdmi / sysboot 8          48 fast rx down 7 gpio 2.14 << lo  P8_37 (pinmux_P8_37_default_pin)
+# P8.38 / hdmi / sysboot 9          49 fast rx down 7 gpio 2.15 << lo  P8_38 (pinmux_P8_38_default_pin)
+# P8.36 / hdmi / sysboot 10         50 fast rx down 7 gpio 2.16 << lo  P8_36 (pinmux_P8_36_default_pin)
+# P8.34 / hdmi / sysboot 11         51 fast rx down 7 gpio 2.17 << lo  P8_34 (pinmux_P8_34_default_pin)
+# P8.35 / hdmi / sysboot 12         52 fast rx down 7 gpio 0.08 << lo  P8_35 (pinmux_P8_35_default_pin)
+# P8.33 / hdmi / sysboot 13         53 fast rx down 7 gpio 0.09 << lo  P8_33 (pinmux_P8_33_default_pin)
+# P8.31 / hdmi / sysboot 14         54 fast rx down 7 gpio 0.10 << lo  P8_31 (pinmux_P8_31_default_pin)
+# P8.32 / hdmi / sysboot 15         55 fast rx down 7 gpio 0.11 << lo  P8_32 (pinmux_P8_32_default_pin)
+# P8.27 / hdmi                      56 fast rx down 7 gpio 2.22 << lo  P8_27 (pinmux_P8_27_default_pin)
+# P8.29 / hdmi                      57 fast rx down 7 gpio 2.23 << lo  P8_29 (pinmux_P8_29_default_pin)
+# P8.28 / hdmi                      58 fast rx down 7 gpio 2.24 << lo  P8_28 (pinmux_P8_28_default_pin)
+# P8.30 / hdmi                      59 fast rx down 7 gpio 2.25 << lo  P8_30 (pinmux_P8_30_default_pin)
+# P9.22 / spi boot clk              84 fast rx  up  7 gpio 0.02 << hi  P9_22 (pinmux_P9_22_default_pin)
+# P9.21 / spi boot in               85 fast rx  up  7 gpio 0.03 << hi  P9_21 (pinmux_P9_21_default_pin)
+# P9.18 / spi boot out              86 fast rx  up  7 gpio 0.04 << hi  P9_18 (pinmux_P9_18_default_pin)
+# P9.17 / spi boot cs               87 fast rx  up  7 gpio 0.05 << hi  P9_17 (pinmux_P9_17_default_pin)
+# P9.42                             89 fast rx down 7 gpio 0.07 << lo  P9_42 (pinmux_P9_42_default_pin)
+# P9.20 / cape i²c sda              94 fast rx  up  3 i²c 2 sda        ocp/P9_20_pinmux (pinmux_P9_20_default_pin)
+# P9.19 / cape i²c scl              95 fast rx  up  3 i²c 2 scl        ocp/P9_19_pinmux (pinmux_P9_19_default_pin)
+# P9.26                             96 fast rx  up  7 gpio 0.14 << hi  P9_26 (pinmux_P9_26_default_pin)
+# P9.24                             97 fast rx  up  7 gpio 0.15 << hi  P9_24 (pinmux_P9_24_default_pin)
+# P9.31 / hdmi audio clk           100 fast rx down 7 gpio 3.14 << lo  P9_31 (pinmux_P9_31_default_pin)
+# P9.29 / hdmi audio fs            101 fast rx down 7 gpio 3.15 << lo  P9_29 (pinmux_P9_29_default_pin)
+# P9.30                            102 fast rx down 7 gpio 3.16 << lo  P9_30 (pinmux_P9_30_default_pin)
+# P9.28 / hdmi audio data          103 fast rx down 7 gpio 3.17 << lo  P9_28 (pinmux_P9_28_default_pin)
+# P9.42                            104 fast rx down 7 gpio 3.18 << lo  P9_92 (pinmux_P9_92_default_pin)
+# P9.27                            105 fast rx down 7 gpio 3.19 << lo  P9_27 (pinmux_P9_27_default_pin)
+# P9.41                            106 fast rx down 7 gpio 3.20 << lo  P9_91 (pinmux_P9_91_default_pin)
+# P9.25 / audio osc                107 fast rx down 7 gpio 3.21 << lo  P9_25 (pinmux_P9_25_default_pin)
+# P9.41 / jtag emu3                109 fast rx down 7 gpio 0.20 << lo  P9_41 (pinmux_P9_41_default_pin)
+
+
+
+# At time of writing my BBB is using this version of uBoot:
+# debian@beaglebone:~$ cd /opt/scripts/tools/
+# debian@beaglebone:/opt/scripts/tools$ sudo ./version.sh | grep bootloader
+# [sudo] password for debian: 
+# bootloader:[eMMC-(default)]:[/dev/mmcblk1]:[U-Boot SPL 2019.04-00002-g31a8ae0206 (May 13 2020 - 09:26:17 -0500)]:[location: dd MBR]
+# bootloader:[eMMC-(default)]:[/dev/mmcblk1]:[U-Boot 2019.04-00002-g31a8ae0206]:[location: dd MBR]
+# ============================================================================
+
+
+#Docs: http://elinux.org/Beagleboard:U-boot_partitioning_layout_2.0
+
+uname_r=4.19.94-ti-r42
+#uuid=
+dtb=am335x-boneblack.dtb
+#dtb=am335x-boneblack-uboot-univ.dtb
+
+###U-Boot Overlays###
+###Documentation: http://elinux.org/Beagleboard:BeagleBoneBlack_Debian#U-Boot_Overlays
+###Master Enable
+enable_uboot_overlays=1
+###
+###Overide capes with eeprom
+#uboot_overlay_addr0=/lib/firmware/<file0>.dtbo
+#uboot_overlay_addr1=/lib/firmware/<file1>.dtbo
+#uboot_overlay_addr2=/lib/firmware/<file2>.dtbo
+#uboot_overlay_addr3=/lib/firmware/<file3>.dtbo
+###
+###Additional custom capes
+#uboot_overlay_addr5=/lib/firmware/<file5>.dtbo
+#uboot_overlay_addr6=/lib/firmware/<file6>.dtbo
+#uboot_overlay_addr7=/lib/firmware/<file7>.dtbo
+###
+###Custom Cape
+#dtb_overlay=/lib/firmware/BB-PRU0-AD7606-LEAN.dtbo
+###
+###Disable auto loading of virtual capes (emmc/video/wireless/adc)
+#disable_uboot_overlay_emmc=1
+disable_uboot_overlay_video=1
+disable_uboot_overlay_audio=1
+#disable_uboot_overlay_wireless=1
+disable_uboot_overlay_adc=1
+###
+###PRUSS OPTIONS
+###pru_rproc (4.14.x-ti kernel)
+#uboot_overlay_pru=/lib/firmware/AM335X-PRU-RPROC-4-14-TI-00A0.dtbo
+###pru_rproc (4.19.x-ti kernel)
+uboot_overlay_pru=/lib/firmware/AM335X-PRU-RPROC-4-19-TI-00A0.dtbo
+###pru_uio (4.14.x-ti, 4.19.x-ti & mainline/bone kernel)
+#uboot_overlay_pru=/lib/firmware/AM335X-PRU-UIO-00A0.dtbo
+###
+###Cape Universal Enable
+enable_uboot_cape_universal=1
+###
+###Debug: disable uboot autoload of Cape
+#disable_uboot_overlay_addr0=1
+#disable_uboot_overlay_addr1=1
+#disable_uboot_overlay_addr2=1
+#disable_uboot_overlay_addr3=1
+###
+###U-Boot fdt tweaks... (60000 = 384KB)
+#uboot_fdt_buffer=0x60000
+###U-Boot Overlays###
+
+cmdline=coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 quiet
+
+#In the event of edid real failures, uncomment this next line:
+#cmdline=coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 quiet video=HDMI-A-1:1024x768@60e
+
+##enable Generic eMMC Flasher:
+#cmdline=init=/opt/scripts/tools/eMMC/init-eMMC-flasher-v3.sh
+
+##uboot_base_dtb_univ=
+#uboot_capemgr_enabled=1
+
+uboot_overlay_addr4=/lib/firmware/am335x-bone-universal-00A0.dtbo
+#uboot_overlay_addr4=BB-PRU0-AD7606-LEAN.dtbo
