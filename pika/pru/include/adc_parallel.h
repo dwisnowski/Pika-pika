@@ -33,9 +33,9 @@ static inline uint16_t adc_assemble_word(void) {
   // DB1/0: P8.29/30 -> GPIO2_23/25
   word |= ((r2 >> 25) & 1) << 0;
   word |= ((r2 >> 23) & 1) << 1;
-  // DB3/2: P8.31/10 -> GPIO0_10 / GPIO2_4
+  // DB3/2: P9.23 / P8.10 -> GPIO1_17 / GPIO2_4
   word |= ((r2 >> 4) & 1) << 2;
-  word |= ((r0 >> 10) & 1) << 3;
+  word |= ((r1 >> 17) & 1) << 3;
   // DB5/4: P8.11/12 -> GPIO1_13/12
   word |= ((r1 >> 12) & 1) << 4;
   word |= ((r1 >> 13) & 1) << 5;
