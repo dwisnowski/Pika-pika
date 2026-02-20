@@ -1,6 +1,8 @@
 #ifndef SHM_LAYOUT_H
 #define SHM_LAYOUT_H
 
+#pragma pack(push, 1)
+
 #include <stdint.h>
 
 /**
@@ -75,5 +77,7 @@ typedef struct {
 
   /* Ring buffer data follows this header at offset 64 */
 } __attribute__((packed)) pru_shared_memory_t;
+
+#pragma pack(pop)
 
 #endif /* SHM_LAYOUT_H */

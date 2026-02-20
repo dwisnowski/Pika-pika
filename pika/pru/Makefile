@@ -188,7 +188,7 @@ load: $(MAIN_FIRMWARE)
 	@config-pin P9.29 pruout # RESET
 	@config-pin P9.25 pruin  # BUSY
 	@echo "Configuring Data Pins (P8)..."
-	@for i in 7 8 9 10 11 12 13 14 15 16 17 18 19 26 27 28; do \
+	@for i in 29 30 31 10 11 12 13 14 15 16 17 18 19 26 27 28; do \
 		config-pin P8.$$i gpio; \
 	done
 	@echo "Loading to $(PRU0_ID) (PRU0)..."

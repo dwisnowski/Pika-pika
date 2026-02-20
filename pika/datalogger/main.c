@@ -1,9 +1,5 @@
 /**
- * Minimal Linux userspace datalogger for PRU AD7606 ADC.
- * Mmaps PRU shared memory, initializes config, starts PRU, reads ring buffer.
- *
- * Build with: -I../pru/include
- * PRU firmware must be installed first (e.g. make pru-load from top level).
+ * Pika Datalogger - Verbose Debug Edition
  */
 
 #define _GNU_SOURCE
@@ -14,217 +10,98 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <unistd.h>
 
-#include "shm_layout.h"
+#include "../pru/include/shm_layout.h"
 
-/* Physical base address for PRU shared memory.
- * PRU Shared RAM is at 0x4a310000 from the ARM's perspective. */
 #define PRU_SHM_PHYS_BASE 0x4a310000
-#define PRU_SHM_SIZE 0x3000 /* 12 KB PRU Shared RAM */
-
+#define PRU_SHM_SIZE 0x3000
 #define REMOTEPROC_STATE "/sys/class/remoteproc/remoteproc0/state"
-
-// Error flags are defined in shm_layout.h
-
-static uint8_t count_channels(uint32_t mask) {
-  uint8_t n = 0;
-  for (int i = 0; i < MAX_CHANNELS; i++)
-    if (mask & (1u << i))
-      n++;
-  return n;
-}
 
 static int pru_state_write(const char *value) {
   int fd = open(REMOTEPROC_STATE, O_WRONLY);
-  if (fd < 0) {
-    perror("open " REMOTEPROC_STATE);
+  if (fd < 0)
     return -1;
-  }
-  size_t len = strlen(value);
-  ssize_t n = write(fd, value, len);
+  write(fd, value, strlen(value));
   close(fd);
-  if (n != (ssize_t)len) {
-    perror("write state");
-    return -1;
-  }
   return 0;
 }
 
-static int pru_stop(void) { return pru_state_write("stop"); }
-
-static int pru_start(void) { return pru_state_write("start"); }
-
 int main(void) {
-  const uint32_t channel_mask = 0x01; /* 1 channel */
-  const uint32_t block_size = 256;
+  const uint32_t channel_mask = 0xFF; // 8 channels
+  const uint32_t block_size = 128;
   const uint32_t num_blocks = 4;
-
-  uint8_t num_channels = count_channels(channel_mask);
-  uint32_t block_data_size =
-      block_size * num_channels * (uint32_t)sizeof(uint16_t);
-  uint32_t block_total_size =
-      (uint32_t)sizeof(block_descriptor_t) + block_data_size;
-  size_t shm_used =
-      sizeof(pru_shared_memory_t) + (size_t)num_blocks * block_total_size;
+  const uint32_t block_total_size = 16 + (block_size * 8 * 2);
 
   int fd = open("/dev/mem", O_RDWR | O_SYNC);
   if (fd < 0) {
     perror("open /dev/mem");
     return 1;
   }
-
   void *base = mmap(NULL, PRU_SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd,
                     PRU_SHM_PHYS_BASE);
-  if (base == MAP_FAILED) {
-    perror("mmap");
-    close(fd);
-    return 1;
-  }
   close(fd);
 
   volatile pru_shared_memory_t *shm = (volatile pru_shared_memory_t *)base;
 
-  /* Stop PRU if running (idempotent) */
-  if (pru_stop() != 0) {
-    fprintf(stderr, "pru_stop failed (run as root?)\n");
-    munmap((void *)base, PRU_SHM_SIZE);
-    return 1;
-  }
-
-  /* Zero out shared memory first to ensure no stale data */
+  printf("Resetting PRU and Shared Memory...\n");
+  pru_state_write("stop");
   memset((void *)base, 0, sizeof(pru_shared_memory_t));
 
-  /* Initialize header for PRU - write magic LAST */
   shm->version = SHM_VERSION;
-  shm->sample_period_cycles = 20000; /* 100 us @ 200 MHz = 10 kHz */
+  shm->sample_period_cycles = 20000; // 100us = 10kHz
   shm->channel_mask = channel_mask;
   shm->block_size = block_size;
   shm->num_blocks = num_blocks;
-  shm->write_block_idx = 0;
-  shm->error_flags = 0;
-  shm->sample_count = 0;
 
-  /* Ensure ARM CPU flushes config before writing magic */
   __sync_synchronize();
-  msync(base, PRU_SHM_SIZE, MS_SYNC);
-
   shm->magic = SHM_MAGIC;
 
-  /* Ensure magic is flushed */
-  __sync_synchronize();
-  msync(base, PRU_SHM_SIZE, MS_SYNC);
+  printf("Starting PRU...\n");
+  pru_state_write("start");
 
-  printf("datalogger: memory layout debug:\n");
-  printf("  sizeof(pru_shm_t): %zu\n", sizeof(pru_shared_memory_t));
-  printf("  sizeof(block_desc_t): %zu\n", sizeof(block_descriptor_t));
-  printf("  block_data_size: %u\n", block_data_size);
-  printf("  block_total_size: %u\n", block_total_size);
-  printf("  block 0 offset: %zu\n", sizeof(pru_shared_memory_t));
-  printf("  block 1 offset: %u\n",
-         (uint32_t)sizeof(pru_shared_memory_t) + block_total_size);
-  printf("  magic: 0x%08x\n", shm->magic);
-  printf("  period: %u\n", shm->sample_period_cycles);
-  printf("  mask: 0x%x\n", shm->channel_mask);
-  printf("  block_size: %u\n", shm->block_size);
-  printf("  num_blocks: %u\n", shm->num_blocks);
+  printf("AD7606 Debug Logger (Interval: 0.2s). Press Ctrl+C to stop.\n");
 
-  usleep(10000);
+  struct timespec last_print;
+  clock_gettime(CLOCK_MONOTONIC, &last_print);
 
-  if (pru_start() != 0) {
-    fprintf(stderr, "pru_start failed\n");
-    munmap((void *)base, PRU_SHM_SIZE);
-    return 1;
-  }
-
-  printf("datalogger: memory layout debug:\n");
-  printf("  sizeof(pru_shm_t): %zu\n", sizeof(pru_shared_memory_t));
-  printf("  sizeof(block_desc_t): %zu\n", sizeof(block_descriptor_t));
-  printf("  block_data_size: %u\n", block_data_size);
-  printf("  block_total_size: %u\n", block_total_size);
-
-  uint32_t read_block = 0;
-  int blocks_printed = 0;
-  int total_blocks_read = 0;
-  const int max_blocks_to_print = 32;
-  const int samples_per_block_to_print = 16;
-  const int max_blocks_then_exit = 64;
-
-  printf("datalogger: reading blocks (channels=%u, block_size=%u, "
-         "num_blocks=%u)\n",
-         (unsigned)num_channels, (unsigned)block_size, (unsigned)num_blocks);
-
-  int loop_iterations = 0;
-  while (total_blocks_read < max_blocks_then_exit) {
-    loop_iterations++;
-
-    // Debug: Show status every 20 iterations
-    if (loop_iterations % 20 == 0) {
-      fprintf(stderr,
-              "DIAG: Loop %d | PRU blk=%u, off=%u, smp=%u, phys=%08x | ARM "
-              "read=%u\n",
-              loop_iterations, shm->reserved[0], shm->reserved[1],
-              shm->reserved[2], shm->reserved[3], (unsigned)read_block);
-    }
-
+  while (1) {
+    // Immediate Error Check
     if (shm->error_flags != 0) {
       uint32_t err = shm->error_flags;
-      fprintf(stderr, "PRU Error detected: 0x%x\n", err);
-      if (err & ERROR_BUSY_TIMEOUT)
-        fprintf(stderr,
-                "  - ERROR_BUSY_TIMEOUT (AD7606 BUSY signal not responding)\n");
-      if (err & ERROR_CFG_PERIOD)
-        fprintf(stderr, "  - ERROR_CFG_PERIOD\n");
-      if (err & ERROR_CFG_MASK)
-        fprintf(stderr, "  - ERROR_CFG_MASK\n");
-      if (err & ERROR_CFG_BLOCKSIZE)
-        fprintf(stderr, "  - ERROR_CFG_BLOCKSIZE\n");
-      if (err & ERROR_CFG_NUMBLOCKS) {
-        fprintf(stderr, "  - ERROR_CFG_NUMBLOCKS\n");
-        fprintf(stderr, "  - PRU echoed val_num_blocks: %u\n",
-                shm->write_block_idx);
-        fprintf(stderr, "  - PRU echoed val_block_size: %u\n",
-                shm->sample_count);
-      }
-      fprintf(stderr, "\nLikely cause: Check that AD7606 RST pin is connected "
-                      "to 3.3V (not GND)\n");
+      printf("\nFATAL: PRU HALTED with Error 0x%08x\n", err);
+      if (err == 0x02)
+        printf("  Meaning: BUSY signal never went HIGH (Check CONVST/BUSY/VCC "
+               "wiring)\n");
+      if (err == 0x04)
+        printf("  Meaning: BUSY signal stuck HIGH (Check BUSY wiring)\n");
       break;
     }
 
-    uint32_t write_idx = shm->write_block_idx;
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    double elapsed = (now.tv_sec - last_print.tv_sec) +
+                     (now.tv_nsec - last_print.tv_nsec) / 1e9;
 
-    while (read_block != write_idx &&
-           total_blocks_read < max_blocks_then_exit) {
-      fprintf(stderr, "datalogger: reading block %u\n", (unsigned)read_block);
-      uint8_t *block_base = (uint8_t *)base + sizeof(pru_shared_memory_t) +
-                            (size_t)read_block * block_total_size;
-      block_descriptor_t *desc = (block_descriptor_t *)block_base;
-      uint16_t *data = (uint16_t *)(block_base + sizeof(block_descriptor_t));
+    if (elapsed >= 0.2) {
+      uint32_t b_idx = shm->write_block_idx;
+      uint8_t *b_ptr = (uint8_t *)base + 64 + (b_idx * block_total_size);
+      volatile block_descriptor_t *d = (volatile block_descriptor_t *)b_ptr;
+      uint16_t *data = (uint16_t *)(b_ptr + 16);
 
-      if (blocks_printed < max_blocks_to_print) {
-        printf("block %u: num_samples=%u", (unsigned)read_block,
-               (unsigned)desc->num_samples);
-        int n = (int)desc->num_samples * (int)num_channels;
-        if (n > samples_per_block_to_print)
-          n = samples_per_block_to_print;
-        for (int i = 0; i < n; i++)
-          printf(" %u", (unsigned)data[i]);
-        printf("\n");
-        blocks_printed++;
-      } else {
-        fprintf(stderr, "datalogger: skipping block %u\n",
-                (unsigned)read_block);
-      }
+      printf("STAT: clk=%u | blk=%u flg=%08x | CH0: %4.3fV | CH1: %4.3fV\n",
+             shm->sample_count, b_idx, d->flags,
+             (float)(int16_t)data[0] * 5.0f / 32768.0f,
+             (float)(int16_t)data[1] * 5.0f / 32768.0f);
 
-      read_block = (read_block + 1) % num_blocks;
-      total_blocks_read++;
+      last_print = now;
     }
 
-    usleep(5000);
+    usleep(10000);
   }
 
-  printf("datalogger: read %d blocks, exiting\n", total_blocks_read);
-  munmap((void *)base, PRU_SHM_SIZE);
-  (void)shm_used;
+  pru_state_write("stop");
+  munmap(base, PRU_SHM_SIZE);
   return 0;
 }

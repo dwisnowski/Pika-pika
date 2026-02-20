@@ -4,62 +4,25 @@
 #include "pru_config.h"
 #include <stdint.h>
 
-/**
- * ADC Parallel Interface
- *
- * Low-level hardware interface to AD7606 using PRU GPIO registers.
- * All functions are inline for zero overhead in the hot loop.
- */
+/* PRU0 R30/R31 Bit Mappings */
+#define PRU0_R30 (*((volatile uint32_t *)0x22000))
+#define PRU0_R31 (*((volatile uint32_t *)0x22000))
 
-// PRU register access (Matches pru_bringup.c)
-#include <pru_cfg.h>
+#define PIN_CONVST 5 // P9.27 (R30 bit 5)
+#define PIN_RD 2     // P9.30 (R30 bit 2)
+#define PIN_CS 3     // P9.28 (R30 bit 3, though user says it's grounded)
+#define PIN_BUSY 7   // P9.25 (R31 bit 7)
 
-volatile register uint32_t __R30; // Output register
-volatile register uint32_t __R31; // Input register
-
-#define PRU0_R30 __R30 // Output register
-#define PRU0_R31 __R31 // Input register
-
-/**
- * Assert CONVST signal (start conversion)
- */
-static inline void adc_assert_convst(void) { PRU0_R30 |= (1 << PIN_CONVST); }
-
-/**
- * Deassert CONVST signal
- */
-static inline void adc_deassert_convst(void) { PRU0_R30 &= ~(1 << PIN_CONVST); }
-
-/**
- * Pulse RESET signal
- */
-static inline void adc_reset(void) {
-  PRU0_R30 |= (1 << PIN_RESET);
-  __delay_cycles(100); // ~500ns
-  PRU0_R30 &= ~(1 << PIN_RESET);
-  __delay_cycles(100);
-}
-
-/**
- * Assert CS signal
- */
 static inline void adc_assert_cs(void) { PRU0_R30 &= ~(1 << PIN_CS); }
-
-/**
- * Deassert CS signal
- */
 static inline void adc_deassert_cs(void) { PRU0_R30 |= (1 << PIN_CS); }
 
-/**
- * Read BUSY signal state
- * Returns: 1 if busy, 0 if ready
- */
 static inline uint32_t adc_read_busy(void) {
-  return (PRU0_R31 & (1 << PIN_BUSY)) ? 1 : 0;
+  return (PRU0_R31 & (1 << PIN_BUSY));
 }
 
 /**
  * Assemble 16-bit word from GPIO banks
+ * We read all three banks once to minimize OCP transaction overhead.
  */
 static inline uint16_t adc_assemble_word(void) {
   uint32_t r0 = (*(volatile uint32_t *)(GPIO0_BASE + GPIO_DATAIN));
@@ -67,12 +30,12 @@ static inline uint16_t adc_assemble_word(void) {
   uint32_t r2 = (*(volatile uint32_t *)(GPIO2_BASE + GPIO_DATAIN));
   uint16_t word = 0;
 
-  // DB1/0: P8.7/8 -> GPIO2_2/3
-  word |= ((r2 >> 3) & 1) << 0;
-  word |= ((r2 >> 2) & 1) << 1;
-  // DB3/2: P8.9/10 -> GPIO2_5/4
+  // DB1/0: P8.29/30 -> GPIO2_23/25
+  word |= ((r2 >> 25) & 1) << 0;
+  word |= ((r2 >> 23) & 1) << 1;
+  // DB3/2: P8.31/10 -> GPIO0_10 / GPIO2_4
   word |= ((r2 >> 4) & 1) << 2;
-  word |= ((r2 >> 5) & 1) << 3;
+  word |= ((r0 >> 10) & 1) << 3;
   // DB5/4: P8.11/12 -> GPIO1_13/12
   word |= ((r1 >> 12) & 1) << 4;
   word |= ((r1 >> 13) & 1) << 5;
@@ -96,43 +59,43 @@ static inline uint16_t adc_assemble_word(void) {
 }
 
 /**
- * Read 16-bit parallel data for the next channel
- */
-static inline uint16_t adc_read_next(void) {
-  uint16_t val;
-  // Pulse RD (Falling edge triggers read)
-  PRU0_R30 &= ~(1 << PIN_RD);
-  __delay_cycles(10); // Minimum RD pulse width (20ns)
-  val = adc_assemble_word();
-  PRU0_R30 |= (1 << PIN_RD);
-  __delay_cycles(10);
-  return val;
-}
-
-// Backward compatibility for main loop
-static inline uint16_t adc_read_channel(uint8_t channel) {
-  return adc_read_next();
-}
-
-/**
- * Trigger conversion and wait for completion
+ * Trigger CONVST and wait for BUSY cycles.
+ * Returns: 0 = OK, -1 = BUSY never went High, -2 = BUSY never went Low
  */
 static inline int adc_trigger_and_wait(void) {
-  adc_assert_convst();
-  __delay_cycles(CONVST_PULSE_CYCLES);
-  adc_deassert_convst();
+  // CONVST Start: Falling edge initiates
+  PRU0_R30 |= (1 << PIN_CONVST);
+  __delay_cycles(200); // Wait 1us
+  PRU0_R30 &= ~(1 << PIN_CONVST);
+  __delay_cycles(200); // 1us pulse width
+  PRU0_R30 |= (1 << PIN_CONVST);
 
-  // Wait for BUSY to go high then low
-  uint32_t timeout = BUSY_TIMEOUT_CYCLES;
+  // Wait for BUSY Rising Edge
+  uint32_t timeout = 500000;
   while (!adc_read_busy() && timeout > 0)
     timeout--;
-  timeout = BUSY_TIMEOUT_CYCLES;
-  while (adc_read_busy() && timeout > 0)
-    timeout--;
-
   if (timeout == 0)
     return -1;
+
+  // Wait for BUSY Falling Edge
+  timeout = 500000;
+  while (adc_read_busy() && timeout > 0)
+    timeout--;
+  if (timeout == 0)
+    return -2;
+
   return 0;
 }
 
-#endif // ADC_PARALLEL_H
+static inline uint16_t adc_read_next(void) {
+  uint16_t val;
+  // Pulse RD low
+  PRU0_R30 &= ~(1 << PIN_RD);
+  __delay_cycles(100); // 500ns stabilization
+  val = adc_assemble_word();
+  PRU0_R30 |= (1 << PIN_RD);
+  __delay_cycles(100);
+  return val;
+}
+
+#endif

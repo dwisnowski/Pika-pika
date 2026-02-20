@@ -75,8 +75,8 @@
 /**
  * GPIO Bank Definitions for 16-bit Parallel Data (P8 Header)
  *
- * DB1 / DB0   : P8.7 / P8.8   -> GPIO2_2 / GPIO2_3
- * DB3 / DB2   : P8.9 / P8.10  -> GPIO2_5 / GPIO2_4
+ * DB1 / DB0   : P8.29 / P8.30  -> GPIO2_23 / GPIO2_25
+ * DB3 / DB2   : P8.31 / P8.10  -> GPIO0_10 / GPIO2_4
  * DB5 / DB4   : P8.11 / P8.12 -> GPIO1_13 / GPIO1_12
  * DB7 / DB6   : P8.13 / P8.14 -> GPIO0_23 / GPIO0_26
  * DB9 / DB8   : P8.15 / P8.16 -> GPIO1_15 / GPIO1_14
@@ -90,13 +90,13 @@
 #define GPIO2_BASE 0x481AC000
 #define GPIO_DATAIN 0x138
 
-// Bank 0 Mask: DB7(23), DB6(26), DB11(27), DB13(22)
-#define BANK0_MASK ((1 << 23) | (1 << 26) | (1 << 27) | (1 << 22))
+// Bank 0 Mask: DB7(23), DB6(26), DB11(27), DB13(22), DB3(10)
+#define BANK0_MASK ((1 << 23) | (1 << 26) | (1 << 27) | (1 << 22) | (1 << 10))
 // Bank 1 Mask: DB5(13), DB4(12), DB9(15), DB8(14), DB12(29)
 #define BANK1_MASK ((1 << 13) | (1 << 12) | (1 << 15) | (1 << 14) | (1 << 29))
-// Bank 2 Mask: DB1(2), DB0(3), DB3(5), DB2(4), DB10(1), DB15(22), DB14(24)
+// Bank 2 Mask: DB1(23), DB0(25), DB2(4), DB10(1), DB15(22), DB14(24)
 #define BANK2_MASK                                                             \
-  ((1 << 2) | (1 << 3) | (1 << 5) | (1 << 4) | (1 << 1) | (1 << 22) | (1 << 24))
+  ((1 << 23) | (1 << 25) | (1 << 4) | (1 << 1) | (1 << 22) | (1 << 24))
 
 /* ============================================================================
  * Channel Configuration (Requirement 2.3)
