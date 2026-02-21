@@ -4,30 +4,29 @@
 #include "pru_config.h"
 #include <stdint.h>
 
-/* PRU0 R30/R31 Bit Mappings */
-#define PRU0_R30 (*((volatile uint32_t *)0x22000))
-#define PRU0_R31 (*((volatile uint32_t *)0x22000))
+/* PRU Special Core Registers (Direct I/O) */
+/* These are intrinsic to the PRU and do not have memory addresses */
+volatile register uint32_t __R30;
+volatile register uint32_t __R31;
 
-#define PIN_CONVST 5 // P9.27 (R30 bit 5)
-#define PIN_RD 2     // P9.30 (R30 bit 2)
-#define PIN_CS 3     // P9.28 (R30 bit 3, though user says it's grounded)
-#define PIN_BUSY 7   // P9.25 (R31 bit 7)
+#define PIN_CONVST 5 // P9.27
+#define PIN_RD 2     // P9.30
+#define PIN_CS 3     // P9.28
+#define PIN_RESET 1  // P9.29
+#define PIN_BUSY 7   // P9.25
 
-static inline void adc_assert_cs(void) { PRU0_R30 &= ~(1 << PIN_CS); }
-static inline void adc_deassert_cs(void) { PRU0_R30 |= (1 << PIN_CS); }
+static inline void adc_assert_cs(void) { __R30 &= ~(1 << PIN_CS); }
+static inline void adc_deassert_cs(void) { __R30 |= (1 << PIN_CS); }
 
-static inline uint32_t adc_read_busy(void) {
-  return (PRU0_R31 & (1 << PIN_BUSY));
-}
+static inline uint32_t adc_read_busy(void) { return (__R31 & (1 << PIN_BUSY)); }
 
 /**
  * Assemble 16-bit word from GPIO banks
- * We read all three banks once to minimize OCP transaction overhead.
  */
 static inline uint16_t adc_assemble_word(void) {
-  uint32_t r0 = (*(volatile uint32_t *)(GPIO0_BASE + GPIO_DATAIN));
-  uint32_t r1 = (*(volatile uint32_t *)(GPIO1_BASE + GPIO_DATAIN));
-  uint32_t r2 = (*(volatile uint32_t *)(GPIO2_BASE + GPIO_DATAIN));
+  uint32_t r0 = *(volatile uint32_t *)(GPIO0_BASE + GPIO_DATAIN);
+  uint32_t r1 = *(volatile uint32_t *)(GPIO1_BASE + GPIO_DATAIN);
+  uint32_t r2 = *(volatile uint32_t *)(GPIO2_BASE + GPIO_DATAIN);
   uint16_t word = 0;
 
   // DB1/0: P8.29/30 -> GPIO2_23/25
@@ -58,43 +57,47 @@ static inline uint16_t adc_assemble_word(void) {
   return word;
 }
 
-/**
- * Trigger CONVST and wait for BUSY cycles.
- * Returns: 0 = OK, -1 = BUSY never went High, -2 = BUSY never went Low
- */
 static inline int adc_trigger_and_wait(void) {
-  // CONVST Start: Falling edge initiates
-  PRU0_R30 |= (1 << PIN_CONVST);
-  __delay_cycles(200); // Wait 1us
-  PRU0_R30 &= ~(1 << PIN_CONVST);
-  __delay_cycles(200); // 1us pulse width
-  PRU0_R30 |= (1 << PIN_CONVST);
+  /* AD7606 requires a rising edge on CONVST to start conversion.
+   * Based on user testing, pulling it LOW, waiting longer (~10us),
+   * and rising it HIGH perfectly triggers the BUSY signal. */
+  __R30 &= ~(1 << PIN_CONVST); /* Pull CONVST LOW */
+  uint32_t cycles = 2000;
+  while (cycles--) {
+    __asm__(" NOP");
+  }
+  __R30 |= (1 << PIN_CONVST); /* Pull CONVST HIGH to trigger */
 
-  // Wait for BUSY Rising Edge
-  uint32_t timeout = 500000;
-  while (!adc_read_busy() && timeout > 0)
+  uint32_t timeout = 2000000; // 1ms timeout
+  while (!adc_read_busy() && timeout > 0) {
     timeout--;
+  }
   if (timeout == 0)
-    return -1;
+    return -1; // BUSY never went HIGH
 
-  // Wait for BUSY Falling Edge
-  timeout = 500000;
-  while (adc_read_busy() && timeout > 0)
+  timeout = 2000000;
+  while (adc_read_busy() && timeout > 0) {
     timeout--;
+  }
   if (timeout == 0)
-    return -2;
+    return -2; // BUSY stuck HIGH
 
   return 0;
 }
 
 static inline uint16_t adc_read_next(void) {
   uint16_t val;
-  // Pulse RD low
-  PRU0_R30 &= ~(1 << PIN_RD);
-  __delay_cycles(100); // 500ns stabilization
+  __R30 &= ~(1 << PIN_RD);
+  uint32_t cycles = 100;
+  while (cycles--) {
+    __asm__(" NOP");
+  }
   val = adc_assemble_word();
-  PRU0_R30 |= (1 << PIN_RD);
-  __delay_cycles(100);
+  __R30 |= (1 << PIN_RD);
+  cycles = 100;
+  while (cycles--) {
+    __asm__(" NOP");
+  }
   return val;
 }
 

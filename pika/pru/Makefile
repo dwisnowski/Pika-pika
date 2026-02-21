@@ -77,8 +77,7 @@ BRINGUP_FIRMWARE := $(FIRMWARE_DIR)/bringup_test.fw
 MAIN_ASM_SOURCES := $(SRC_DIR)/delay_cycles.asm
 
 # Object files
-MAIN_OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.obj,$(MAIN_SOURCES)) \
-                $(BUILD_DIR)/delay_cycles.obj
+MAIN_OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.obj,$(MAIN_SOURCES))
 BRINGUP_OBJECTS := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.obj,$(BRINGUP_SOURCES))
 
 
@@ -175,42 +174,66 @@ bringup: $(BRINGUP_FIRMWARE)
 # =============================================================================
 # Load Firmware to PRU
 # =============================================================================
-# Dynamically discover the index for PRU0 (4a334000)
-PRU0_ID := $(shell grep -l "4a334000.pru" /sys/class/remoteproc/remoteproc*/name | cut -d '/' -f 5)
+# Robust PRU0 Discovery
+PRU_PATH := /sys/class/remoteproc
+# Discover which remoteproc is PRU0 (4a334000)
+PRU0_ID := $(shell grep -l "4a334000.pru" $(PRU_PATH)/remoteproc*/name 2>/dev/null | cut -d '/' -f 5)
 
+pru-status:
+	@echo "Checking PRU status..."
+	@for r in $(PRU_PATH)/remoteproc*; do \
+		echo "$$(basename $$r): $$(cat $$r/name) -> $$(cat $$r/state)"; \
+	done
 
 # Load main sampling firmware
 load: $(MAIN_FIRMWARE)
-	@echo "Configuring Control Pins (P9)..."
-	@config-pin P9.27 pruout # CONVST
-	@config-pin P9.30 pruout # RD
-	@config-pin P9.28 pruout # CS
-	@config-pin P9.29 pruout # RESET
-	@config-pin P9.25 pruin  # BUSY
-	@config-pin P9.23 gpio   # DB3 (Safe pin)
-	@echo "Configuring Data Pins (P8)..."
-	@for i in 29 30 10 11 12 13 14 15 16 17 18 19 26 27 28; do \
+	@if [ -z "$(PRU0_ID)" ]; then echo "ERROR: PRU0 not found in $(PRU_PATH). Is the overlay loaded?"; exit 1; fi
+	@echo "Detected PRU0 at $(PRU_PATH)/$(PRU0_ID)"
+	@config-pin P9.27 pruout
+	@config-pin P9.30 pruout
+	@config-pin P9.28 pruout
+	@config-pin P9.29 pruout
+	@config-pin P9.25 pruin
+	@echo "Configuring Data Pins..."
+	@for i in 29 30 23 10 11 12 13 14 15 16 17 18 19 26 27 28; do \
 		config-pin P8.$$i gpio; \
 	done
-	@echo "Loading to $(PRU0_ID) (PRU0)..."
-	@if [ "$$(cat /sys/class/remoteproc/$(PRU0_ID)/state)" != "offline" ]; then \
-		echo stop | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state; \
-	fi
+
+	@echo "Stopping $(PRU0_ID)..."
+	@echo stop | sudo tee $(PRU_PATH)/$(PRU0_ID)/state 2>/dev/null || true
+	@echo "Loading firmware..."
 	@sudo cp $(FIRMWARE_DIR)/ad7606_sampler.out /lib/firmware/am335x-pru0-fw
-	@echo am335x-pru0-fw | sudo tee /sys/class/remoteproc/$(PRU0_ID)/firmware
-	@echo start | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state
+	@echo am335x-pru0-fw | sudo tee $(PRU_PATH)/$(PRU0_ID)/firmware
+	@echo "Starting $(PRU0_ID)..."
+	@echo start | sudo tee $(PRU_PATH)/$(PRU0_ID)/state
+	@echo "Current State: $$(cat $(PRU_PATH)/$(PRU0_ID)/state)"
 
 
 load-bringup: $(BRINGUP_FIRMWARE)
+	@if [ -z "$(PRU0_ID)" ]; then echo "ERROR: PRU0 not found in $(PRU_PATH). Is the overlay loaded?"; exit 1; fi
 	@config-pin P9.27 pruout
 	@echo "Loading to $(PRU0_ID) (PRU0)..."
-	@if [ "$$(cat /sys/class/remoteproc/$(PRU0_ID)/state)" != "offline" ]; then \
-		echo stop | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state; \
-	fi
-	@sudo cp firmware/bringup_test.out /lib/firmware/am335x-pru0-fw
+	@echo stop | sudo tee $(PRU_PATH)/$(PRU0_ID)/state 2>/dev/null || true
+	@sudo cp $(FIRMWARE_DIR)/bringup_test.out /lib/firmware/am335x-pru0-fw
+	@echo am335x-pru0-fw | sudo tee $(PRU_PATH)/$(PRU0_ID)/firmware
+	@echo start | sudo tee $(PRU_PATH)/$(PRU0_ID)/state
+
+
+# Isolated Debug Target
+DEBUG_OBJECTS := $(BUILD_DIR)/pru_test_io.obj $(BUILD_DIR)/resource_table.obj
+
+debug-pru: $(DEBUG_OBJECTS) firmware_dir
+	@echo "Linking Debug firmware..."
+	@$(PRU_LD) -z --entry_point=main -u pru_remoteproc_ResourceTable $(DEBUG_OBJECTS) AM335x_PRU.cmd $(PRU_LIBS) -o $(FIRMWARE_DIR)/debug.out
+	@config-pin P9.27 pruout
+	@echo "Loading Debug Firmware to $(PRU0_ID)..."
+	@if [ "$$(cat /sys/class/remoteproc/$(PRU0_ID)/state)" != "offline" ]; then echo stop | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state; fi
+	@sudo cp $(FIRMWARE_DIR)/debug.out /lib/firmware/am335x-pru0-fw
 	@echo am335x-pru0-fw | sudo tee /sys/class/remoteproc/$(PRU0_ID)/firmware
 	@echo start | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state
 
+$(BUILD_DIR)/pru_test_io.obj: $(SRC_DIR)/pru_test_io.c | build_dir
+	@$(PRU_CC) $(PRU_CFLAGS) -c $< -o $@
 
 wakeup-pru:
 	@ls /sys/class/remoteproc/
@@ -226,24 +249,27 @@ pru-info:
 uart-pulse:
 	@echo "Logic Analyzer Sanity Check" | sudo tee /dev/ttyS0
 
-# Variables for P9.27 (Chip 3, Line 19)
-CHIP = 3
-LINE = 19
-ITERATIONS = 10
-# Duration in milliseconds (2000ms = 2s)
-MS_DELAY = 250
-# Duration in seconds for the "off" period
-SEC_DELAY = .2
+# Parameterized Pin Testing (Usage: make pin-test H=P9 P=27 C=3 L=19)
+# Common Mappings:
+# P9.27: C=3 L=19 (CONVST) | P9.30: C=3 L=16 (RD) | P9.28: C=3 L=17 (CS)
+# P9.29: C=3 L=15 (RST)    | P9.25: C=3 L=21 (BUSY)
+# P8.29: C=2 L=23 (DB1)    | P8.30: C=2 L=25 (DB0) | P9.23: C=1 L=17 (DB3)
+H ?= P9
+P ?= 27
+C ?= 3
+L ?= 19
+ITERATIONS ?= 5
+MS_DELAY ?= 250
 
 pin-test:
-	@echo "Configuring P9.27 as GPIO..."
-	@config-pin P9.27 gpio
-	@echo "Toggling P9.27 $(ITERATIONS) times..."
+	@echo "Configuring $(H).$(P) as GPIO..."
+	@config-pin $(H).$(P) gpio
+	@echo "Toggling $(H).$(P) (Chip $(C), Line $(L)) $(ITERATIONS) times..."
 	@for i in $$(seq 1 $(ITERATIONS)); do \
-		echo "Iteration $$i: HIGH (Holding for $(MS_DELAY)ms)"; \
-		gpioset --mode time --sec 0 --usec $$(($(MS_DELAY) * 1000)) $(CHIP) $(LINE)=1; \
-		echo "Iteration $$i: LOW (Holding for $(MS_DELAY)ms)"; \
-		gpioset --mode time --sec 0 --usec $$(($(MS_DELAY) * 1000)) $(CHIP) $(LINE)=0; \
+		echo "Iteration $$i: HIGH"; \
+		gpioset --mode time --sec 0 --usec $$(($(MS_DELAY) * 1000)) $(C) $(L)=1; \
+		echo "Iteration $$i: LOW"; \
+		gpioset --mode time --sec 0 --usec $$(($(MS_DELAY) * 1000)) $(C) $(L)=0; \
 	done
 	@echo "Done."
 	
@@ -258,6 +284,21 @@ stop:
 			echo "PRU0 stopped"; \
 		else \
 			echo "PRU0 is already stopped"; \
+		fi \
+	else \
+		echo "PRU remoteproc not found. Is PRU enabled in device tree?"; \
+	fi
+
+# Start PRU0 safely
+start:
+	@echo "Starting PRU0 ($(PRU0_ID))..."
+	@if [ -d /sys/class/remoteproc/$(PRU0_ID) ]; then \
+		STATE=$$(cat /sys/class/remoteproc/$(PRU0_ID)/state); \
+		if [ "$$STATE" != "offline" ]; then \
+			echo start | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state; \
+			echo "PRU0 started"; \
+		else \
+			echo "PRU0 is already started"; \
 		fi \
 	else \
 		echo "PRU remoteproc not found. Is PRU enabled in device tree?"; \

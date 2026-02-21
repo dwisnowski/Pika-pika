@@ -15,8 +15,8 @@
 
 #include "../pru/include/shm_layout.h"
 
-#define PRU_SHM_PHYS_BASE 0x4a310000
-#define PRU_SHM_SIZE 0x3000
+#define PRU_SHM_PHYS_BASE 0x4a301000
+#define PRU_SHM_SIZE 0x1000
 #define REMOTEPROC_STATE "/sys/class/remoteproc/remoteproc0/state"
 
 static int pru_state_write(const char *value) {
@@ -90,10 +90,9 @@ int main(void) {
       volatile block_descriptor_t *d = (volatile block_descriptor_t *)b_ptr;
       uint16_t *data = (uint16_t *)(b_ptr + 16);
 
-      printf("STAT: clk=%u | blk=%u flg=%08x | CH0: %4.3fV | CH1: %4.3fV\n",
-             shm->sample_count, b_idx, d->flags,
-             (float)(int16_t)data[0] * 5.0f / 32768.0f,
-             (float)(int16_t)data[1] * 5.0f / 32768.0f);
+      printf("STAT: clk=%-6u | HB=%08x | blk=%u flg=%08x | CH0: %4.3fV\n",
+             shm->sample_count, shm->reserved[0], b_idx, d->flags,
+             (float)(int16_t)data[0] * 5.0f / 32768.0f);
 
       last_print = now;
     }
