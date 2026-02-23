@@ -6,8 +6,9 @@ MEMORY {
         PRU_IMEM     : org = 0x00000000 len = 0x00002000
 
       PAGE 1:
-        PRU_DMEM_0_1 : org = 0x00000000 len = 0x00002000
-        PRU_SHAREDMEM: org = 0x00010000 len = 0x00003000
+        PRU_DMEM_0_1 : org = 0x00000000 len = 0x00002000 CREGISTER=24
+        PRU_SHAREDMEM: org = 0x00010000 len = 0x00003000 CREGISTER=28
+        PRU_CFG      : org = 0x00026000 len = 0x00000044 CREGISTER=4
 }
 
 SECTIONS {

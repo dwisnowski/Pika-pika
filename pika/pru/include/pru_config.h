@@ -64,40 +64,54 @@
  */
 
 /** PRU0 R30 Output Pins on P9 */
-#define PIN_CONVST 5 // P9.27
-#define PIN_RD 2     // P9.30
-#define PIN_CS 3     // P9.28
-#define PIN_RESET 1  // P9.29
+// P9.27 is bit 5 of R30 on PRU0
+#define PIN_CONVST (1 << 5) // P9.27
+#define PIN_RD (1 << 2)     // P9.30
+#define PIN_CS (1 << 3)     // P9.28
+#define PIN_RESET (1 << 1)  // P9.29
 
 /** PRU0 R31 Input Pins on P9 */
-#define PIN_BUSY 7 // P9.25
+#define PIN_BUSY (1 << 7) // P9.25
 
-/**
- * GPIO Bank Definitions for 16-bit Parallel Data (P8 Header)
- *
- * DB1 / DB0   : P8.29 / P8.30  -> GPIO2_23 / GPIO2_25
- * DB3 / DB2   : P9.23 / P8.10  -> GPIO1_17 / GPIO2_4
- * DB5 / DB4   : P8.11 / P8.12 -> GPIO1_13 / GPIO1_12
- * DB7 / DB6   : P8.13 / P8.14 -> GPIO0_23 / GPIO0_26
- * DB9 / DB8   : P8.15 / P8.16 -> GPIO1_15 / GPIO1_14
- * DB11 / DB10 : P8.17 / P8.18 -> GPIO0_27 / GPIO2_1
- * DB13 / DB12 : P8.19 / P8.26 -> GPIO0_22 / GPIO1_29
- * DB15 / DB14 : P8.27 / P8.28 -> GPIO2_22 / GPIO2_24
- */
+/* PRU Special Core Registers (Direct I/O) */
+/* These are intrinsic to the PRU and do not have memory addresses */
+volatile register uint32_t __R30;
+volatile register uint32_t __R31;
 
+// Pin mapping organized by GPIO Bank for optimized assembly
+// Bank 0 (GPIO0): P8.13, P8.14, P8.17, P8.19
+#define M_GPIO0_DB7 (1 << 23)
+#define M_GPIO0_DB6 (1 << 26)
+#define M_GPIO0_DB11 (1 << 27)
+#define M_GPIO0_DB13 (1 << 22)
+
+// Bank 1 (GPIO1): P9.23, P8.11, P8.12, P8.15, P8.16, P8.26
+#define M_GPIO1_DB3 (1 << 17)
+#define M_GPIO1_DB5 (1 << 13)
+#define M_GPIO1_DB4 (1 << 12)
+#define M_GPIO1_DB9 (1 << 15)
+#define M_GPIO1_DB8 (1 << 14)
+#define M_GPIO1_DB12 (1 << 29)
+
+// Bank 2 (GPIO2): P8.29, P8.30, P8.10, P8.18, P8.27, P8.28
+#define M_GPIO2_DB1 (1 << 23)
+#define M_GPIO2_DB0 (1 << 25)
+#define M_GPIO2_DB2 (1 << 4)
+#define M_GPIO2_DB10 (1 << 1)
+#define M_GPIO2_DB15 (1 << 22)
+#define M_GPIO2_DB14 (1 << 24)
+
+/* GPIO base addresses (AM335x) */
 #define GPIO0_BASE 0x44E07000
 #define GPIO1_BASE 0x4804C000
 #define GPIO2_BASE 0x481AC000
+
 #define GPIO_DATAIN 0x138
 
-// Bank 0 Mask: DB7(23), DB6(26), DB11(27), DB13(22)
-#define BANK0_MASK ((1 << 23) | (1 << 26) | (1 << 27) | (1 << 22))
-// Bank 1 Mask: DB5(13), DB4(12), DB9(15), DB8(14), DB12(29), DB3(17)
-#define BANK1_MASK                                                             \
-  ((1 << 13) | (1 << 12) | (1 << 15) | (1 << 14) | (1 << 29) | (1 << 17))
-// Bank 2 Mask: DB1(23), DB0(25), DB2(4), DB10(1), DB15(22), DB14(24)
-#define BANK2_MASK                                                             \
-  ((1 << 23) | (1 << 25) | (1 << 4) | (1 << 1) | (1 << 22) | (1 << 24))
+/* Volatile register pointers */
+#define GPIO0_DATAIN_REG (*(volatile uint32_t *)(GPIO0_BASE + GPIO_DATAIN))
+#define GPIO1_DATAIN_REG (*(volatile uint32_t *)(GPIO1_BASE + GPIO_DATAIN))
+#define GPIO2_DATAIN_REG (*(volatile uint32_t *)(GPIO2_BASE + GPIO_DATAIN))
 
 /* ============================================================================
  * Channel Configuration (Requirement 2.3)

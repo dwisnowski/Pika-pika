@@ -37,8 +37,8 @@ Configure these pins as `gpio` via `config-pin`.
 
 | AD7606 Pin | BBB Pin  | GPIO Register |
 | :--------- | :------- | :------------ |
-| **DB1 / DB0** | **P8.7 / P8.8** | GPIO2_2 / GPIO2_3 | ✅ ✅
-| **DB3 / DB2** | **P8.9 / P8.10** | GPIO2_5 / GPIO2_4 | ✅ ✅
+| **DB1 / DB0** | **P8.29 / P8.30** | GPIO2_29 / GPIO2_30 | ✅ ✅
+| **DB3 / DB2** | **P9.23 / P8.10** | GPIO1_23 / GPIO2_4 | ✅ ✅
 | **DB5 / DB4** | **P8.11 / P8.12** | GPIO1_13 / GPIO1_12 | ✅ ✅
 | **DB7 / DB6** | **P8.13 / P8.14** | GPIO0_23 / GPIO0_26 | ✅ ✅
 | **DB9 / DB8** | **P8.15 / P8.16** | GPIO1_15 / GPIO1_14 | ✅ ✅

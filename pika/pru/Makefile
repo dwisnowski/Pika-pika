@@ -12,7 +12,7 @@ PRU_LD := clpru
 # PRU Software Support Package paths (adjust as needed)
 # These paths may need to be configured based on installation
 PRU_SSP ?= /usr/lib/ti/pru-software-support-package
-PRU_CGT ?= /usr/share/ti/cgt-pru
+PRU_CGT := /usr/share/ti/cgt-pru
 PRU_LIBS := --library=$(PRU_CGT)/lib/libc.a
 
 # =============================================================================
@@ -27,24 +27,33 @@ FIRMWARE_DIR := firmware
 # Compiler and Linker Flags
 # =============================================================================
 
-# Compiler flags
-PRU_CFLAGS := -v3 \
+# Include Paths
+INCLUDE := -I$(INC_DIR) \
+           -I$(PRU_CGT)/include \
+           -I$(PRU_SSP)/include \
+           -I$(PRU_SSP)/include/am335x
+
+# Common Flags (Shared between C and Assembly)
+COMMON_FLAGS := -v3 \
+                --endian=little \
+                --obj_directory=$(BUILD_DIR) \
+                --define=PRU0
+
+# PRU Compiler Flags for CGT 2.3.3
+PRU_CFLAGS := $(COMMON_FLAGS) \
               -O2 \
-              --display_error_number \
-              --endian=little \
               --hardware_mac=on \
-              --include_path=$(INC_DIR) \
-              --include_path=$(PRU_CGT)/include \
-              --include_path=$(PRU_SSP)/include \
-              --include_path=$(PRU_SSP)/include/am335x \
-			  --obj_directory=$(BUILD_DIR)
+              --display_error_number \
+              $(INCLUDE)
 
 # Linker flags
-PRU_LDFLAGS := --reread_libs \
-               --warn_sections \
+PRU_LDFLAGS := -z \
+               --entry_point=main \
                --stack_size=0x100 \
                --heap_size=0x100 \
-               --entry_point main
+               --reread_libs \
+               --warn_sections \
+               -u pru_remoteproc_ResourceTable
 
 # Linker command file (if needed)
 PRU_LINKER_CMD := AM335x_PRU.cmd
@@ -68,9 +77,8 @@ HEADERS := $(wildcard $(INC_DIR)/*.h)
 # =============================================================================
 # Output Files
 # =============================================================================
-
-MAIN_FIRMWARE := $(FIRMWARE_DIR)/ad7606_sampler.fw
-BRINGUP_FIRMWARE := $(FIRMWARE_DIR)/bringup_test.fw
+MAIN_OUT := $(FIRMWARE_DIR)/ad7606_sampler.out
+BRINGUP_OUT := $(FIRMWARE_DIR)/bringup_test.out
 
 
 # Assembly sources (main firmware only: runtime cycle delay)
@@ -119,57 +127,29 @@ firmware_dir:
 # =============================================================================
 $(BUILD_DIR)/%.obj: $(SRC_DIR)/%.c $(HEADERS) | build_dir
 	@echo "Compiling: $<"
-	@$(PRU_CC) $(PRU_CFLAGS) -c $< -o $@ --define=PRU0
+	@$(PRU_CC) $(PRU_CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/delay_cycles.obj: $(SRC_DIR)/delay_cycles.asm | build_dir
+$(BUILD_DIR)/%.obj: $(SRC_DIR)/%.asm | build_dir
 	@echo "Assembling: $<"
-	@$(PRU_CC) -v3 --endian=little --obj_directory=$(BUILD_DIR) -c $< -o $@ --define=PRU0
+	@$(PRU_CC) $(COMMON_FLAGS) -c $< -o $@
 
 # =============================================================================
 # Linking Rules
 # =============================================================================
 
 # Main firmware
-$(FIRMWARE_DIR)/ad7606_sampler.out: $(MAIN_OBJECTS) firmware_dir
+$(FIRMWARE_DIR)/ad7606_sampler.out: $(MAIN_OBJECTS) $(BUILD_DIR)/delay_cycles.obj | firmware_dir
 	@echo "Linking main firmware: $@"
-	@$(PRU_LD) -z --entry_point=main \
-	-u pru_remoteproc_ResourceTable \
-	$(MAIN_OBJECTS) \
-	AM335x_PRU.cmd \
-	$(PRU_LIBS) \
-	-o $@
+	@$(PRU_LD) $(PRU_LDFLAGS) $^ $(PRU_LINKER_CMD) $(PRU_LIBS) -o $@
 	@echo "Main firmware linked successfully: $@"
-
-$(FIRMWARE_DIR)/ad7606_sampler.fw: $(FIRMWARE_DIR)/ad7606_sampler.out
-	@echo "Converting main firmware to raw .fw: $@"
-	@hexpru -o $@ $<
-	@echo "Main firmware .fw created successfully: $@"
-
-# Bringup firmware
-$(FIRMWARE_DIR)/bringup_test.out: $(BRINGUP_OBJECTS) firmware_dir
-	@echo "Linking bringup firmware: $@"
-	@$(PRU_LD) -z --entry_point=main \
-	-u pru_remoteproc_ResourceTable \
-	$(BRINGUP_OBJECTS) \
-	AM335x_PRU.cmd \
-	$(PRU_LIBS) \
-	-o $@
-	@echo "Bringup firmware linked successfully: $@"
-
-$(FIRMWARE_DIR)/bringup_test.fw: $(FIRMWARE_DIR)/bringup_test.out
-	@echo "Converting bringup firmware to raw .fw: $@"
-	@hexpru -o $@ $<
-	@echo "Bringup firmware .fw created successfully: $@"
-
-
-
-
 
 # =============================================================================
 # Build Targets
 # =============================================================================
-build: $(MAIN_FIRMWARE)
-bringup: $(BRINGUP_FIRMWARE)
+info: 
+	$(info PRU_CGT=$(PRU_CGT))
+build: $(FIRMWARE_DIR)/ad7606_sampler.out
+bringup: $(FIRMWARE_DIR)/bringup_test.out
 
 # =============================================================================
 # Load Firmware to PRU
@@ -186,7 +166,7 @@ pru-status:
 	done
 
 # Load main sampling firmware
-load: $(MAIN_FIRMWARE)
+load: $(MAIN_OUT)
 	@if [ -z "$(PRU0_ID)" ]; then echo "ERROR: PRU0 not found in $(PRU_PATH). Is the overlay loaded?"; exit 1; fi
 	@echo "Detected PRU0 at $(PRU_PATH)/$(PRU0_ID)"
 	@config-pin P9.27 pruout
@@ -194,22 +174,30 @@ load: $(MAIN_FIRMWARE)
 	@config-pin P9.28 pruout
 	@config-pin P9.29 pruout
 	@config-pin P9.25 pruin
+	
 	@echo "Configuring Data Pins..."
-	@for i in 29 30 23 10 11 12 13 14 15 16 17 18 19 26 27 28; do \
+# 	@config-pin P9.23 gpio had to move because of other pins not available.
+	@config-pin P9.23 gpio
+	@for i in 10 11 12 13 14 15 16 17 18 19 26 27 28 29 30; do \
 		config-pin P8.$$i gpio; \
 	done
 
 	@echo "Stopping $(PRU0_ID)..."
 	@echo stop | sudo tee $(PRU_PATH)/$(PRU0_ID)/state 2>/dev/null || true
 	@echo "Loading firmware..."
+	@echo "MD5 of firmware before loading:"
+	@md5sum $(FIRMWARE_DIR)/ad7606_sampler.out /lib/firmware/am335x-pru0-fw
+# 	@sudo rm /lib/firmware/am335x-pru0-fw  2>/dev/null || true
 	@sudo cp $(FIRMWARE_DIR)/ad7606_sampler.out /lib/firmware/am335x-pru0-fw
+	@echo "MD5 of firmware after loading:"
+	@md5sum $(FIRMWARE_DIR)/ad7606_sampler.out /lib/firmware/am335x-pru0-fw
 	@echo am335x-pru0-fw | sudo tee $(PRU_PATH)/$(PRU0_ID)/firmware
 	@echo "Starting $(PRU0_ID)..."
 	@echo start | sudo tee $(PRU_PATH)/$(PRU0_ID)/state
 	@echo "Current State: $$(cat $(PRU_PATH)/$(PRU0_ID)/state)"
 
 
-load-bringup: $(BRINGUP_FIRMWARE)
+load-bringup: $(BRINGUP_OUT)
 	@if [ -z "$(PRU0_ID)" ]; then echo "ERROR: PRU0 not found in $(PRU_PATH). Is the overlay loaded?"; exit 1; fi
 	@config-pin P9.27 pruout
 	@echo "Loading to $(PRU0_ID) (PRU0)..."
@@ -294,7 +282,7 @@ start:
 	@echo "Starting PRU0 ($(PRU0_ID))..."
 	@if [ -d /sys/class/remoteproc/$(PRU0_ID) ]; then \
 		STATE=$$(cat /sys/class/remoteproc/$(PRU0_ID)/state); \
-		if [ "$$STATE" != "offline" ]; then \
+		if [ "$$STATE" = "offline" ]; then \
 			echo start | sudo tee /sys/class/remoteproc/$(PRU0_ID)/state; \
 			echo "PRU0 started"; \
 		else \

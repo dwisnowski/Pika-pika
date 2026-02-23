@@ -15,8 +15,8 @@
 
 #include "../pru/include/shm_layout.h"
 
-#define PRU_SHM_PHYS_BASE 0x4a301000
-#define PRU_SHM_SIZE 0x1000
+#define PRU_SHM_PHYS_BASE 0x4a310000
+#define PRU_SHM_SIZE 0x3000
 #define REMOTEPROC_STATE "/sys/class/remoteproc/remoteproc0/state"
 
 static int pru_state_write(const char *value) {

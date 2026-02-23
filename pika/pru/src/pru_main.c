@@ -1,23 +1,32 @@
+// src/pru_main.c - Minimal PRU Hello World / Sanity Check
+
 #include "adc_parallel.h"
 #include "pru_config.h"
 #include "shm_layout.h"
+#include <pru_cfg.h>
 #include <stdint.h>
 
-/* PRU0 Local Data RAM is at 0x0000. Put SHM at 0x1000 (4KB offset) */
-#define SHM_BASE_ADDRESS 0x00001000
+/* Put SHM in PRU Shared RAM (0x10000) which is 12KB - enough for our blocks */
+#define SHM_BASE_ADDRESS 0x00010000
+
+// The __R30 and __R31 registers are intrinsic to the PRU and often
+// declared in pru_ctrl.h or similar headers. Since pru_ctrl.h is removed,
+// we explicitly declare them here to ensure the code compiles.
+volatile register uint32_t __R30;
+volatile register uint32_t __R31;
 
 void main(void) {
-  /* 1. Disable IDLE and STANDBY (PRU_ICSS_CFG base is 0x26000) */
-  /* This ensures the hardware doesn't cut the clock while we are running */
-  (*(volatile uint32_t *)0x26004) = 0x00000001;
+  /* 1. Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
+  CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
 
-  /* PANIC PULSE: The logic analyzer MUST see this first! */
-  /* Pulse PIN_CONVST (P9.27) high for 500ms */
-  __R30 |= (1 << PIN_CONVST);
-  __delay_cycles(100000000); // wait for 500ms
-  __R30 &= ~(1 << PIN_CONVST);
-  __delay_cycles(100000000); // wait for 500ms
+  /* 2. PANIC PULSE: The logic analyzer MUST see this first! */
+  /* Pulse PIN_CONVST (P9.27) high for 100ms as a start indicator */
+  __R30 |= PIN_CONVST;
+  __delay_cycles(20000000);
+  __R30 &= ~PIN_CONVST;
+  __delay_cycles(20000000);
 
+  /* 3. Initialize Shared Memory pointer */
   volatile pru_shared_memory_t *shm =
       (volatile pru_shared_memory_t *)SHM_BASE_ADDRESS;
 
@@ -33,25 +42,19 @@ void main(void) {
   uint32_t current_blk = 0;
   uint32_t smp_in_blk = 0;
 
-  /* Idle Pins */
-  __R30 |= (1 << PIN_RD); // this sets the pin high
-  __R30 |= (1 << PIN_CONVST); // this sets the pin high
-  __R30 &= ~(1 << PIN_CS); // this sets the pin low
+  /* 4. Idle Pins for AD7606 */
+  __R30 |= PIN_RD;     // Set high
+  __R30 |= PIN_CONVST; // Set high
+  __R30 &= ~PIN_CS;    // Set low (active)
 
-  /* Reset the AD7606 (Pulse RST High for at least 50ns) */
-  /* Here we pulse it for about 10us to be safe */
-  __R30 |= (1 << PIN_RESET); // this sets the pin high
-  __delay_cycles(200000);
-  __R30 &= ~(1 << PIN_RESET); // this sets the pin low
-  __delay_cycles(10000000); // wait for 10ms
+  /* 5. Reset the AD7606 (Pulse RST High for at least 50ns) */
+  __R30 |= PIN_RESET;
+  __delay_cycles(2000); // 10us reset pulse
+  __R30 &= ~PIN_RESET;
+  __delay_cycles(200000); // Wait 1ms for ADC to stabilize after reset
 
+  /* 6. Main Acquisition Loop */
   while (1) {
-    /* Simple software delay loop (~2 cycles per iteration overhead) */
-    uint32_t delay_loops = (sample_period >> 1) / 2;
-    while (delay_loops > 0) {
-      delay_loops--;
-    }
-
     if (adc_trigger_and_wait() != 0) {
       shm->error_flags = 0xDEAD0002;
       __delay_cycles(1000000);
