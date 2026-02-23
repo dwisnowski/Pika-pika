@@ -1,0 +1,20 @@
+[project]
+name = "pika-webapp"
+version = "0.1.0"
+description = "Web Application for Pika Power Monitor"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "jinja2",
+    "websockets",
+    "pyyaml",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

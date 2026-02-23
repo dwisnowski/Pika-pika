@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pika Power Monitor</title>
+    <!-- Material Design 3 Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --primary: #FFD600; /* Pika Yellow */
+            --on-primary: #000000;
+            --secondary: #FFB300; /* Amber */
+            --background: #121212;
+            --surface: #1E1E1E;
+            --on-surface: #E1E1E1;
+            --error: #CF6679;
+        }
+
+        body {
+            background-color: var(--background);
+            color: var(--on-surface);
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: var(--surface);
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            z-index: 100;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 500;
+            color: var(--primary);
+        }
+
+        .nav {
+            display: flex;
+            gap: 24px;
+            margin-left: auto;
+        }
+
+        .nav a {
+            color: var(--on-surface);
+            text-decoration: none;
+            text-transform: uppercase;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 1px;
+            opacity: 0.7;
+            transition: 0.3s;
+        }
+
+        .nav a:hover, .nav a.active {
+            opacity: 1;
+            color: var(--primary);
+        }
+
+        main {
+            padding: 16px;
+            flex: 1;
+            max-width: 1200px;
+            align-self: center;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Material Card */
+        .card {
+            background-color: var(--surface);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .card-header span {
+            color: var(--primary);
+            margin-right: 12px;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 500;
+            margin: 0;
+        }
+
+        /* Mobile First Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+
+        @media (min-width: 768px) {
+            .grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .grid-wide {
+                grid-column: span 2;
+            }
+        }
+
+        /* UI Components */
+        .status-dot {
+            height: 10px;
+            width: 10px;
+            background-color: #4CAF50;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        footer {
+            padding: 16px;
+            text-align: center;
+            font-size: 12px;
+            opacity: 0.5;
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header>
+        <span class="material-icons-outlined" style="color: var(--primary); margin-right: 12px;">bolt</span>
+        <h1>PIKA MONITOR</h1>
+        <div class="nav">
+            <a href="/" id="nav-dashboard">Dashboard</a>
+            <a href="/oscilloscope" id="nav-scope">Scope</a>
+        </div>
+    </header>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        BeagleBone Black Powered &bull; PRU 180kHz Streaming Engine
+    </footer>
+
+    <script>
+        // Set active nav
+        const path = window.location.pathname;
+        if (path === '/') document.getElementById('nav-dashboard').classList.add('active');
+        if (path === '/oscilloscope') document.getElementById('nav-scope').classList.add('active');
+    </script>
+</body>
+</html>

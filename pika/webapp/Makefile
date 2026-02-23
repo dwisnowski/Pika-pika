@@ -1,17 +1,24 @@
-# Web Application Makefile
-# This Makefile will build the FastAPI web application
-# Future build steps will include:
-#   - Setting up Python virtual environment
-#   - Installing FastAPI and dependencies
-#   - Building static assets
-#   - Running tests
-
-.PHONY: all clean
+# Robust UV path for sudo environments
+UV := $(shell which uv 2>/dev/null || if [ -x /home/debian/.local/bin/uv ]; then echo /home/debian/.local/bin/uv; else echo uv; fi)
 
 all:
-	@echo "Building web application..."
-	@echo "No build steps defined yet."
+	@echo "Webapp ready. Run 'make setup' if dependencies are missing."
+
+setup:
+	$(UV) sync
+
+run:
+	@echo "Starting webapp on port 8000 (Requires Sudo for SHM)..."
+	sudo $(UV) run uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+run-bg:
+	@echo "Starting webapp in background..."
+	sudo nohup $(UV) run uvicorn app.main:app --host 0.0.0.0 --port 8000 > webapp.log 2>&1 &
+
+stop:
+	@echo "Stopping webapp..."
+	-sudo pkill -9 -f uvicorn
 
 clean:
-	@echo "Cleaning web application..."
-	@echo "No clean steps defined yet."
+	rm -rf .venv
+	find . -type d -name "__pycache__" -exec rm -rf {} +

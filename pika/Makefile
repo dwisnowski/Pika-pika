@@ -16,7 +16,7 @@
 #   to maintain its own build logic while providing a unified interface
 #   at the top level.
 
-.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all help setup
+.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all stop help setup
 
 # Build all components
 all: pru datalogger web
@@ -62,14 +62,30 @@ pru-stop:
 pru-overlay:
 	$(MAKE) -C pru overlay install-overlay
 
+# Web Application
+web-setup:
+	$(MAKE) -C webapp setup
+
+run-web:
+	$(MAKE) -C webapp run
+
 # Run datalogger (builds first). PRU firmware must be installed: run make pru-load once.
 run-datalogger: datalogger
 	@sudo $(MAKE) -C datalogger run
 
-# Build PRU firmware and datalogger, then run datalogger (stops PRU, inits shm, starts PRU, reads blocks).
-# PRU firmware must be in /lib/firmware: run make pru-load once before first run-all.
-run-all: pru datalogger
-	@sudo $(MAKE) -C datalogger run
+# Build PRU firmware and datalogger, then run both.
+run-all: pru datalogger web
+	@echo "Starting Datalogger (C)..."
+	@sudo $(MAKE) -C datalogger run &
+	@echo "Starting Web Application (FastAPI)..."
+	@$(MAKE) -C webapp run
+
+stop:
+	@echo "Stopping all Pika components..."
+	-@sudo pkill -9 -f datalogger
+	-@sudo pkill -9 -f uvicorn
+	-@$(MAKE) -C pru stop
+	@echo "Stopped."
 
 # Clean all build artifacts - delegates to all subproject Makefiles
 clean:
@@ -92,6 +108,7 @@ help:
 	@echo "Run Targets:"
 	@echo "  run-datalogger   - Build and run datalogger (run make pru-load once first)"
 	@echo "  run-all          - Build pru + datalogger, then run datalogger"
+	@echo "  stop             - Force stop all background components"
 	@echo ""
 	@echo "PRU Targets:"
 	@echo "  test-pru         - Run PRU firmware tests"

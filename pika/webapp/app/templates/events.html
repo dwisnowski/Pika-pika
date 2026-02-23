@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <span class="material-icons-outlined">history</span>
+        <h2 class="card-title">Event Explorer</h2>
+    </div>
+
+    <div id="events-gallery" class="grid">
+        <!-- Event Cards will go here -->
+        <p style="text-align: center; grid-column: 1/-1;">Loading captured events...</p>
+    </div>
+</div>
+
+<script>
+    async function loadEvents() {
+        const res = await fetch('/api/v1/events');
+        const events = await res.json();
+        const gallery = document.getElementById('events-gallery');
+
+        if (events.length === 0) {
+            gallery.innerHTML = '<p style="text-align: center; grid-column: 1/-1;">No events found in logs.</p>';
+            return;
+        }
+
+        gallery.innerHTML = events.map(e => `
+            <div class="card" style="margin-bottom: 0; border: 1px solid rgba(255,214,0,0.1);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <span style="background: rgba(255,214,0,0.1); color: var(--primary); padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">
+                        ${e.type}
+                    </span>
+                    <span style="font-size: 12px; opacity: 0.6;">#${e.id}</span>
+                </div>
+                <h3 style="margin: 0; font-size: 16px;">Peak: ${e.peak} LSB</h3>
+                <p style="font-size: 14px; opacity: 0.8; margin: 8px 0;">Duration: ${e.duration_ms.toFixed(1)}ms</p>
+                <div style="font-size: 12px; opacity: 0.5;">
+                    ${new Date(e.timestamp / 1000000).toLocaleString()}
+                </div>
+                <button style="margin-top: 16px; width: 100%; padding: 8px; background: transparent; border: 1px solid var(--primary); color: var(--primary); border-radius: 4px; cursor: pointer; font-size: 12px;">
+                    VIEW DETAILS
+                </button>
+            </div>
+        `).join('');
+    }
+
+    loadEvents();
+</script>
+{% endblock %}

@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card" style="padding: 12px; position: relative; overflow: hidden;">
+    <div class="card-header" style="margin-bottom: 8px;">
+        <span class="material-icons-outlined">visibility</span>
+        <h2 class="card-title">Live Oscilloscope (180kHz Engine)</h2>
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
+            <div id="trigger-badge"
+                style="background: rgba(255,255,255,0.1); padding: 4px 8px; border-radius: 4px; font-size: 12px; display: none;">
+                TRIGGERED: <span id="trigger-type" style="color: var(--primary); font-weight: bold;">--</span>
+            </div>
+            <button onclick="togglePause()" id="pause-btn"
+                style="background: var(--primary); border: none; padding: 6px 12px; border-radius: 4px; font-weight: 500; cursor: pointer;">PAUSE</button>
+        </div>
+    </div>
+
+    <div style="height: 400px; background: #000; border-radius: 8px; position: relative;">
+        <!-- Canvas for the scope -->
+        <canvas id="scopeCanvas" style="width: 100%; height: 100%;"></canvas>
+
+        <!-- Overlay for Grid/Legend -->
+        <div style="position: absolute; top: 10px; left: 10px; pointer-events: none; font-size: 12px; opacity: 0.6;">
+            100V/div &bull; 2ms/div
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="grid" style="margin-top: 16px;">
+        <div class="card" style="margin-bottom: 0; padding: 12px;">
+            <p style="font-size: 12px; margin: 0 0 8px 0; opacity: 0.7;">VERTICAL SCALE</p>
+            <input type="range" min="0.1" max="2" step="0.1" value="1"
+                style="width: 100%; accent-color: var(--primary);" id="vScale">
+        </div>
+        <div class="card" style="margin-bottom: 0; padding: 12px;">
+            <p style="font-size: 12px; margin: 0 0 8px 0; opacity: 0.7;">TIMEBASE</p>
+            <input type="range" min="1" max="10" step="1" value="2" style="width: 100%; accent-color: var(--primary);"
+                id="tScale">
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('scopeCanvas');
+    const ctx = canvas.getContext('2d');
+    let paused = false;
+    let lastData = [];
+
+    // Scale factors
+    let vScale = 1.0;
+    let tScale = 2.0;
+
+    function resize() {
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function togglePause() {
+        paused = !paused;
+        document.getElementById('pause-btn').innerText = paused ? 'RESUME' : 'PAUSE';
+        document.getElementById('pause-btn').style.background = paused ? '#4CAF50' : 'var(--primary)';
+    }
+
+    // WebSocket Connection
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/live`);
+
+    ws.onmessage = (event) => {
+        if (paused) return;
+        const data = JSON.parse(event.data);
+        const samples = data.samples;
+
+        // Channel 0 is usually index 0, 8, 16...
+        const ch0 = [];
+        for (let i = 0; i < samples.length; i += 8) {
+            ch0.push(samples[i]);
+        }
+
+        draw(ch0);
+    };
+
+    function draw(samples) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw Grid
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < canvas.width; x += 50) {
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+        }
+        for (let y = 0; y < canvas.height; y += 50) {
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+        }
+
+        // Draw Trace
+        ctx.strokeStyle = '#FFD600';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        const midY = canvas.height / 2;
+        const points = samples.length;
+        const dx = canvas.width / points;
+
+        for (let i = 0; i < points; i++) {
+            const x = i * dx;
+            // Scale and center. ADC raw is signed 16-bit.
+            // Full scale is roughly +/- 32768.
+            const val = (samples[i] / 32768) * (canvas.height / 2) * vScale;
+            const y = midY - val;
+
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+
+            // Basic anomaly detection in JS for visual trigger
+            if (Math.abs(samples[i]) < 1000 && !paused) { // Simple grounding detection
+                triggerAnom("SAG / GROUNDED");
+            }
+        }
+        ctx.stroke();
+    }
+
+    let trigTimeout = null;
+    function triggerAnom(type) {
+        const badge = document.getElementById('trigger-badge');
+        document.getElementById('trigger-type').innerText = type;
+        badge.style.display = 'block';
+
+        if (trigTimeout) clearTimeout(trigTimeout);
+        trigTimeout = setTimeout(() => {
+            badge.style.display = 'none';
+        }, 2000);
+    }
+
+    document.getElementById('vScale').oninput = (e) => vScale = parseFloat(e.target.value);
+</script>
+{% endblock %}

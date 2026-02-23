@@ -1,0 +1,10 @@
+server:
+  host: 0.0.0.0
+  port: 8000
+
+limits:
+  realtime_max_ms: 500
+  history_max_points: 50000
+
+cache:
+  event_index_ttl_sec: 5

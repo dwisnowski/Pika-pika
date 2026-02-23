@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="grid">
+    <!-- System Status -->
+    <div class="card">
+        <div class="card-header">
+            <span class="material-icons-outlined">settings_input_component</span>
+            <h2 class="card-title">System Health</h2>
+        </div>
+        <div id="health-info">
+            <p><span class="status-dot"></span> PRU: <strong id="pru-status">Connecting...</strong></p>
+            <p>Uptime: <strong id="uptime">--</strong></p>
+            <p>Storage: <strong id="storage">Stable</strong></p>
+        </div>
+    </div>
+
+    <!-- Latest Anomalies -->
+    <div class="card grid-wide">
+        <div class="card-header">
+            <span class="material-icons-outlined">warning_amber</span>
+            <h2 class="card-title">Recent Events</h2>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+            <thead>
+                <tr style="opacity: 0.6; font-size: 12px;">
+                    <th style="padding: 8px;">TYPE</th>
+                    <th>TIME</th>
+                    <th>PEAK</th>
+                    <th>DURATION</th>
+                </tr>
+            </thead>
+            <tbody id="event-list">
+                <tr>
+                    <td colspan="4" style="text-align: center; padding: 20px;">Loading events...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Trend Chart -->
+    <div class="card grid-wide">
+        <div class="card-header">
+            <span class="material-icons-outlined">show_chart</span>
+            <h2 class="card-title">Line Voltage Trend (Decimated)</h2>
+        </div>
+        <div style="height: 250px;">
+            <canvas id="trendChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function updateDashboard() {
+        // 1. Fetch Health
+        const healthRes = await fetch('/health');
+        const health = await healthRes.json();
+        document.getElementById('pru-status').innerText = health.pru_connected ? 'RUNNING' : 'ERROR';
+        document.getElementById('pru-status').style.color = health.pru_connected ? '#4CAF50' : '#F44336';
+
+        // 2. Fetch Events
+        const eventsRes = await fetch('/api/v1/events');
+        const events = await eventsRes.json();
+        const list = document.getElementById('event-list');
+        list.innerHTML = events.map(e => `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 12px 8px; font-weight: 500; color: #FFD600;">${e.type}</td>
+                <td style="font-size: 12px; opacity: 0.8;">${new Date(e.timestamp / 1000000).toLocaleTimeString()}</td>
+                <td>${e.peak}</td>
+                <td>${e.duration_ms.toFixed(1)}ms</td>
+            </tr>
+        `).join('') || '<tr><td colspan="4" style="text-align: center;">No events detected yet</td></tr>';
+
+        // 3. Fetch Trend Data
+        const trendRes = await fetch('/api/v1/history');
+        const trendData = await trendRes.json();
+        renderTrend(trendData.samples);
+    }
+
+    let trendChart = null;
+    function renderTrend(samples) {
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        if (trendChart) trendChart.destroy();
+
+        trendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: samples.map((_, i) => i),
+                datasets: [{
+                    label: 'RMS Voltage (Estimated)',
+                    data: samples,
+                    borderColor: '#FFD600',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: true,
+                    backgroundColor: 'rgba(255, 214, 0, 0.1)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { display: false },
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: '#888' }
+                    }
+                }
+            }
+        });
+    }
+
+    updateDashboard();
+    setInterval(updateDashboard, 5000);
+</script>
+{% endblock %}
