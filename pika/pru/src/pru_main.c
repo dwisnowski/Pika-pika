@@ -9,11 +9,6 @@
 /* Put SHM in PRU Shared RAM (0x10000) which is 12KB - enough for our blocks */
 #define SHM_BASE_ADDRESS 0x00010000
 
-// The __R30 and __R31 registers are intrinsic to the PRU and often
-// declared in pru_ctrl.h or similar headers. Since pru_ctrl.h is removed,
-// we explicitly declare them here to ensure the code compiles.
-volatile register uint32_t __R30;
-volatile register uint32_t __R31;
 
 void main(void) {
   /* 1. Clear SYSCFG[STANDBY_INIT] to enable OCP master port */

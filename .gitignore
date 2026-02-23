@@ -10,11 +10,24 @@
 *.ko
 *.fw
 
-# DKMS / kernel junk (if any ends up in repo)
+# Datalogger
+pika/pika/datalogger/bin/
+pika/pika/datalogger/obj/
+pika/pika/datalogger/data/*.bin
+pika/pika/datalogger/data/*.idx
+
+# Python / Webapp (Plan 4 prep)
+__pycache__/
+*.pyc
+venv/
+.env
+
+# DKMS / kernel junk
 *.mod
 *.cmd
 *.symvers
 
-# hexpru intermediate hex files
+# Intermediate files
 *.x*
 *.dtbo
+.DS_Store

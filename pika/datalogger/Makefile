@@ -1,22 +1,35 @@
-# Data Logger Makefile
-# Builds the Linux userspace datalogger that reads ADC data from the PRU.
-# Requires: PRU firmware installed first (from top level: make pru-load).
+CC = gcc
+CFLAGS = -Wall -O2 -I./include -I../pru/include -pthread
+LDFLAGS = -pthread -lyaml
 
-CC ?= gcc
-CFLAGS := -Wall -Wextra -I../pru/include
-TARGET := datalogger
+SRC_DIR = src
+OBJ_DIR = obj
+BIN_DIR = bin
 
-.PHONY: all build clean run
+SRCS = $(wildcard $(SRC_DIR)/*.c) main.c
+OBJS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(filter $(SRC_DIR)/%.c,$(SRCS)))
+OBJS += $(OBJ_DIR)/main.o
 
-all: build
-build: $(TARGET)
+TARGET = $(BIN_DIR)/datalogger
 
-$(TARGET): main.c
-	$(CC) $(CFLAGS) -o $@ $<
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	@mkdir -p $(BIN_DIR)
+	$(CC) $(OBJS) -o $@ $(LDFLAGS)
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/main.o: main.c
+	@mkdir -p $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(TARGET)
+	rm -rf $(OBJ_DIR) $(BIN_DIR)
 
-# Run the datalogger (PRU firmware must already be in /lib/firmware; run make pru-load once from top level)
-run: build
+run: all
 	@sudo ./$(TARGET)
+
+.PHONY: all clean run

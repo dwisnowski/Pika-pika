@@ -16,10 +16,15 @@
 #   to maintain its own build logic while providing a unified interface
 #   at the top level.
 
-.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all help
+.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all help setup
 
 # Build all components
 all: pru datalogger web
+
+# Install system dependencies
+setup:
+	@echo "Installing system dependencies..."
+	@sudo apt-get update && sudo apt-get install -y libyaml-dev
 
 # Build PRU firmware - delegates to pru/Makefile
 pru:
@@ -96,6 +101,7 @@ help:
 	@echo "  pru-overlay      - Build and install device tree overlay"
 	@echo ""
 	@echo "Other:"
+	@echo "  setup            - Install system dependencies (libyaml-dev)"
 	@echo "  clean            - Clean all build artifacts"
 	@echo "  help             - Show this help message"
 	@echo ""

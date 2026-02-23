@@ -1,0 +1,21 @@
+sampling:
+  nominal_rate_hz: 10000
+  channels: 8
+
+decimation:
+  normal_rate: 1000          # store 1/1000th of samples
+
+anomalies:
+  sag:
+    threshold_pct: -10
+    min_duration_ms: 8
+  swell:
+    threshold_pct: 10
+    min_duration_ms: 8
+
+event_window:
+  pre_event_sec: 0.5
+  post_event_sec: 0.5
+
+buffers:
+  ram_flush_mb: 64
