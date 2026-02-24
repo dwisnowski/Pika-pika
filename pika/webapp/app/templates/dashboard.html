@@ -15,6 +15,26 @@
         </div>
     </div>
 
+    <!-- Live Stats -->
+    <div class="card">
+        <div class="card-header">
+            <span class="material-icons-outlined">insights</span>
+            <h2 class="card-title">Live Stats</h2>
+        </div>
+        <div id="live-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
+            <div>Avg: <strong id="stat-avg">--</strong></div>
+            <div>RMS: <strong id="stat-rms">--</strong></div>
+            <div>Min: <strong id="stat-min">--</strong></div>
+            <div>Max: <strong id="stat-max">--</strong></div>
+            <div style="grid-column: span 2; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px;">
+                Window: <strong id="stat-window">--</strong>
+            </div>
+            <div style="grid-column: span 2; opacity: 0.7; font-size: 12px;">
+                Stability: <strong id="stat-p2p">--</strong> (P-P)
+            </div>
+        </div>
+    </div>
+
     <!-- Latest Anomalies -->
     <div class="card grid-wide">
         <div class="card-header">
@@ -75,6 +95,30 @@
         const trendRes = await fetch('/api/v1/history');
         const trendData = await trendRes.json();
         renderTrend(trendData.samples);
+        updateLiveStats(trendData.samples, trendData.rate);
+    }
+
+    function updateLiveStats(samples, rate) {
+        if (!samples || samples.length === 0) return;
+
+        const sum = samples.reduce((a, b) => a + b, 0);
+        const avg = sum / samples.length;
+        const min = Math.min(...samples);
+        const max = Math.max(...samples);
+        const sqSum = samples.reduce((a, b) => a + (b * b), 0);
+        const rms = Math.sqrt(sqSum / samples.length);
+        const windowSec = samples.length / (rate || 1);
+        const p2p = max - min;
+
+        document.getElementById('stat-avg').innerText = avg.toFixed(1) + 'V';
+        document.getElementById('stat-rms').innerText = rms.toFixed(1) + 'V';
+        document.getElementById('stat-min').innerText = min.toFixed(0) + 'V';
+        document.getElementById('stat-max').innerText = max.toFixed(0) + 'V';
+
+        let windowStr = windowSec.toFixed(0) + 's';
+        if (windowSec > 60) windowStr = (windowSec / 60).toFixed(1) + 'm';
+        document.getElementById('stat-window').innerText = windowStr;
+        document.getElementById('stat-p2p').innerText = p2p.toFixed(1) + 'V';
     }
 
     let trendChart = null;
