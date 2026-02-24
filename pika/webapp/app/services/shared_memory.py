@@ -19,10 +19,14 @@ class SHMHeader(ctypes.Structure):
     _fields_ = [
         ("magic", ctypes.c_uint32),
         ("version", ctypes.c_uint32),
-        ("num_blocks", ctypes.c_uint32),
+        ("sample_period_cycles", ctypes.c_uint32),
+        ("channel_mask", ctypes.c_uint32),
         ("block_size", ctypes.c_uint32),
+        ("num_blocks", ctypes.c_uint32),
         ("write_block_idx", ctypes.c_uint32),
-        ("reserved", ctypes.c_uint32 * 11), # Padding to 64 bytes
+        ("error_flags", ctypes.c_uint32),
+        ("sample_count", ctypes.c_uint32),
+        ("reserved", ctypes.c_uint32 * 7), # Padding to 64 bytes
     ]
 
 class SHMService:
@@ -78,16 +82,24 @@ class SHMService:
         block_total_size = 16 + (self.header.block_size * 8 * 2)
         offset = 64 + (ready_idx * block_total_size)
 
+        # Bounds check
+        if offset + block_total_size > PRU_SHM_SIZE:
+            return None
+
         # Map descriptor
         desc = BlockDescriptor.from_buffer(self.mm, offset)
         
         # Map samples
         samples_offset = offset + 16
-        samples_size = desc.num_samples * 8 * 2
+        # The number of samples per block is 128 * 8 channels
+        total_samples = self.header.block_size * 8
         
-        # Read raw bytes and convert to shorts
-        raw_data = self.mm[samples_offset : samples_offset + samples_size]
-        samples = list(ctypes.cast(raw_data, ctypes.POINTER(ctypes.c_int16 * (desc.num_samples * 8))).contents)
+        # Create a ctypes array type for the samples
+        SamplesArray = ctypes.c_int16 * total_samples
+        samples_view = SamplesArray.from_buffer(self.mm, samples_offset)
+        
+        # Convert to a standard Python list for JSON serialization
+        samples = list(samples_view)
 
         return desc, samples
 

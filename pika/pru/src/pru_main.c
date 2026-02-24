@@ -9,7 +9,6 @@
 /* Put SHM in PRU Shared RAM (0x10000) which is 12KB - enough for our blocks */
 #define SHM_BASE_ADDRESS 0x00010000
 
-
 void main(void) {
   /* 1. Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
   CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
@@ -25,13 +24,19 @@ void main(void) {
   volatile pru_shared_memory_t *shm =
       (volatile pru_shared_memory_t *)SHM_BASE_ADDRESS;
 
-  /* Step 1: Heartbeat */
-  shm->reserved[0] = 0x12345678;
+  /* Initialize Header */
+  shm->magic = SHM_MAGIC;
+  shm->version = SHM_VERSION;
+  shm->num_blocks = 4;
+  shm->block_size = 128;
+  shm->sample_period_cycles = 20000;
+  shm->channel_mask = 0xFF; // All 8 channels
+  shm->write_block_idx = 0;
+  shm->sample_count = 0;
 
-  /* Hardcoded defaults */
-  uint32_t sample_period = 20000;
-  uint32_t block_size = 128;
-  uint32_t num_blocks = 4;
+  /* Hardcoded defaults for local logic */
+  uint32_t block_size = shm->block_size;
+  uint32_t num_blocks = shm->num_blocks;
   uint32_t block_total_size = 16 + (block_size * 8 * 2);
 
   uint32_t current_blk = 0;
@@ -60,6 +65,10 @@ void main(void) {
     block_descriptor_t *desc = (block_descriptor_t *)b_base;
     uint16_t *b_data = (uint16_t *)(b_base + 16);
 
+    // Track total cycles (approximate since we use fixed delay)
+    static uint64_t total_cycles = 0;
+    total_cycles += shm->sample_period_cycles;
+
     uint32_t ch_ptr = smp_in_blk * 8;
     int ch;
     for (ch = 0; ch < 8; ch++) {
@@ -68,9 +77,9 @@ void main(void) {
 
     smp_in_blk++;
     shm->sample_count++;
-    shm->reserved[1] = shm->sample_count;
 
     if (smp_in_blk >= block_size) {
+      desc->timestamp_cycles = total_cycles;
       desc->num_samples = smp_in_blk;
       desc->flags = 0xAA55AA55;
       current_blk = (current_blk + 1) % num_blocks;

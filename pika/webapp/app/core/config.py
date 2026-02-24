@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8888
 
 class LimitsConfig(BaseModel):
     realtime_max_ms: int = 500

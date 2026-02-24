@@ -45,14 +45,22 @@ class HistoryService:
                         if not hdr_data: break
                         
                         ts, rate, count, channels = struct.unpack(HEADER_FORMAT, hdr_data)
+                        
+                        # Safety check: avoid reading corrupt huge sizes
+                        if count > 100000 or channels > 32 or count <= 0:
+                            print(f"Skipping corrupt chunk: count={count}, channels={channels}")
+                            continue
+                            
                         sample_rate = rate
                         
                         raw_samples = f.read(count * channels * 2)
+                        if len(raw_samples) < count * channels * 2:
+                            break
+                            
                         # Just grab Channel 0 for the trend graph
                         shorts = struct.unpack(f"<{count * channels}h", raw_samples)
                         ch0 = shorts[0::channels]
                         samples.extend(ch0)
-                        
         except Exception as e:
             print(f"Error reading history: {e}")
 

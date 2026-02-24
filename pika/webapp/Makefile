@@ -8,12 +8,12 @@ setup:
 	$(UV) sync
 
 run:
-	@echo "Starting webapp on port 8000 (Requires Sudo for SHM)..."
-	sudo $(UV) run uvicorn app.main:app --host 0.0.0.0 --port 8000
+	@echo "Starting webapp on port 8888 (Requires Sudo for SHM)..."
+	sudo $(UV) run uvicorn app.main:app --host 0.0.0.0 --port 8888
 
 run-bg:
 	@echo "Starting webapp in background..."
-	sudo nohup $(UV) run uvicorn app.main:app --host 0.0.0.0 --port 8000 > webapp.log 2>&1 &
+	sudo nohup $(UV) run uvicorn app.main:app --host 0.0.0.0 --port 8888 > webapp.log 2>&1 &
 
 stop:
 	@echo "Stopping webapp..."

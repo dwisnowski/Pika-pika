@@ -11,10 +11,9 @@
 #define SHM_VERSION 1
 
 typedef struct {
-  uint32_t timestamp_cycles;
+  uint64_t timestamp_cycles;
   uint32_t num_samples;
   uint32_t flags;
-  uint32_t reserved;
 } __attribute__((packed)) block_descriptor_t;
 
 typedef struct {
