@@ -45,6 +45,20 @@
         </div>
     </div>
 
+    <!-- Trend Chart -->
+    <div class="card grid-wide">
+        <div class="card-header">
+            <span class="material-icons-outlined">show_chart</span>
+            <h2 class="card-title">Line Voltage Trend (Decimated)</h2>
+            <button onclick="resetZoom()"
+                style="margin-left: auto; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Reset
+                Zoom</button>
+        </div>
+        <div style="height: 250px;">
+            <canvas id="trendChart"></canvas>
+        </div>
+    </div>
+
     <!-- Latest Anomalies -->
     <div class="card grid-wide">
         <div class="card-header">
@@ -67,18 +81,16 @@
             </tbody>
         </table>
     </div>
-
-    <!-- Trend Chart -->
-    <div class="card grid-wide">
-        <div class="card-header">
-            <span class="material-icons-outlined">show_chart</span>
-            <h2 class="card-title">Line Voltage Trend (Decimated)</h2>
-            <button onclick="resetZoom()"
-                style="margin-left: auto; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Reset
-                Zoom</button>
+    <!-- Popover for Event Previews -->
+    <div id="event-popover"
+        style="display: none; position: fixed; z-index: 1000; width: 220px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,214,0,0.2); padding: 12px; pointer-events: none;">
+        <div style="font-size: 12px; font-weight: 500; color: var(--primary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;"
+            id="popover-title">Event Preview</div>
+        <div style="height: 100px;">
+            <canvas id="popoverChart"></canvas>
         </div>
-        <div style="height: 250px;">
-            <canvas id="trendChart"></canvas>
+        <div style="font-size: 11px; opacity: 0.6; margin-top: 8px; line-height: 1.4;" id="popover-desc">
+            Visual representation of this anomaly type.
         </div>
     </div>
 </div>
@@ -147,7 +159,11 @@
         const list = document.getElementById('event-list');
         list.innerHTML = events.map(e => `
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                <td style="padding: 12px 8px; font-weight: 500; color: #FFD600;">${e.type}</td>
+                <td style="padding: 12px 8px; font-weight: 500; color: #FFD600; cursor: help;" 
+                    onmouseenter="showEventPreview(event, '${e.type}')" 
+                    onmouseleave="hideEventPreview()">
+                    ${e.type}
+                </td>
                 <td style="font-size: 12px; opacity: 0.8;">${new Date(e.timestamp / 1000000).toLocaleTimeString()}</td>
                 <td>${e.peak_volts !== undefined ? e.peak_volts.toFixed(1) + ' V' : e.peak}</td>
                 <td>${e.duration_ms.toFixed(1)}ms</td>
@@ -311,6 +327,77 @@
 
     function resetZoom() {
         if (trendChart) trendChart.resetZoom();
+    }
+
+    let popoverChart = null;
+    const eventDescriptions = {
+        'SAG': 'A temporary reduction in the RMS voltage, typically lasting from 0.5 cycles to 1 minute.',
+        'SWELL': 'A temporary increase in the RMS voltage, often caused by shutting off large loads.',
+        'SPIKE': 'A very brief, high-magnitude voltage surge, usually lasting less than a millisecond.',
+        'DIP': 'A short-duration drop in voltage, often used interchangeably with a brief SAG.'
+    };
+
+    function generatePreviewData(type) {
+        const points = 60;
+        const data = [];
+        for (let i = 0; i < points; i++) {
+            let base = Math.sin(i / 3) * 100;
+            if (type === 'SAG' && i > 20 && i < 40) base *= 0.4;
+            if (type === 'SWELL' && i > 20 && i < 40) base *= 1.6;
+            if (type === 'SPIKE' && i === 30) base = 250;
+            if (type === 'DIP' && i > 28 && i < 33) base *= 0.2;
+            data.push(base);
+        }
+        return data;
+    }
+
+    function showEventPreview(event, type) {
+        const popover = document.getElementById('event-popover');
+        const title = document.getElementById('popover-title');
+        const desc = document.getElementById('popover-desc');
+        const ctx = document.getElementById('popoverChart').getContext('2d');
+
+        title.innerText = type + " PREVIEW";
+        desc.innerText = eventDescriptions[type] || 'Anomaly detection trigger.';
+
+        popover.style.display = 'block';
+        popover.style.left = (event.clientX + 20) + 'px';
+        popover.style.top = (event.clientY - 50) + 'px';
+
+        if (popoverChart) popoverChart.destroy();
+
+        popoverChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: new Array(60).fill(''),
+                datasets: [{
+                    data: generatePreviewData(type),
+                    borderColor: '#FFD600',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 400 },
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { display: false },
+                    y: {
+                        display: false,
+                        min: -200,
+                        max: 200
+                    }
+                }
+            }
+        });
+    }
+
+    function hideEventPreview() {
+        document.getElementById('event-popover').style.display = 'none';
     }
 
     updateDashboard();
