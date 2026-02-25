@@ -11,10 +11,10 @@
 *.fw
 
 # Datalogger
-pika/pika/datalogger/bin/
-pika/pika/datalogger/obj/
-pika/pika/datalogger/data/*.bin
-pika/pika/datalogger/data/*.idx
+pika/datalogger/bin/
+pika/datalogger/obj/
+pika/datalogger/data/*.bin
+pika/datalogger/data/*.idx
 
 # Python / Webapp (Plan 4 prep)
 __pycache__/
