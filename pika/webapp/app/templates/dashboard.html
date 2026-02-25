@@ -405,14 +405,17 @@
         const events = await eventsRes.json();
         const list = document.getElementById('event-list');
         list.innerHTML = events.map(e => `
-            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: background 0.2s;" 
+                onclick="showEventModal(${e.id})"
+                onmouseover="this.style.background='rgba(255,214,0,0.05)'" 
+                onmouseout="this.style.background='transparent'">
                 <td style="padding: 12px 8px; font-weight: 500; color: #FFD600; cursor: help;" 
-                    onmouseenter="showEventPreview(event, '${e.type}')" 
+                    onmouseenter="showEventPreview(event, '${e.type}'); event.stopPropagation();" 
                     onmouseleave="hideEventPreview()">
                     ${e.type}
                 </td>
                 <td style="font-size: 12px; opacity: 0.8;">${new Date(e.timestamp / 1000000).toLocaleTimeString()}</td>
-                <td>${e.peak_volts !== undefined ? e.peak_volts.toFixed(1) + ' V' : e.peak}</td>
+                <td>${e.peak_volts !== undefined ? e.peak_volts.toFixed(1) + ' V' : (e.peak_volts || '0.0 V')}</td>
                 <td>${e.duration_ms.toFixed(1)}ms</td>
             </tr>
         `).join('') || '<tr><td colspan="4" style="text-align: center;">No events detected yet</td></tr>';
@@ -663,8 +666,146 @@
         document.getElementById('event-popover').style.display = 'none';
     }
 
+    let eventDetailChart = null;
+    let eventFftChart = null;
+
+    async function showEventModal(eventId) {
+        const overlay = document.getElementById('event-modal');
+        overlay.style.display = 'flex';
+
+        document.getElementById('modal-title').innerText = `Loading Event #${eventId}...`;
+        document.getElementById('modal-stats').innerHTML = 'Fetching high-precision data from storage...';
+
+        try {
+            const response = await fetch(`/api/v1/events/${eventId}/data`);
+            if (!response.ok) throw new Error("Event data not found");
+            const data = await response.json();
+
+            document.getElementById('modal-title').innerText = `${data.type} Alert #${data.id}`;
+            document.getElementById('modal-stats').innerHTML = `
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-top: 8px;">
+                    <div><span style="opacity: 0.6; font-size: 12px;">TIME</span><br><b>${new Date(data.timestamp / 1000000).toLocaleString()}</b></div>
+                    <div><span style="opacity: 0.6; font-size: 12px;">PEAK VOLTAGE</span><br><b style="color: var(--primary)">${data.vrms.toFixed(1)} VAC</b></div>
+                    <div><span style="opacity: 0.6; font-size: 12px;">SAMPLES</span><br><b>${data.samples.length} @ ${data.sample_rate}Hz</b></div>
+                </div>
+            `;
+
+            // Waveform Chart
+            const ctxWave = document.getElementById('eventDetailChart').getContext('2d');
+            if (eventDetailChart) eventDetailChart.destroy();
+
+            eventDetailChart = new Chart(ctxWave, {
+                type: 'line',
+                data: {
+                    labels: data.samples.map((_, i) => (i / data.sample_rate * 1000).toFixed(1) + 'ms'),
+                    datasets: [{
+                        label: 'Waveform (VAC)',
+                        data: data.samples,
+                        borderColor: '#FFD600',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        backgroundColor: 'rgba(255, 214, 0, 0.1)',
+                        fill: true,
+                        tension: 0.2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 500 },
+                    plugins: {
+                        zoom: {
+                            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+                            pan: { enabled: true, mode: 'x' }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', font: { size: 10 }, maxTicksLimit: 20 } },
+                        y: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#888' }, title: { display: true, text: 'Instantaneous Volts', color: '#888' } }
+                    }
+                }
+            });
+
+            // FFT Chart
+            const ctxFft = document.getElementById('eventFftChart').getContext('2d');
+            if (eventFftChart) eventFftChart.destroy();
+
+            const fftResult = calculateFFT(data.samples, data.sample_rate);
+            let maxY = Math.max(...fftResult.magnitudes);
+            if (maxY < 5) maxY = 5; else maxY = Math.ceil((maxY * 1.2) / 5) * 5;
+
+            eventFftChart = new Chart(ctxFft, {
+                type: 'bar',
+                data: {
+                    labels: fftResult.labels,
+                    datasets: [{
+                        label: 'Magnitude (V)',
+                        data: fftResult.magnitudes,
+                        backgroundColor: '#00E5FF',
+                        barPercentage: 1.0,
+                        categoryPercentage: 1.0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 500 },
+                    plugins: {
+                        legend: { display: false },
+                        zoom: {
+                            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+                            pan: { enabled: true, mode: 'x' }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, title: { display: true, text: 'Frequency (Hz)', color: '#888' }, ticks: { maxTicksLimit: 20 } },
+                        y: { max: maxY, grid: { color: 'rgba(255,255,255,0.1)' } }
+                    }
+                }
+            });
+
+        } catch (err) {
+            document.getElementById('modal-title').innerText = "Error";
+            document.getElementById('modal-stats').innerText = err.message;
+        }
+    }
+
+    function closeEventModal() {
+        document.getElementById('event-modal').style.display = 'none';
+    }
+
     updateDashboard();
     setupWebSocket();
     setInterval(updateDashboard, 5000);
 </script>
+
+<!-- Event Detail Modal -->
+<div id="event-modal" class="modal-overlay" onclick="if(event.target === this) closeEventModal()">
+    <div class="modal-container">
+        <div class="modal-header">
+            <div>
+                <h2 id="modal-title" style="margin: 0; font-size: 18px; color: var(--primary);">Event Details</h2>
+                <div id="modal-stats" style="margin-top: 4px; font-size: 14px; opacity: 0.8;"></div>
+            </div>
+            <button onclick="closeEventModal()"
+                style="background: none; border: none; color: white; cursor: pointer; padding: 8px;">
+                <span class="material-icons-outlined">close</span>
+            </button>
+        </div>
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 24px;">
+            <div style="flex: 1; min-height: 250px; position: relative;">
+                <canvas id="eventDetailChart"></canvas>
+            </div>
+            <div
+                style="flex: 1; min-height: 250px; position: relative; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-size: 14px; color: #888; text-transform: uppercase;">Frequency Spectrum
+                        (FFT)</span>
+                </div>
+                <canvas id="eventFftChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
