@@ -94,12 +94,12 @@
         // 3. Fetch Trend Data
         const trendRes = await fetch('/api/v1/history');
         const trendData = await trendRes.json();
-        renderTrend(trendData.samples);
-        updateLiveStats(trendData.samples, trendData.rate);
+        const stats = updateLiveStats(trendData.samples, trendData.rate);
+        renderTrend(trendData.samples, stats);
     }
 
     function updateLiveStats(samples, rate) {
-        if (!samples || samples.length === 0) return;
+        if (!samples || samples.length === 0) return null;
 
         const sum = samples.reduce((a, b) => a + b, 0);
         const avg = sum / samples.length;
@@ -119,36 +119,100 @@
         if (windowSec > 60) windowStr = (windowSec / 60).toFixed(1) + 'm';
         document.getElementById('stat-window').innerText = windowStr;
         document.getElementById('stat-p2p').innerText = p2p.toFixed(1) + 'V';
+
+        return { avg, rms, min, max, rate };
     }
 
     let trendChart = null;
-    function renderTrend(samples) {
+    function renderTrend(samples, stats) {
         const ctx = document.getElementById('trendChart').getContext('2d');
         if (trendChart) trendChart.destroy();
+
+        if (!samples || samples.length === 0) return;
+
+        // Find indices for annotations
+        const minIdx = samples.indexOf(stats.min);
+        const maxIdx = samples.indexOf(stats.max);
 
         trendChart = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: samples.map((_, i) => i),
-                datasets: [{
-                    label: 'RMS Voltage (Estimated)',
-                    data: samples,
-                    borderColor: '#FFD600',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    fill: true,
-                    backgroundColor: 'rgba(255, 214, 0, 0.1)'
-                }]
+                datasets: [
+                    {
+                        label: 'Line Voltage',
+                        data: samples,
+                        borderColor: '#FFD600',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: true,
+                        backgroundColor: 'rgba(255, 214, 0, 0.05)',
+                        tension: 0.1,
+                        order: 10
+                    },
+                    {
+                        label: 'Min',
+                        data: samples.map((v, i) => i === minIdx ? v : null),
+                        pointBackgroundColor: '#2196F3',
+                        pointBorderColor: '#FFF',
+                        pointBorderWidth: 1,
+                        pointRadius: 6,
+                        showLine: false,
+                        order: 1
+                    },
+                    {
+                        label: 'Max',
+                        data: samples.map((v, i) => i === maxIdx ? v : null),
+                        pointBackgroundColor: '#F44336',
+                        pointBorderColor: '#FFF',
+                        pointBorderWidth: 1,
+                        pointRadius: 6,
+                        showLine: false,
+                        order: 1
+                    },
+                    {
+                        label: 'RMS',
+                        data: new Array(samples.length).fill(stats.rms),
+                        borderColor: '#00BCD4',
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false,
+                        order: 5
+                    },
+                    {
+                        label: 'Avg',
+                        data: new Array(samples.length).fill(stats.avg),
+                        borderColor: '#E91E63',
+                        borderWidth: 1,
+                        borderDash: [2, 4, 10, 4],
+                        pointRadius: 0,
+                        fill: false,
+                        order: 5
+                    }
+                ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                animation: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        enabled: true,
+                        callbacks: {
+                            label: (context) => `${context.dataset.label}: ${context.raw.toFixed(1)}V`
+                        }
+                    }
+                },
                 scales: {
                     x: { display: false },
                     y: {
-                        grid: { color: 'rgba(255,255,255,0.1)' },
-                        ticks: { color: '#888' }
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: {
+                            color: '#888',
+                            font: { size: 10 }
+                        }
                     }
                 }
             }
