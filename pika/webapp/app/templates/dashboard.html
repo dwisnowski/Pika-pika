@@ -69,8 +69,23 @@
                 <span class="material-icons-outlined" style="font-size: 14px;">cloud_off</span>
                 LIVE STREAM OFF
             </div>
+            <div
+                style="display: flex; align-items: center; gap: 4px; margin-left: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 8px; background: rgba(0,0,0,0.2);">
+                <span
+                    style="font-size: 10px; color: #888; margin-right: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Scale</span>
+                <button onclick="adjustFFTYScale(-5)"
+                    style="background: none; border: none; color: var(--primary); cursor: pointer; padding: 0 8px; font-size: 16px; font-weight: bold;">-</button>
+                <span id="fft-ymax-display"
+                    style="font-size: 12px; min-width: 30px; text-align: center; color: #FFF; font-weight: 500;">150</span>
+                <button onclick="adjustFFTYScale(5)"
+                    style="background: none; border: none; color: var(--primary); cursor: pointer; padding: 0 8px; font-size: 16px; font-weight: bold;">+</button>
+            </div>
+            <button onclick="resetFFTYScale()"
+                style="margin-left: 8px; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; font-weight: 500; text-transform: uppercase;">Reset</button>
+            <button onclick="zoomToHarmonics()"
+                style="margin-left: 8px; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; font-weight: 500; text-transform: uppercase;">Harmonics</button>
             <button onclick="manualFFT()"
-                style="margin-left: 12px; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Capture
+                style="margin-left: 12px; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 12px; cursor: pointer; font-size: 12px; font-weight: 500; text-transform: uppercase;">Capture
                 Now</button>
         </div>
         <div style="height: 200px;">
@@ -119,6 +134,54 @@
     let latestEffectiveRate = 10000;
     let latestSamples = [];
     let currentFrequency = 0;
+    let fftYMax = 150;
+
+    function adjustFFTYScale(delta) {
+        fftYMax = Math.max(5, fftYMax + delta);
+        document.getElementById('fft-ymax-display').innerText = fftYMax;
+        if (fftChart) {
+            fftChart.options.scales.y.max = fftYMax;
+            fftChart.update('none');
+        }
+    }
+
+    function resetFFTYScale() {
+        fftYMax = 150;
+        document.getElementById('fft-ymax-display').innerText = fftYMax;
+        if (fftChart) {
+            fftChart.options.scales.y.max = fftYMax;
+            fftChart.update('none');
+        }
+    }
+
+    function zoomToHarmonics() {
+        if (!fftChart) return;
+        const labels = fftChart.data.labels;
+        const data = fftChart.data.datasets[0].data;
+        let maxVal = 0;
+        for (let i = 0; i < labels.length; i++) {
+            if (parseFloat(labels[i]) > 117) {
+                if (data[i] > maxVal) maxVal = data[i];
+            }
+        }
+
+        let targetMax = maxVal * 1.2;
+        if (targetMax < 0.0001) targetMax = 0.0001;
+
+        if (targetMax < 5) {
+            fftYMax = targetMax;
+            // Adaptive decimal display: more precision for smaller numbers
+            let precision = targetMax < 0.01 ? 4 : (targetMax < 1 ? 2 : 1);
+            document.getElementById('fft-ymax-display').innerText = fftYMax.toFixed(precision);
+        } else {
+            // Round to nearest 5 for larger "standard" scales
+            fftYMax = Math.ceil(targetMax / 5) * 5;
+            document.getElementById('fft-ymax-display').innerText = Math.round(fftYMax);
+        }
+
+        fftChart.options.scales.y.max = fftYMax;
+        fftChart.update('none');
+    }
 
     // Zero-crossing detection for frequency
     function calculateFrequency(samples, rate) {
@@ -295,6 +358,7 @@
                         },
                         y: {
                             beginAtZero: true,
+                            max: fftYMax,
                             grid: { color: 'rgba(255,255,255,0.05)' },
                             ticks: { color: '#888', font: { size: 9 } },
                             title: { display: true, text: 'VAC', color: '#888', font: { size: 10 } }
@@ -302,13 +366,25 @@
                     },
                     plugins: {
                         legend: { display: false },
-                        tooltip: { enabled: true }
+                        tooltip: { enabled: true },
+                        zoom: {
+                            zoom: {
+                                wheel: { enabled: true },
+                                pinch: { enabled: true },
+                                mode: 'x',
+                            },
+                            pan: {
+                                enabled: true,
+                                mode: 'x',
+                            }
+                        }
                     }
                 }
             });
         } else {
             fftChart.data.labels = displayLabels;
             fftChart.data.datasets[0].data = Array.from(displayMagnitudes);
+            fftChart.options.scales.y.max = fftYMax;
             fftChart.update('none');
         }
     }
