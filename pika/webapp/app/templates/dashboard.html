@@ -59,6 +59,20 @@
         </div>
     </div>
 
+    <!-- FFT Analysis Chart -->
+    <div class="card grid-wide">
+        <div class="card-header">
+            <span class="material-icons-outlined">analytics</span>
+            <h2 class="card-title">Frequency Spectrum (FFT)</h2>
+            <button onclick="manualFFT()"
+                style="margin-left: auto; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Capture
+                Now</button>
+        </div>
+        <div style="height: 200px;">
+            <canvas id="fftChart"></canvas>
+        </div>
+    </div>
+
     <!-- Latest Anomalies -->
     <div class="card grid-wide">
         <div class="card-header">
@@ -97,6 +111,7 @@
 
 <script>
     let latestSampleRate = 10000;
+    let latestSamples = [];
     let currentFrequency = 0;
 
     // Zero-crossing detection for frequency
@@ -136,10 +151,129 @@
                     currentFrequency = freq;
                     document.getElementById('stat-freq').innerText = freq.toFixed(2) + ' Hz';
                 }
+
+                // Cache the latest high-res samples for the 5s FFT update
+                latestSamples = data.samples;
             }
         };
 
         ws.onclose = () => setTimeout(setupWebSocket, 5000);
+    }
+
+    // Simple FFT Implementation (Radix-2)
+    function fft(real, imag) {
+        const n = real.length;
+        if (n <= 1) return;
+
+        const halfN = n / 2;
+        const realEven = new Float32Array(halfN);
+        const imagEven = new Float32Array(halfN);
+        const realOdd = new Float32Array(halfN);
+        const imagOdd = new Float32Array(halfN);
+
+        for (let i = 0; i < halfN; i++) {
+            realEven[i] = real[2 * i];
+            imagEven[i] = imag[2 * i];
+            realOdd[i] = real[2 * i + 1];
+            imagOdd[i] = imag[2 * i + 1];
+        }
+
+        fft(realEven, imagEven);
+        fft(realOdd, imagOdd);
+
+        for (let k = 0; k < halfN; k++) {
+            const angle = -2 * Math.PI * k / n;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            const tReal = realOdd[k] * cos - imagOdd[k] * sin;
+            const tImag = realOdd[k] * sin + imagOdd[k] * cos;
+
+            real[k] = realEven[k] + tReal;
+            imag[k] = imagEven[k] + tImag;
+            real[k + halfN] = realEven[k] - tReal;
+            imag[k + halfN] = imagEven[k] - tImag;
+        }
+    }
+
+    let fftChart = null;
+    function updateFFT(samples, rate) {
+        // Find nearest power of 2
+        const n = 1024;
+        if (samples.length < n) return;
+
+        const real = new Float32Array(n);
+        const imag = new Float32Array(n);
+
+        // Windowing (Hanning) and DC removal
+        const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
+        for (let i = 0; i < n; i++) {
+            const window = 0.5 * (1 - Math.cos(2 * Math.PI * i / (n - 1)));
+            real[i] = (samples[i] - mean) * window;
+        }
+
+        fft(real, imag);
+
+        const magnitudes = new Float32Array(n / 2);
+        const labels = [];
+        for (let i = 0; i < n / 2; i++) {
+            magnitudes[i] = Math.sqrt(real[i] * real[i] + imag[i] * imag[i]) / (n / 2);
+            labels.push((i * rate / n).toFixed(0));
+        }
+
+        // Only show up to 1000Hz (Harmonics area)
+        const limitIndex = Math.floor(1000 * n / rate);
+        const displayMagnitudes = magnitudes.slice(0, limitIndex);
+        const displayLabels = labels.slice(0, limitIndex);
+
+        const ctx = document.getElementById('fftChart').getContext('2d');
+        if (!fftChart) {
+            fftChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: displayLabels,
+                    datasets: [{
+                        label: 'Magnitude (V)',
+                        data: displayMagnitudes,
+                        backgroundColor: 'rgba(255, 214, 0, 0.6)',
+                        borderColor: 'rgba(255, 214, 0, 1)',
+                        borderWidth: 1,
+                        barPercentage: 1.0,
+                        categoryPercentage: 1.0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                color: '#888',
+                                font: { size: 9 },
+                                autoSkip: true,
+                                maxTicksLimit: 10
+                            },
+                            title: { display: true, text: 'Frequency (Hz)', color: '#888', font: { size: 10 } }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#888', font: { size: 9 } },
+                            title: { display: true, text: 'VAC', color: '#888', font: { size: 10 } }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: true }
+                    }
+                }
+            });
+        } else {
+            fftChart.data.labels = displayLabels;
+            fftChart.data.datasets[0].data = displayMagnitudes;
+            fftChart.update('none');
+        }
     }
 
     async function updateDashboard() {
@@ -175,6 +309,19 @@
         const trendData = await trendRes.json();
         const stats = updateLiveStats(trendData.samples, trendData.rate);
         renderTrend(trendData.samples, stats);
+
+        // 4. Update FFT (matched to 5s timer)
+        if (latestSamples.length > 0) {
+            updateFFT(latestSamples, latestSampleRate);
+        }
+    }
+
+    function manualFFT() {
+        if (latestSamples.length > 0) {
+            updateFFT(latestSamples, latestSampleRate);
+        } else {
+            alert("Waiting for live data stream...");
+        }
     }
 
     function updateLiveStats(samples, rate) {
