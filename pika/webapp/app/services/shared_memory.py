@@ -4,6 +4,12 @@ import os
 import time
 from typing import Optional, Tuple
 
+# Sensor calibration constants — matching datalogger config/logger.yaml
+ADC_VREF          = 5.0      # AD7606 input range (±5V)
+ADC_FULL_SCALE    = 32768.0  # 2^15 (signed 16-bit)
+TRANSFORMER_RATIO = 120.0    # ZMPT101B: mains / adc_output_amplitude
+_CALIBRATION_SCALE = (ADC_VREF / ADC_FULL_SCALE) * TRANSFORMER_RATIO
+
 # Physical address constants for BeagleBone Black PRU SHM
 PRU_SHM_PHYS_BASE = 0x4a310000
 PRU_SHM_SIZE = 0x3000
@@ -98,8 +104,16 @@ class SHMService:
         SamplesArray = ctypes.c_int16 * total_samples
         samples_view = SamplesArray.from_buffer(self.mm, samples_offset)
         
-        # Convert to a standard Python list for JSON serialization
-        samples = list(samples_view)
+        # Convert to a standard Python list and apply calibration:
+        # raw → instantaneous mains voltage (VAC)
+        raw_list    = list(samples_view)
+        # Remove DC bias by subtracting the block mean before scaling —
+        # the ZMPT101B resting DC offset is removed per-block.
+        if raw_list:
+            block_mean = sum(raw_list) / len(raw_list)
+        else:
+            block_mean = 0.0
+        samples = [round((r - block_mean) * _CALIBRATION_SCALE, 2) for r in raw_list]
 
         return desc, samples
 

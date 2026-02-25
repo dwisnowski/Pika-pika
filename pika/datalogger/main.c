@@ -32,12 +32,8 @@ void *reader_thread_func(void *arg) {
     volatile block_descriptor_t *desc = shm_reader_poll(&shm_reader, &data);
 
     if (desc) {
-      // New block found!
-      // Calculate total size: 16 (desc) + (samples * channels * 2)
       size_t data_size = desc->num_samples * global_config.channels * 2;
 
-      // For now, let's just copy exactly what we need
-      // In a better version, we'd use zero-copy or pre-allocated chunks
       uint8_t temp_buf[2064];
       memcpy(temp_buf, (void *)desc, 16);
       memcpy(temp_buf + 16, data, data_size);
@@ -53,13 +49,27 @@ void *reader_thread_func(void *arg) {
   return NULL;
 }
 
+// Extract channel 0 samples from an interleaved multi-channel buffer.
+// out_ch0 must be pre-allocated with at least (total_frames) int16 slots.
+static void extract_ch0(const int16_t *interleaved, uint32_t total_frames,
+                        uint32_t channels, int16_t *out_ch0) {
+  for (uint32_t i = 0; i < total_frames; i++) {
+    out_ch0[i] = interleaved[i * channels];
+  }
+}
+
 // Processor Thread: Pops from Ring Buffer, runs Decimator and Anomaly Detector
 void *processor_thread_func(void *arg) {
   printf("[Processor] Started\n");
 
   anomaly_detector_t ad;
-  anomaly_detector_init(&ad, global_config.anomalies,
-                        20000); // Placeholder nominal peak
+  if (anomaly_detector_init(&ad, global_config.anomalies, global_config.sensor,
+                            global_config.detection, global_config.debounce,
+                            global_config.nominal_rate_hz) != 0) {
+    fprintf(stderr,
+            "[Processor] Failed to init anomaly detector, exiting thread\n");
+    return NULL;
+  }
 
   decimator_t dec;
   decimator_init(&dec, global_config.normal_decimation_rate);
@@ -76,53 +86,78 @@ void *processor_thread_func(void *arg) {
   uint16_t decimated_samples[128 * 8];
   uint32_t decimated_count = 0;
 
+  // Scratch buffer for channel-0 extraction — large enough for max event window
+  // Max event window: (pre + post) seconds * sample_rate samples * 2 bytes
+  // 5 seconds * 10000 Hz = 50000 samples (conservative upper bound)
+  int16_t *ch0_scratch = (int16_t *)malloc(50000 * sizeof(int16_t));
+  if (!ch0_scratch) {
+    fprintf(stderr, "[Processor] Failed to allocate ch0 scratch buffer\n");
+    anomaly_detector_free(&ad);
+    event_window_free(&ew);
+    return NULL;
+  }
+
   while (keep_running) {
     if (ring_buffer_pop(&raw_block_rb, temp_buf)) {
       block_descriptor_t *desc = (block_descriptor_t *)temp_buf;
-      uint16_t *samples = (uint16_t *)(temp_buf + 16);
+      int16_t *samples = (int16_t *)(temp_buf + 16);
 
       uint64_t block_time = cycles_to_ns(&t_sync, desc->timestamp_cycles);
 
-      // 1. Snapshot for history
+      // 1. Snapshot for pre-event history (full multi-channel block)
       event_window_push_block(&ew, samples);
 
-      // 2. Anomaly Detection
-      anomaly_event_t *event =
-          anomaly_detector_process(&ad, samples, desc->num_samples, block_time);
+      // 2. Anomaly Detection (processes ch0, applies RMS + debounce)
+      anomaly_event_t *event = anomaly_detector_process(
+          &ad, samples, desc->num_samples, global_config.channels, block_time);
       if (event) {
-        printf("[Processor] EVENT DETECTED: Type %d at %llu\n", event->type,
-               event->timestamp_ns);
+        printf("[Processor] EVENT DETECTED: Type %d, VRMS=%.2f V at %llu ns\n",
+               event->type, event->rms_vrms,
+               (unsigned long long)event->timestamp_ns);
         event_window_trigger(&ew, *event);
       }
 
-      // 3. Check for finished captures
+      // 3. Check for finished captures — extract ch0 before writing
       size_t event_data_size;
       anomaly_event_t captured_event;
       uint8_t *event_data =
           event_window_get_ready(&ew, &event_data_size, &captured_event);
       if (event_data) {
-        printf("[Processor] Saving high-res event data to disk (%zu bytes)\n",
-               event_data_size);
-        event_index_record_t index = {
-            .timestamp_ns = captured_event.timestamp_ns,
-            .event_type = (uint8_t)captured_event.type,
-            .peak_value = captured_event.peak_value,
-            .duration_samples = captured_event.duration_samples};
-        writer_write_event(&disk_writer, &index, (uint16_t *)event_data,
-                           event_data_size);
+        // event_data is interleaved multi-channel int16; extract ch0 only
+        uint32_t total_frames =
+            (uint32_t)(event_data_size / (global_config.channels * 2));
+        uint32_t ch0_sample_count = total_frames;
+
+        if (ch0_sample_count <= 50000) {
+          extract_ch0((const int16_t *)event_data, total_frames,
+                      global_config.channels, ch0_scratch);
+
+          printf("[Processor] Saving ch0 event data: %u samples (~%zu KB)\n",
+                 ch0_sample_count, (ch0_sample_count * sizeof(int16_t)) / 1024);
+
+          event_index_record_t index = {
+              .timestamp_ns = captured_event.timestamp_ns,
+              .event_type = (uint8_t)captured_event.type,
+              .peak_value = captured_event.peak_value,
+              .duration_samples = captured_event.duration_samples};
+
+          writer_write_event(&disk_writer, &index, ch0_scratch,
+                             ch0_sample_count);
+        } else {
+          fprintf(stderr,
+                  "[Processor] Event too large (%u samples), skipping\n",
+                  ch0_sample_count);
+        }
       }
 
-      // 4. Decimation
+      // 4. Decimation (multi-channel, unchanged)
       for (uint32_t i = 0; i < desc->num_samples; i++) {
         if (decimator_process(&dec)) {
-          // Keep this sample
           memcpy(&decimated_samples[decimated_count * 8], &samples[i * 8],
                  8 * 2);
           decimated_count++;
 
-          if (decimated_count >= 10) { // Batch writes
-            printf("[Processor] Flushing %u decimated samples to disk\n",
-                   decimated_count);
+          if (decimated_count >= 10) {
             decimated_chunk_header_t header = {
                 .start_time_ns = block_time,
                 .sample_rate = global_config.nominal_rate_hz /
@@ -135,10 +170,13 @@ void *processor_thread_func(void *arg) {
         }
       }
     } else {
-      usleep(5000); // Wait for data
+      usleep(5000);
     }
   }
+
   printf("[Processor] Stopped\n");
+  free(ch0_scratch);
+  anomaly_detector_free(&ad);
   event_window_free(&ew);
   return NULL;
 }
@@ -160,13 +198,12 @@ int main(int argc, char **argv) {
   }
 
   // 3. Init Ring Buffer
-  // Element size = 16 (desc) + (128 samples * 8 channels * 2 bytes) = 2064
-  // bytes
-  size_t element_size = 16 + (128 * 8 * 2);
+  size_t element_size = 16 + (128 * global_config.channels * 2);
   ring_buffer_init(&raw_block_rb, 100, element_size);
 
-  // 4. Init Writer
-  if (writer_init(&disk_writer, "data") != 0) {
+  // 4. Init Writer (with size limits from config)
+  if (writer_init(&disk_writer, "data", global_config.storage.max_decimated_mb,
+                  global_config.storage.max_events_mb) != 0) {
     fprintf(stderr, "Failed to init writer\n");
     return 1;
   }

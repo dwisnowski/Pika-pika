@@ -1,5 +1,11 @@
 {% extends "base.html" %}
 
+{% block head %}
+<!-- Hammer.js is required for Chart.js Zoom -->
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <div class="grid">
     <!-- System Status -->
@@ -10,6 +16,7 @@
         </div>
         <div id="health-info">
             <p><span class="status-dot"></span> PRU: <strong id="pru-status">Connecting...</strong></p>
+            <p>ADC Rate: <strong id="pru-samplerate">--</strong></p>
             <p>Uptime: <strong id="uptime">--</strong></p>
             <p>Storage: <strong id="storage">Stable</strong></p>
         </div>
@@ -27,6 +34,9 @@
             <div>Min: <strong id="stat-min">--</strong></div>
             <div>Max: <strong id="stat-max">--</strong></div>
             <div style="grid-column: span 2; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px;">
+                Frequency: <strong id="stat-freq">--</strong>
+            </div>
+            <div style="grid-column: span 2;">
                 Window: <strong id="stat-window">--</strong>
             </div>
             <div style="grid-column: span 2; opacity: 0.7; font-size: 12px;">
@@ -46,7 +56,7 @@
                 <tr style="opacity: 0.6; font-size: 12px;">
                     <th style="padding: 8px;">TYPE</th>
                     <th>TIME</th>
-                    <th>PEAK</th>
+                    <th>PEAK (VAC)</th>
                     <th>DURATION</th>
                 </tr>
             </thead>
@@ -63,6 +73,9 @@
         <div class="card-header">
             <span class="material-icons-outlined">show_chart</span>
             <h2 class="card-title">Line Voltage Trend (Decimated)</h2>
+            <button onclick="resetZoom()"
+                style="margin-left: auto; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Reset
+                Zoom</button>
         </div>
         <div style="height: 250px;">
             <canvas id="trendChart"></canvas>
@@ -71,12 +84,62 @@
 </div>
 
 <script>
+    let latestSampleRate = 10000;
+    let currentFrequency = 0;
+
+    // Zero-crossing detection for frequency
+    function calculateFrequency(samples, rate) {
+        if (!samples || samples.length < 2 || !rate) return 0;
+
+        let crossings = [];
+        for (let i = 1; i < samples.length; i++) {
+            // Check for positive-going zero crossing
+            if (samples[i - 1] <= 0 && samples[i] > 0) {
+                crossings.push(i);
+            }
+        }
+
+        if (crossings.length < 2) return 0;
+
+        let avgDist = 0;
+        for (let i = 1; i < crossings.length; i++) {
+            avgDist += (crossings[i] - crossings[i - 1]);
+        }
+        avgDist /= (crossings.length - 1);
+
+        return rate / avgDist;
+    }
+
+    // WebSocket for high-res frequency detection
+    function setupWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${protocol}//${window.location.host}/ws/live`);
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.samples && data.samples.length > 0) {
+                // WebSocket sends ch0 samples (already calibrated by backend)
+                const freq = calculateFrequency(data.samples, latestSampleRate);
+                if (freq > 40 && freq < 70) { // Simple filter for mains 50/60Hz
+                    currentFrequency = freq;
+                    document.getElementById('stat-freq').innerText = freq.toFixed(2) + ' Hz';
+                }
+            }
+        };
+
+        ws.onclose = () => setTimeout(setupWebSocket, 5000);
+    }
+
     async function updateDashboard() {
         // 1. Fetch Health
         const healthRes = await fetch('/health');
         const health = await healthRes.json();
         document.getElementById('pru-status').innerText = health.pru_connected ? 'RUNNING' : 'ERROR';
         document.getElementById('pru-status').style.color = health.pru_connected ? '#4CAF50' : '#F44336';
+        if (health.sample_rate) {
+            latestSampleRate = health.sample_rate;
+            document.getElementById('pru-samplerate').innerText = (health.sample_rate / 1000).toFixed(1) + ' kHz';
+        }
 
         // 2. Fetch Events
         const eventsRes = await fetch('/api/v1/events');
@@ -86,7 +149,7 @@
             <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
                 <td style="padding: 12px 8px; font-weight: 500; color: #FFD600;">${e.type}</td>
                 <td style="font-size: 12px; opacity: 0.8;">${new Date(e.timestamp / 1000000).toLocaleTimeString()}</td>
-                <td>${e.peak}</td>
+                <td>${e.peak_volts !== undefined ? e.peak_volts.toFixed(1) + ' V' : e.peak}</td>
                 <td>${e.duration_ms.toFixed(1)}ms</td>
             </tr>
         `).join('') || '<tr><td colspan="4" style="text-align: center;">No events detected yet</td></tr>';
@@ -101,24 +164,25 @@
     function updateLiveStats(samples, rate) {
         if (!samples || samples.length === 0) return null;
 
-        const sum = samples.reduce((a, b) => a + b, 0);
-        const avg = sum / samples.length;
+        const absSum = samples.reduce((a, b) => a + Math.abs(b), 0);
+        const avg = absSum / samples.length; // Average Rectified Value
         const min = Math.min(...samples);
         const max = Math.max(...samples);
         const sqSum = samples.reduce((a, b) => a + (b * b), 0);
-        const rms = Math.sqrt(sqSum / samples.length);
+        const rms = Math.sqrt(sqSum / samples.length);   // RMS of AC waveform ≈ VRMS
         const windowSec = samples.length / (rate || 1);
         const p2p = max - min;
 
-        document.getElementById('stat-avg').innerText = avg.toFixed(1) + 'V';
-        document.getElementById('stat-rms').innerText = rms.toFixed(1) + 'V';
-        document.getElementById('stat-min').innerText = min.toFixed(0) + 'V';
-        document.getElementById('stat-max').innerText = max.toFixed(0) + 'V';
+        // Samples are already calibrated to VAC by the backend
+        document.getElementById('stat-avg').innerText = avg.toFixed(1) + ' VAC (rect)';
+        document.getElementById('stat-rms').innerText = rms.toFixed(1) + ' VAC';
+        document.getElementById('stat-min').innerText = min.toFixed(1) + ' VAC';
+        document.getElementById('stat-max').innerText = max.toFixed(1) + ' VAC';
 
         let windowStr = windowSec.toFixed(0) + 's';
         if (windowSec > 60) windowStr = (windowSec / 60).toFixed(1) + 'm';
         document.getElementById('stat-window').innerText = windowStr;
-        document.getElementById('stat-p2p').innerText = p2p.toFixed(1) + 'V';
+        document.getElementById('stat-p2p').innerText = p2p.toFixed(1) + ' VAC';
 
         return { avg, rms, min, max, rate };
     }
@@ -126,11 +190,26 @@
     let trendChart = null;
     function renderTrend(samples, stats) {
         const ctx = document.getElementById('trendChart').getContext('2d');
-        if (trendChart) trendChart.destroy();
+
+        // If chart exists, just update data instead of destroying to preserve zoom state
+        if (trendChart) {
+            trendChart.data.labels = samples.map((_, i) => i);
+            trendChart.data.datasets[0].data = samples;
+            trendChart.data.datasets[3].data = new Array(samples.length).fill(stats.rms);
+            trendChart.data.datasets[4].data = new Array(samples.length).fill(stats.avg);
+
+            // Re-find min/max for annotations
+            const minIdx = samples.indexOf(stats.min);
+            const maxIdx = samples.indexOf(stats.max);
+            trendChart.data.datasets[1].data = samples.map((v, i) => i === minIdx ? v : null);
+            trendChart.data.datasets[2].data = samples.map((v, i) => i === maxIdx ? v : null);
+
+            trendChart.update('none'); // Update without animation
+            return;
+        }
 
         if (!samples || samples.length === 0) return;
 
-        // Find indices for annotations
         const minIdx = samples.indexOf(stats.min);
         const maxIdx = samples.indexOf(stats.max);
 
@@ -140,7 +219,7 @@
                 labels: samples.map((_, i) => i),
                 datasets: [
                     {
-                        label: 'Line Voltage',
+                        label: 'Line Voltage (VAC)',
                         data: samples,
                         borderColor: '#FFD600',
                         borderWidth: 2,
@@ -198,10 +277,21 @@
                 animation: false,
                 plugins: {
                     legend: { display: false },
+                    zoom: {
+                        zoom: {
+                            wheel: { enabled: true },
+                            pinch: { enabled: true },
+                            mode: 'x',
+                        },
+                        pan: {
+                            enabled: true,
+                            mode: 'x',
+                        }
+                    },
                     tooltip: {
                         enabled: true,
                         callbacks: {
-                            label: (context) => `${context.dataset.label}: ${context.raw.toFixed(1)}V`
+                            label: (context) => `${context.dataset.label}: ${context.raw !== null ? context.raw.toFixed(1) : ''}  VAC`
                         }
                     }
                 },
@@ -219,7 +309,12 @@
         });
     }
 
+    function resetZoom() {
+        if (trendChart) trendChart.resetZoom();
+    }
+
     updateDashboard();
+    setupWebSocket();
     setInterval(updateDashboard, 5000);
 </script>
 {% endblock %}

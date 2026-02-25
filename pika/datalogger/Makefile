@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -O2 -I./include -I../pru/include -pthread
-LDFLAGS = -pthread -lyaml
+LDFLAGS = -pthread -lyaml -lm
 
 SRC_DIR = src
 OBJ_DIR = obj

@@ -41,10 +41,16 @@ async def get_events_view(request: Request):
 
 @app.get("/health")
 async def health():
+    sample_rate = 0
+    if shm.header:
+        # PRU runs at 200MHz
+        sample_rate = 200000000 // shm.header.sample_period_cycles
+        
     return {
         "status": "ok",
         "pru_connected": shm.header is not None,
-        "shm_magic": hex(shm.header.magic) if shm.header else "N/A"
+        "shm_magic": hex(shm.header.magic) if shm.header else "N/A",
+        "sample_rate": sample_rate
     }
 
 # --- REST APIs ---
