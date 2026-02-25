@@ -10,55 +10,33 @@ ADC_FULL_SCALE    = 32768.0  # 2^15 (signed 16-bit)
 TRANSFORMER_RATIO = 120.0    # ZMPT101B: mains / adc_output_amplitude
 _CALIBRATION_SCALE = (ADC_VREF / ADC_FULL_SCALE) * TRANSFORMER_RATIO
 
-# Physical address constants for BeagleBone Black PRU SHM
-PRU_SHM_PHYS_BASE = 0x4a310000
-PRU_SHM_SIZE = 0x3000
+SCOPE_SHM_PATH = "/dev/shm/pika_scope_shm"
 
-class BlockDescriptor(ctypes.Structure):
-    _fields_ = [
-        ("timestamp_cycles", ctypes.c_uint64),
-        ("num_samples", ctypes.c_uint32),
-        ("reserved", ctypes.c_uint32),
-    ]
-
-class SHMHeader(ctypes.Structure):
+class ScopeSHM(ctypes.Structure):
     _fields_ = [
         ("magic", ctypes.c_uint32),
-        ("version", ctypes.c_uint32),
-        ("sample_period_cycles", ctypes.c_uint32),
-        ("channel_mask", ctypes.c_uint32),
-        ("block_size", ctypes.c_uint32),
-        ("num_blocks", ctypes.c_uint32),
-        ("write_block_idx", ctypes.c_uint32),
-        ("error_flags", ctypes.c_uint32),
-        ("sample_count", ctypes.c_uint32),
-        ("reserved", ctypes.c_uint32 * 7), # Padding to 64 bytes
+        ("sample_rate", ctypes.c_uint32),
+        ("channels", ctypes.c_uint32),
+        ("capacity", ctypes.c_uint32),
+        ("total_samples", ctypes.c_uint64),
     ]
 
 class SHMService:
     def __init__(self):
         self.fd = -1
         self.mm = None
-        self.header: Optional[SHMHeader] = None
-        self.last_read_idx = 0
+        self.header: Optional[ScopeSHM] = None
 
     def connect(self):
         try:
-            self.fd = os.open("/dev/mem", os.O_RDWR | os.O_SYNC)
-            self.mm = mmap.mmap(
-                self.fd, 
-                PRU_SHM_SIZE, 
-                flags=mmap.MAP_SHARED, 
-                prot=mmap.PROT_READ | mmap.PROT_WRITE, 
-                offset=PRU_SHM_PHYS_BASE
-            )
-            self.header = SHMHeader.from_buffer(self.mm)
-            if self.header.magic != 0xDEADBEEF:
-                print(f"Warning: SHM Magic mismatch! Got {hex(self.header.magic)}")
+            self.fd = os.open(SCOPE_SHM_PATH, os.O_RDWR)
+            self.mm = mmap.mmap(self.fd, 0)
+            self.header = ScopeSHM.from_buffer(self.mm)
+            if self.header.magic != 0x5C09E000:
+                print(f"Warning: Scope magic mismatch! Got {hex(self.header.magic)}")
         except Exception as e:
-            print(f"Failed to connect to SHM: {e}")
+            print(f"Failed to connect to Scope SHM: {e}")
             self.cleanup()
-            raise
 
     def cleanup(self):
         self.header = None
@@ -69,53 +47,62 @@ class SHMService:
             os.close(self.fd)
             self.fd = -1
 
-    def get_latest_samples(self) -> Optional[Tuple[BlockDescriptor, list]]:
+    def get_window(self, time_window_s: float, channel: int = 0) -> list:
         if not self.header:
-            return None
+            # Attempt to auto-reconnect
+            self.connect()
+            if not self.header:
+                return []
 
-        current_idx = self.header.write_block_idx
-        num_blocks = self.header.num_blocks
-        
-        if num_blocks == 0:
-            return None
+        rate = self.header.sample_rate
+        channels = self.header.channels
+        capacity = self.header.capacity
+        total = self.header.total_samples
 
-        # The most recently completed block is at (current_idx - 1)
-        ready_idx = (current_idx + num_blocks - 1) % num_blocks
-        
-        # Calculate offset: Header (64) + (idx * block_total_size)
-        # block_total_size = 16 (desc) + (samples * channels * 2)
-        # Logger assumes 8 channels hardcoded
-        block_total_size = 16 + (self.header.block_size * 8 * 2)
-        offset = 64 + (ready_idx * block_total_size)
+        if total == 0:
+            return []
 
-        # Bounds check
-        if offset + block_total_size > PRU_SHM_SIZE:
-            return None
+        # Number of samples requested
+        req_samples = int(rate * time_window_s)
+        if req_samples > capacity:
+            req_samples = capacity
 
-        # Map descriptor
-        desc = BlockDescriptor.from_buffer(self.mm, offset)
-        
-        # Map samples
-        samples_offset = offset + 16
-        # The number of samples per block is 128 * 8 channels
-        total_samples = self.header.block_size * 8
-        
-        # Create a ctypes array type for the samples
-        SamplesArray = ctypes.c_int16 * total_samples
-        samples_view = SamplesArray.from_buffer(self.mm, samples_offset)
-        
-        # Convert to a standard Python list and apply calibration:
-        # raw → instantaneous mains voltage (VAC)
-        raw_list    = list(samples_view)
-        # Remove DC bias by subtracting the block mean before scaling —
-        # the ZMPT101B resting DC offset is removed per-block.
-        if raw_list:
-            block_mean = sum(raw_list) / len(raw_list)
+        # Can not fetch more than what's arrived
+        if req_samples > total:
+            req_samples = int(total)
+
+        if req_samples <= 0:
+            return []
+
+        head = total % capacity
+        start_idx = (head - req_samples + capacity) % capacity
+
+        data_offset = ctypes.sizeof(ScopeSHM)
+        DataArray = ctypes.c_int16 * (capacity * channels)
+        data_view = DataArray.from_buffer(self.mm, data_offset)
+
+        if start_idx < head:
+            raw = data_view[start_idx * channels : head * channels]
         else:
-            block_mean = 0.0
-        samples = [round((r - block_mean) * _CALIBRATION_SCALE, 2) for r in raw_list]
+            part1 = data_view[start_idx * channels : capacity * channels]
+            part2 = data_view[0 : head * channels]
+            raw = part1 + part2
 
-        return desc, samples
+        # Extract desired channel
+        ch_raw = raw[channel::channels]
 
-# Global instance
+        # Decimate purely for transmission size (approx 2000 points is enough for HD curve)
+        max_points = 2000
+        stride = 1
+        if len(ch_raw) > max_points:
+            stride = len(ch_raw) // max_points
+            ch_raw = ch_raw[::stride]
+
+        if ch_raw:
+            mean = sum(ch_raw) / len(ch_raw)
+            return [round((r - mean) * _CALIBRATION_SCALE, 2) for r in ch_raw]
+        else:
+            return []
+
+# Global instance replaces the old PRU SHM service
 shm = SHMService()

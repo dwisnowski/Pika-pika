@@ -1,138 +1,547 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="card" style="padding: 12px; position: relative; overflow: hidden;">
-    <div class="card-header" style="margin-bottom: 8px;">
-        <span class="material-icons-outlined">visibility</span>
-        <h2 class="card-title">Live Oscilloscope (180kHz Engine)</h2>
-        <div style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
-            <div id="trigger-badge"
-                style="background: rgba(255,255,255,0.1); padding: 4px 8px; border-radius: 4px; font-size: 12px; display: none;">
-                TRIGGERED: <span id="trigger-type" style="color: var(--primary); font-weight: bold;">--</span>
+<style>
+    .scope-panel {
+        background: #1e1e1e;
+        border-radius: 8px;
+        padding: 16px;
+        color: #eee;
+    }
+
+    .scope-grid {
+        display: grid;
+        grid-template-columns: 1fr 300px;
+        gap: 16px;
+    }
+
+    .knob-group {
+        margin-bottom: 16px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+    }
+
+    .knob-group h3 {
+        margin: 0 0 12px 0;
+        font-size: 14px;
+        color: var(--primary);
+        text-transform: uppercase;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 4px;
+    }
+
+    .control-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 13px;
+    }
+
+    .control-btn {
+        background: #333;
+        border: 1px solid #555;
+        color: #ddd;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+    }
+
+    .control-btn:hover {
+        background: #444;
+    }
+
+    .control-btn.active {
+        background: var(--primary);
+        color: #000;
+        border-color: var(--primary);
+    }
+
+    .slider {
+        width: 100%;
+        accent-color: var(--primary);
+    }
+
+    .measure-overlay {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.7);
+        border: 1px solid rgba(255, 214, 0, 0.3);
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 13px;
+        color: #0f0;
+        pointer-events: none;
+    }
+</style>
+
+<div class="scope-grid">
+    <!-- Main Screen -->
+    <div class="card"
+        style="padding: 12px; position: relative; overflow: hidden; display: flex; flex-direction: column;">
+        <div class="card-header" style="margin-bottom: 8px;">
+            <span class="material-icons-outlined">visibility</span>
+            <h2 class="card-title">Live Oscilloscope</h2>
+            <div style="margin-left: auto; display: flex; gap: 8px;">
+                <button onclick="autoset()" class="control-btn"
+                    style="background:#2196F3; color:#fff; border:none;">AUTOSET</button>
+                <button onclick="toggleRun()" id="run-btn" class="control-btn"
+                    style="background:#4CAF50; color:#fff; border:none; font-weight:bold;">RUN</button>
             </div>
-            <button onclick="togglePause()" id="pause-btn"
-                style="background: var(--primary); border: none; padding: 6px 12px; border-radius: 4px; font-weight: 500; cursor: pointer;">PAUSE</button>
+        </div>
+
+        <div style="flex-grow: 1; background: #000; border-radius: 8px; position: relative; min-height: 400px;">
+            <canvas id="scopeCanvas" style="width: 100%; height: 100%;"></canvas>
+
+            <div
+                style="position: absolute; top: 10px; left: 10px; pointer-events: none; font-size: 12px; opacity: 0.8; color: #fff; font-family: monospace;">
+                <span id="readout-ch" style="color:var(--primary)">CH1</span> &bull;
+                <span id="readout-vdiv">100V/div</span> &bull;
+                <span id="readout-tdiv">5ms/div</span>
+                <br>
+                <span id="readout-trig" style="color:#aaa">TRIG: AUTO 0.0V (RISING)</span>
+            </div>
+
+            <div class="measure-overlay" id="measurements">
+                Vpp: -- V<br>
+                Vrms: -- V<br>
+                Freq: -- Hz
+            </div>
+
+            <div id="status-badge"
+                style="position: absolute; bottom: 10px; left: 10px; background: rgba(255,0,0,0.7); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; display: none;">
+                STOPPED
+            </div>
+            <div id="trig-badge"
+                style="position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: var(--primary); color: #000; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; display: none;">
+                T
+            </div>
         </div>
     </div>
 
-    <div style="height: 400px; background: #000; border-radius: 8px; position: relative;">
-        <!-- Canvas for the scope -->
-        <canvas id="scopeCanvas" style="width: 100%; height: 100%;"></canvas>
+    <!-- Controls Sidebar -->
+    <div class="scope-panel">
 
-        <!-- Overlay for Grid/Legend -->
-        <div style="position: absolute; top: 10px; left: 10px; pointer-events: none; font-size: 12px; opacity: 0.6;">
-            100V/div &bull; 2ms/div
+        <div class="knob-group">
+            <h3>Vertical</h3>
+            <div class="control-row">
+                <span>Channel</span>
+                <div>
+                    <button class="control-btn active" onclick="setChannel(0)" id="btn-ch0">CH1</button>
+                    <!-- Expandable for CH2-8 later if needed -->
+                </div>
+            </div>
+            <div class="control-row">
+                <span>Coupling</span>
+                <div>
+                    <button class="control-btn active" onclick="setCoupling('DC')" id="btn-cpl-dc">DC</button>
+                    <button class="control-btn" onclick="setCoupling('AC')" id="btn-cpl-ac">AC</button>
+                </div>
+            </div>
+            <div class="control-row" style="margin-top:12px;">
+                <span>Volts/Div</span>
+                <select id="vdiv-sel" onchange="setVDiv(this.value)" class="control-btn">
+                    <option value="500">500 V</option>
+                    <option value="200">200 V</option>
+                    <option value="100" selected>100 V</option>
+                    <option value="50">50 V</option>
+                    <option value="20">20 V</option>
+                    <option value="10">10 V</option>
+                </select>
+            </div>
+            <div style="margin-top:12px;">
+                <div class="control-row">
+                    <span>Position (Offset)</span>
+                    <span id="vpos-label">0V</span>
+                </div>
+                <input type="range" class="slider" min="-500" max="500" value="0" id="vpos-slider"
+                    oninput="setVPos(this.value)">
+                <button class="control-btn" style="width:100%; margin-top:4px;"
+                    onclick="document.getElementById('vpos-slider').value=0; setVPos(0);">Zero Offset</button>
+            </div>
         </div>
-    </div>
 
-    <!-- Controls -->
-    <div class="grid" style="margin-top: 16px;">
-        <div class="card" style="margin-bottom: 0; padding: 12px;">
-            <p style="font-size: 12px; margin: 0 0 8px 0; opacity: 0.7;">VERTICAL SCALE</p>
-            <input type="range" min="0.1" max="2" step="0.1" value="1"
-                style="width: 100%; accent-color: var(--primary);" id="vScale">
+        <div class="knob-group">
+            <h3>Horizontal</h3>
+            <div class="control-row">
+                <span>Time/Div</span>
+                <select id="tdiv-sel" onchange="setTDiv(this.value)" class="control-btn">
+                    <option value="1.0">1 s</option>
+                    <option value="0.5">500 ms</option>
+                    <option value="0.2">200 ms</option>
+                    <option value="0.1">100 ms</option>
+                    <option value="0.05">50 ms</option>
+                    <option value="0.02">20 ms</option>
+                    <option value="0.01">10 ms</option>
+                    <option value="0.005" selected>5 ms</option>
+                    <option value="0.002">2 ms</option>
+                    <option value="0.001">1 ms</option>
+                </select>
+            </div>
+            <div style="margin-top:12px;">
+                <div class="control-row">
+                    <span>Pan (Delay)</span>
+                    <span id="tpos-label">0%</span>
+                </div>
+                <input type="range" class="slider" min="-50" max="50" value="0" id="tpos-slider"
+                    oninput="setTPos(this.value)">
+                <button class="control-btn" style="width:100%; margin-top:4px;"
+                    onclick="document.getElementById('tpos-slider').value=0; setTPos(0);">Center</button>
+            </div>
         </div>
-        <div class="card" style="margin-bottom: 0; padding: 12px;">
-            <p style="font-size: 12px; margin: 0 0 8px 0; opacity: 0.7;">TIMEBASE</p>
-            <input type="range" min="1" max="10" step="1" value="2" style="width: 100%; accent-color: var(--primary);"
-                id="tScale">
+
+        <div class="knob-group" style="margin-bottom: 0;">
+            <h3>Trigger</h3>
+            <div class="control-row">
+                <span>Mode</span>
+                <div>
+                    <button class="control-btn active" onclick="setMode('AUTO')" id="btn-trig-auto">AUTO</button>
+                    <button class="control-btn" onclick="setMode('NORM')" id="btn-trig-norm">NORM</button>
+                    <button class="control-btn" onclick="setMode('SING')" id="btn-trig-sing">SING</button>
+                </div>
+            </div>
+            <div class="control-row">
+                <span>Edge</span>
+                <div>
+                    <button class="control-btn active" onclick="setEdge('RISING')" id="btn-edge-rise">&uarr;</button>
+                    <button class="control-btn" onclick="setEdge('FALLING')" id="btn-edge-fall">&darr;</button>
+                </div>
+            </div>
+            <div style="margin-top:12px;">
+                <div class="control-row">
+                    <span>Level</span>
+                    <span id="tlev-label">0V</span>
+                </div>
+                <input type="range" class="slider" min="-200" max="200" value="0" id="tlev-slider"
+                    oninput="setTLev(this.value)">
+                <button class="control-btn" style="width:100%; margin-top:4px;"
+                    onclick="document.getElementById('tlev-slider').value=0; setTLev(0);">Set to 0V</button>
+            </div>
         </div>
+
     </div>
 </div>
 
 <script>
+    // System State
+    let isRunning = true;
+    let ws = null;
+
+    // Vertical
+    let channel = 0;
+    let coupling = 'DC';
+    let vDiv = 100.0;
+    let vPos = 0.0;
+
+    // Horizontal
+    let tDiv = 0.005; // 5ms
+    let tPosPct = 0;
+
+    // Trigger
+    let trigMode = 'AUTO';
+    let trigEdge = 'RISING';
+    let trigLevel = 0.0;
+
     const canvas = document.getElementById('scopeCanvas');
     const ctx = canvas.getContext('2d');
-    let paused = false;
-    let lastData = [];
-
-    // Scale factors
-    let vScale = 1.0;
-    let tScale = 2.0;
 
     function resize() {
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
+        // High DPI canvas scaling
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        drawGrid();
     }
     window.addEventListener('resize', resize);
     resize();
 
-    function togglePause() {
-        paused = !paused;
-        document.getElementById('pause-btn').innerText = paused ? 'RESUME' : 'PAUSE';
-        document.getElementById('pause-btn').style.background = paused ? '#4CAF50' : 'var(--primary)';
+    // Configuration API
+    function updateReadouts() {
+        document.getElementById('readout-ch').innerText = `CH${channel + 1}`;
+        document.getElementById('readout-vdiv').innerText = `${vDiv}V/div`;
+
+        let tStr = tDiv >= 1.0 ? `${tDiv}s` : `${tDiv * 1000}ms`;
+        document.getElementById('readout-tdiv').innerText = `${tStr}/div`;
+
+        document.getElementById('readout-trig').innerText = `TRIG: ${trigMode}  ${trigLevel.toFixed(1)}V (${trigEdge})`;
     }
 
-    // WebSocket Connection
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/live`);
+    function toggleRun() {
+        isRunning = !isRunning;
+        const btn = document.getElementById('run-btn');
+        const badge = document.getElementById('status-badge');
+        btn.innerText = isRunning ? 'STOP' : 'RUN';
+        btn.style.background = isRunning ? '#F44336' : '#4CAF50';
+        badge.style.display = isRunning ? 'none' : 'block';
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ pause: !isRunning }));
+        }
+    }
 
-    ws.onmessage = (event) => {
-        if (paused) return;
-        const data = JSON.parse(event.data);
-        const samples = data.samples;
+    function autoset() {
+        if (!isRunning) toggleRun();
+        // Autoset will be computed on the next block arrival
+        wantAutoset = true;
+    }
+    let wantAutoset = false;
 
-        // Channel 0 is usually index 0, 8, 16...
-        const ch0 = [];
-        for (let i = 0; i < samples.length; i += 8) {
-            ch0.push(samples[i]);
+    function setChannel(ch) { channel = ch; sendConfig(); }
+
+    function setCoupling(c) {
+        coupling = c;
+        document.getElementById('btn-cpl-dc').classList.toggle('active', c === 'DC');
+        document.getElementById('btn-cpl-ac').classList.toggle('active', c === 'AC');
+    }
+
+    function setVDiv(v) { vDiv = parseFloat(v); updateReadouts(); }
+    function setVPos(v) {
+        vPos = parseFloat(v);
+        document.getElementById('vpos-label').innerText = vPos + 'V';
+    }
+
+    function setTDiv(t) {
+        tDiv = parseFloat(t);
+        sendConfig(); // Change buffer size requested from server
+        updateReadouts();
+    }
+    function setTPos(p) {
+        tPosPct = parseFloat(p);
+        document.getElementById('tpos-label').innerText = tPosPct + '%';
+    }
+
+    function setMode(m) {
+        trigMode = m;
+        document.getElementById('btn-trig-auto').classList.toggle('active', m === 'AUTO');
+        document.getElementById('btn-trig-norm').classList.toggle('active', m === 'NORM');
+        document.getElementById('btn-trig-sing').classList.toggle('active', m === 'SING');
+        updateReadouts();
+        if (m === 'SING' && !isRunning) toggleRun();
+    }
+    function setEdge(e) {
+        trigEdge = e;
+        document.getElementById('btn-edge-rise').classList.toggle('active', e === 'RISING');
+        document.getElementById('btn-edge-fall').classList.toggle('active', e === 'FALLING');
+        updateReadouts();
+    }
+    function setTLev(l) {
+        trigLevel = parseFloat(l);
+        document.getElementById('tlev-label').innerText = trigLevel + 'V';
+        updateReadouts();
+    }
+
+    function sendConfig() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            // Request a buffer large enough to find a trigger and display 10 divisions
+            // We request 2x the display width so we can center the trigger
+            const displayWindow = tDiv * 10.0;
+            ws.send(JSON.stringify({
+                time_window: displayWindow * 2.0,
+                channel: channel
+            }));
+        }
+    }
+
+    // WebSocket init
+    function connect() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(`${protocol}//${window.location.host}/ws/live`);
+        ws.onopen = () => sendConfig();
+        ws.onmessage = handleData;
+        ws.onclose = () => setTimeout(connect, 2000);
+    }
+
+    function processAutoset(samples) {
+        let min = Math.min(...samples);
+        let max = Math.max(...samples);
+        let vpp = max - min;
+
+        // Find best V/Div (8 vertical divisions)
+        let targetDiv = vpp / 6;
+        const vSteps = [10, 20, 50, 100, 200, 500];
+        let bestV = 500;
+        for (let v of vSteps) {
+            if (v >= targetDiv) { bestV = v; break; }
         }
 
-        draw(ch0);
-    };
+        vDiv = bestV;
+        document.getElementById('vdiv-sel').value = bestV;
 
-    function draw(samples) {
+        // Center trace
+        vPos = -((max + min) / 2);
+        document.getElementById('vpos-slider').value = vPos;
+        setVPos(vPos);
+
+        // trigger
+        trigLevel = (max + min) / 2;
+        document.getElementById('tlev-slider').value = trigLevel;
+        setTLev(trigLevel);
+
+        // Basic tDiv estimation could go here. Skipping for now (keeps current tDiv).
+        wantAutoset = false;
+        updateReadouts();
+    }
+
+    let lastDrawTime = 0;
+
+    function handleData(event) {
+        if (!isRunning) return;
+
+        const data = JSON.parse(event.data);
+        if (!data.samples || data.samples.length < 2) return;
+
+        let samples = data.samples;
+
+        if (coupling === 'AC') {
+            const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
+            samples = samples.map(s => s - mean);
+        }
+
+        if (wantAutoset) processAutoset(samples);
+
+        // Find Trigger
+        let trigIdx = -1;
+        // Search the middle chunk of the buffer for a trigger edge
+        const searchStart = Math.floor(samples.length * 0.25);
+        const searchEnd = Math.floor(samples.length * 0.75);
+
+        for (let i = searchStart; i < searchEnd; i++) {
+            let s1 = samples[i - 1];
+            let s2 = samples[i];
+
+            if (trigEdge === 'RISING' && s1 <= trigLevel && s2 > trigLevel) {
+                trigIdx = i; break;
+            } else if (trigEdge === 'FALLING' && s1 >= trigLevel && s2 < trigLevel) {
+                trigIdx = i; break;
+            }
+        }
+
+        const badge = document.getElementById('trig-badge');
+
+        if (trigIdx === -1) {
+            badge.style.display = 'none';
+            if (trigMode === 'NORM' || trigMode === 'SING') {
+                return; // Wait for trigger
+            }
+            // AUTO mode: force a trigger near the center
+            trigIdx = Math.floor(samples.length / 2);
+        } else {
+            badge.style.display = 'block';
+            if (trigMode === 'SING') {
+                toggleRun(); // Stop after single shot
+            }
+        }
+
+        // Calculate measurements
+        const sqSum = samples.reduce((a, b) => a + (b * b), 0);
+        const vrms = Math.sqrt(sqSum / samples.length);
+        const max = Math.max(...samples);
+        const min = Math.min(...samples);
+        const vpp = max - min;
+
+        // Freq estimation (count all zero crossings around mean)
+        let crossings = 0;
+        let mean = (max + min) / 2;
+        for (let i = 1; i < samples.length; i++) {
+            if (samples[i - 1] <= mean && samples[i] > mean) crossings++;
+        }
+        // total time of buffer
+        let totalTime = data.time_window;
+        let freq = crossings / totalTime;
+
+        document.getElementById('measurements').innerHTML = `
+            Vpp: ${vpp.toFixed(1)} V<br>
+            Vrms: ${vrms.toFixed(1)} V<br>
+            Freq: ${freq > 0 ? freq.toFixed(1) : '--'} Hz
+        `;
+
+        // Render aligned
+        renderTrace(samples, trigIdx);
+    }
+
+    function drawGrid() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Draw Grid
-        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
         ctx.lineWidth = 1;
-        for (let x = 0; x < canvas.width; x += 50) {
+
+        // 10 Horizontal Divisions
+        const dx = canvas.width / 10;
+        for (let x = 0; x <= canvas.width; x += dx) {
             ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
         }
-        for (let y = 0; y < canvas.height; y += 50) {
+
+        // 8 Vertical Divisions
+        const dy = canvas.height / 8;
+        for (let y = 0; y <= canvas.height; y += dy) {
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
         }
 
-        // Draw Trace
+        // Center crosshairs
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.beginPath(); ctx.moveTo(canvas.width / 2, 0); ctx.lineTo(canvas.width / 2, canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, canvas.height / 2); ctx.lineTo(canvas.width, canvas.height / 2); ctx.stroke();
+    }
+
+    function renderTrace(samples, trigIdx) {
+        drawGrid();
+
+        // 10 horizontal divisions = total drawn width
+        const totalDrawnSamples = samples.length / 2; // Because we requested 2x window
+        const scaleX = canvas.width / totalDrawnSamples;
+
+        // Vertical scaling: 8 divisions total. 
+        // 1 division = vDiv volts. 1 division = canvas.height/8 pixels.
+        // Pixels per volt = (canvas.height/8) / vDiv
+        const pxPerVolt = (canvas.height / 8) / vDiv;
+        const midY = canvas.height / 2;
+
         ctx.strokeStyle = '#FFD600';
         ctx.lineWidth = 2;
         ctx.beginPath();
 
-        const midY = canvas.height / 2;
-        const points = samples.length;
-        const dx = canvas.width / points;
+        // The center of the screen (x = canvas.width/2) should align with trigIdx
+        // Plus pan offset (tPosPct: -50% to +50%)
+        let panOffsetSamples = (tPosPct / 100.0) * totalDrawnSamples;
+        let startIdx = Math.floor(trigIdx - (totalDrawnSamples / 2) + panOffsetSamples);
 
-        for (let i = 0; i < points; i++) {
-            const x = i * dx;
-            // Scale and center. ADC raw is signed 16-bit.
-            // Full scale is roughly +/- 32768.
-            const val = (samples[i] / 32768) * (canvas.height / 2) * vScale;
-            const y = midY - val;
+        let started = false;
+        for (let i = 0; i < totalDrawnSamples; i++) {
+            let dataIdx = startIdx + i;
+            if (dataIdx >= 0 && dataIdx < samples.length) {
+                let volts = samples[dataIdx] + vPos;
+                let y = midY - (volts * pxPerVolt);
+                let x = i * scaleX;
 
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
-
-            // Basic anomaly detection in JS for visual trigger
-            if (Math.abs(samples[i]) < 1000 && !paused) { // Simple grounding detection
-                triggerAnom("SAG / GROUNDED");
+                if (!started) { ctx.moveTo(x, y); started = true; }
+                else { ctx.lineTo(x, y); }
             }
         }
         ctx.stroke();
+
+        // Draw Trigger Level Indicator
+        let trigY = midY - ((trigLevel + vPos) * pxPerVolt);
+        ctx.fillStyle = 'var(--primary)';
+        ctx.beginPath();
+        ctx.moveTo(0, trigY);
+        ctx.lineTo(8, trigY - 4);
+        ctx.lineTo(8, trigY + 4);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 214, 0, 0.5)';
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(8, trigY);
+        ctx.lineTo(canvas.width, trigY);
+        ctx.stroke();
+        ctx.setLineDash([]);
     }
 
-    let trigTimeout = null;
-    function triggerAnom(type) {
-        const badge = document.getElementById('trigger-badge');
-        document.getElementById('trigger-type').innerText = type;
-        badge.style.display = 'block';
+    // Startup
+    updateReadouts();
+    connect();
 
-        if (trigTimeout) clearTimeout(trigTimeout);
-        trigTimeout = setTimeout(() => {
-            badge.style.display = 'none';
-        }, 2000);
-    }
-
-    document.getElementById('vScale').oninput = (e) => vScale = parseFloat(e.target.value);
 </script>
 {% endblock %}

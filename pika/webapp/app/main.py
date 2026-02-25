@@ -43,8 +43,7 @@ async def get_events_view(request: Request):
 async def health():
     sample_rate = 0
     if shm.header:
-        # PRU runs at 200MHz
-        sample_rate = 200000000 // shm.header.sample_period_cycles
+        sample_rate = shm.header.sample_rate
         
     return {
         "status": "ok",
@@ -69,23 +68,49 @@ async def get_events_api():
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("WebSocket client connected")
+    
+    # Defaults
+    req_window = 0.1  # 100ms default view
+    req_channel = 0
+    pause = False
+
+    async def receive_messages():
+        nonlocal req_window, req_channel, pause
+        try:
+            while True:
+                data = await websocket.receive_json()
+                if "time_window" in data:
+                    req_window = float(data["time_window"])
+                if "channel" in data:
+                    req_channel = int(data["channel"])
+                if "pause" in data:
+                    pause = bool(data["pause"])
+        except WebSocketDisconnect:
+            pass
+        except Exception as e:
+            print(f"WS receive error: {e}")
+
+    # Spin up async listener
+    listen_task = asyncio.create_task(receive_messages())
+
     try:
         while True:
-            # Poll SHM for latest block
-            result = shm.get_latest_samples()
-            if result:
-                desc, samples = result
-                # Serialize to JSON and send
-                # We send it as a flat list of shorts
-                await websocket.send_json({
-                    "ts": desc.timestamp_cycles,
-                    "samples": samples
-                })
+            if not pause:
+                samples = shm.get_window(req_window, req_channel)
+                if samples:
+                    effective_rate = len(samples) / req_window if req_window > 0 else 0
+                    await websocket.send_json({
+                        "samples": samples,
+                        "time_window": req_window,
+                        "channel": req_channel,
+                        "effective_rate": effective_rate
+                    })
             
-            # Throttle to avoid flooding the socket
-            # 50Hz update rate is plenty for smooth visualizer
-            await asyncio.sleep(0.02)
+            # Throttle to 20Hz update (smooth UI)
+            await asyncio.sleep(0.05)
     except WebSocketDisconnect:
         print("WebSocket client disconnected")
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        print(f"WebSocket send error: {e}")
+    finally:
+        listen_task.cancel()

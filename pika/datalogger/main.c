@@ -11,6 +11,7 @@
 #include "event_window.h"
 #include "logger_config.h"
 #include "ring_buffer.h"
+#include "scope_buffer.h"
 #include "shm_reader.h"
 #include "time_utils.h"
 #include "writer.h"
@@ -21,6 +22,7 @@ logger_config_t global_config;
 ring_buffer_t raw_block_rb;
 shm_reader_t shm_reader;
 writer_t disk_writer;
+scope_buffer_t live_scope_buffer;
 
 void handle_sigint(int sig) { keep_running = 0; }
 
@@ -101,6 +103,9 @@ void *processor_thread_func(void *arg) {
     if (ring_buffer_pop(&raw_block_rb, temp_buf)) {
       block_descriptor_t *desc = (block_descriptor_t *)temp_buf;
       int16_t *samples = (int16_t *)(temp_buf + 16);
+
+      // Push raw interleaved frame to the real-time oscilloscope buffer
+      scope_buffer_push(&live_scope_buffer, samples, desc->num_samples);
 
       uint64_t block_time = cycles_to_ns(&t_sync, desc->timestamp_cycles);
 
@@ -208,6 +213,13 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // 4.5. Init Real-time Scope Buffer
+  if (scope_buffer_init(&live_scope_buffer, global_config.nominal_rate_hz) !=
+      0) {
+    fprintf(stderr, "Failed to init scope buffer\n");
+    return 1;
+  }
+
   // 5. Start PRU
   printf("Starting PRU firmware...\n");
   shm_pru_set_state("start");
@@ -232,6 +244,7 @@ int main(int argc, char **argv) {
   shm_reader_cleanup(&shm_reader);
   ring_buffer_free(&raw_block_rb);
   writer_cleanup(&disk_writer);
+  scope_buffer_cleanup(&live_scope_buffer);
 
   printf("Datalogger exited cleanly.\n");
   return 0;
