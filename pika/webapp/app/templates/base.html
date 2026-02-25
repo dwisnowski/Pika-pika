@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,12 +10,14 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     <style>
         :root {
-            --primary: #FFD600; /* Pika Yellow */
+            --primary: #FFD600;
+            /* Pika Yellow */
             --on-primary: #000000;
-            --secondary: #FFB300; /* Amber */
+            --secondary: #FFB300;
+            /* Amber */
             --background: #121212;
             --surface: #1E1E1E;
             --on-surface: #E1E1E1;
@@ -36,7 +39,7 @@
             padding: 16px;
             display: flex;
             align-items: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
             z-index: 100;
         }
 
@@ -64,7 +67,8 @@
             transition: 0.3s;
         }
 
-        .nav a:hover, .nav a.active {
+        .nav a:hover,
+        .nav a.active {
             opacity: 1;
             color: var(--primary);
         }
@@ -84,7 +88,7 @@
             border-radius: 12px;
             padding: 20px;
             margin-bottom: 16px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         }
 
         .card-header {
@@ -121,8 +125,51 @@
             .grid {
                 grid-template-columns: repeat(3, 1fr);
             }
+
             .grid-wide {
                 grid-column: span 2;
+            }
+        }
+
+        @media (min-width: 1400px) {
+            main {
+                max-width: 1600px;
+            }
+
+            .grid {
+                grid-template-columns: repeat(2, 1fr) 420px;
+                grid-template-areas:
+                    "health stats events"
+                    "trend trend events"
+                    "fft fft events";
+                gap: 24px;
+            }
+
+            .card-health {
+                grid-area: health;
+            }
+
+            .card-stats {
+                grid-area: stats;
+            }
+
+            .card-trend {
+                grid-area: trend;
+            }
+
+            .card-fft {
+                grid-area: fft;
+            }
+
+            .card-events {
+                grid-area: events;
+                margin-bottom: 0;
+            }
+
+            .grid>.card-trend,
+            .grid>.card-fft,
+            .grid>.card-events {
+                grid-column: auto;
             }
         }
 
@@ -145,6 +192,7 @@
     </style>
     {% block head %}{% endblock %}
 </head>
+
 <body>
     <header>
         <span class="material-icons-outlined" style="color: var(--primary); margin-right: 12px;">bolt</span>
@@ -170,4 +218,5 @@
         if (path === '/oscilloscope') document.getElementById('nav-scope').classList.add('active');
     </script>
 </body>
+
 </html>

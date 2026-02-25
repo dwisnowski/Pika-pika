@@ -9,7 +9,7 @@
 {% block content %}
 <div class="grid">
     <!-- System Status -->
-    <div class="card">
+    <div class="card card-health">
         <div class="card-header">
             <span class="material-icons-outlined">settings_input_component</span>
             <h2 class="card-title">System Health</h2>
@@ -23,7 +23,7 @@
     </div>
 
     <!-- Live Stats -->
-    <div class="card">
+    <div class="card card-stats">
         <div class="card-header">
             <span class="material-icons-outlined">insights</span>
             <h2 class="card-title">Live Stats</h2>
@@ -46,7 +46,7 @@
     </div>
 
     <!-- Trend Chart -->
-    <div class="card grid-wide">
+    <div class="card grid-wide card-trend">
         <div class="card-header">
             <span class="material-icons-outlined">show_chart</span>
             <h2 class="card-title">Line Voltage Trend (Decimated)</h2>
@@ -60,12 +60,17 @@
     </div>
 
     <!-- FFT Analysis Chart -->
-    <div class="card grid-wide">
+    <div class="card grid-wide card-fft">
         <div class="card-header">
             <span class="material-icons-outlined">analytics</span>
             <h2 class="card-title">Frequency Spectrum (FFT)</h2>
+            <div id="ws-status"
+                style="margin-left: auto; font-size: 10px; color: #f44336; display: flex; align-items: center; gap: 4px;">
+                <span class="material-icons-outlined" style="font-size: 14px;">cloud_off</span>
+                LIVE STREAM OFF
+            </div>
             <button onclick="manualFFT()"
-                style="margin-left: auto; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Capture
+                style="margin-left: 12px; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Capture
                 Now</button>
         </div>
         <div style="height: 200px;">
@@ -74,7 +79,7 @@
     </div>
 
     <!-- Latest Anomalies -->
-    <div class="card grid-wide">
+    <div class="card grid-wide card-events">
         <div class="card-header">
             <span class="material-icons-outlined">warning_amber</span>
             <h2 class="card-title">Recent Events</h2>
@@ -110,7 +115,8 @@
 </div>
 
 <script>
-    let latestSampleRate = 10000;
+    let latestSampleRate = 180000;
+    let latestEffectiveRate = 10000;
     let latestSamples = [];
     let currentFrequency = 0;
 
@@ -142,11 +148,22 @@
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const ws = new WebSocket(`${protocol}//${window.location.host}/ws/live`);
 
+        ws.onopen = () => {
+            document.getElementById('ws-status').innerHTML = '<span class="status-dot" style="background:#4CAF50"></span> LIVE STREAM ON';
+            document.getElementById('ws-status').style.color = '#4CAF50';
+            // Request a 100ms window (same as default but ensures backend task wakes up)
+            ws.send(JSON.stringify({ time_window: 0.1, channel: 0 }));
+        };
+
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
             if (data.samples && data.samples.length > 0) {
+                // Determine rate of this block (backend might decimate)
+                const rate = data.effective_rate || latestSampleRate;
+                latestEffectiveRate = rate;
+
                 // WebSocket sends ch0 samples (already calibrated by backend)
-                const freq = calculateFrequency(data.samples, latestSampleRate);
+                const freq = calculateFrequency(data.samples, rate);
                 if (freq > 40 && freq < 70) { // Simple filter for mains 50/60Hz
                     currentFrequency = freq;
                     document.getElementById('stat-freq').innerText = freq.toFixed(2) + ' Hz';
@@ -154,10 +171,15 @@
 
                 // Cache the latest high-res samples for the 5s FFT update
                 latestSamples = data.samples;
+                if (!fftChart) { updateFFT(latestSamples, rate); }
             }
         };
 
-        ws.onclose = () => setTimeout(setupWebSocket, 5000);
+        ws.onclose = () => {
+            document.getElementById('ws-status').innerHTML = '<span class="material-icons-outlined" style="font-size:14px;">cloud_off</span> LIVE STREAM OFF';
+            document.getElementById('ws-status').style.color = '#f44336';
+            setTimeout(setupWebSocket, 5000);
+        };
     }
 
     // Simple FFT Implementation (Radix-2)
@@ -197,10 +219,13 @@
 
     let fftChart = null;
     function updateFFT(samples, rate) {
-        // Find nearest power of 2
-        const n = 1024;
-        if (samples.length < n) return;
+        if (!samples || samples.length < 512) {
+            console.warn("FFT: Not enough samples", samples ? samples.length : 0);
+            return;
+        }
 
+        // Find nearest power of 2 for FFT
+        const n = 512;
         const real = new Float32Array(n);
         const imag = new Float32Array(n);
 
@@ -225,15 +250,27 @@
         const displayMagnitudes = magnitudes.slice(0, limitIndex);
         const displayLabels = labels.slice(0, limitIndex);
 
-        const ctx = document.getElementById('fftChart').getContext('2d');
+        if (!displayMagnitudes.length) {
+            console.error("FFT: No magnitude data computed");
+            return;
+        }
+
+        const canvas = document.getElementById('fftChart');
+        if (!canvas) {
+            console.error("FFT: Canvas element not found");
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
         if (!fftChart) {
+            console.log("FFT: Initializing standard chart...");
             fftChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: displayLabels,
                     datasets: [{
                         label: 'Magnitude (V)',
-                        data: displayMagnitudes,
+                        data: Array.from(displayMagnitudes),
                         backgroundColor: 'rgba(255, 214, 0, 0.6)',
                         borderColor: 'rgba(255, 214, 0, 1)',
                         borderWidth: 1,
@@ -271,7 +308,7 @@
             });
         } else {
             fftChart.data.labels = displayLabels;
-            fftChart.data.datasets[0].data = displayMagnitudes;
+            fftChart.data.datasets[0].data = Array.from(displayMagnitudes);
             fftChart.update('none');
         }
     }
@@ -312,13 +349,16 @@
 
         // 4. Update FFT (matched to 5s timer)
         if (latestSamples.length > 0) {
-            updateFFT(latestSamples, latestSampleRate);
+            updateFFT(latestSamples, latestEffectiveRate);
+        } else if (trendData.samples && trendData.samples.length >= 128) {
+            // Fallback to trend data if live stream is missing (lower resolution)
+            updateFFT(trendData.samples, trendData.rate);
         }
     }
 
     function manualFFT() {
         if (latestSamples.length > 0) {
-            updateFFT(latestSamples, latestSampleRate);
+            updateFFT(latestSamples, latestEffectiveRate);
         } else {
             alert("Waiting for live data stream...");
         }
