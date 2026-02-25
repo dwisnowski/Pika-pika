@@ -57,3 +57,43 @@ Ensure the **PAR/SER** pin on your module is connected to **GND** to enable para
 - **OS[0:2]**: Tie to **GND** for no oversampling (highest speed).
 - **RANGE**: Tie to **GND** for +/- 5V range.
 - **VIO**: Must be **3.3V**.
+
+
+
+## ZMPT101B Connection
+
+Trim the thing!
+
+### Step 1:
+Connect:
+* ZMPT101B's VCC to the BBB's 5v
+* ZMPT101B's GND to the BBB's GND
+* ZMPT101B's GND to a multimeter DC 20VAC mode
+* ZMPT101B's 120VAC SHOULD NOT BE HOOKED UP YET!!!!!
+
+#### Validation:
+You should see 2.5v on the meter
+
+
+### Step 2:
+Connect:
+* ZMPT101B's VCC to the BBB's 5v
+* ZMPT101B's GND to the BBB's GND
+* ZMPT101B's GND to a multimeter AC 200VAC.   <------- switch your meter to the AC side now!!!!!!!!!
+* ZMPT101B's 120VAC to mains
+
+#### Validation:
+You should see 1.0VAC on the meter
+
+If not, then trim the ZMPT101B by going `Clockwise` (righty tighty) till the POT starts "clicking" or "harder to turn.
+
+then go the other way till the voltage shows 1.0-1.2VAC
+This took mine about 36 full turns to get 1.0VAC (9 full turns to get 0.1VAC).
+
+Now connect the output of the ZMPT101B to the ADC
+
+
+ZPMT101B
+Grey     ==  GND      —>   AD7606 Channel 0 GND
+Purple   ==  V OUT    —>   AD7606 Channel 0 V input
+Blue     ==  +5V vcc  —>   BBB 5V
