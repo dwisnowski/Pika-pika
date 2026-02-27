@@ -61,32 +61,76 @@ async def get_events_view(request: Request):
 @app.get("/health")
 async def health():
     from app.services.calibration_service import calibration_service
+    import os
+    import time
     
     sample_rate = 0
     pru_clock_hz = 0
     sample_period_cycles = 0
+    pru_connected = False
     
     if shm.header:
-        sample_rate = shm.header.sample_rate
-        pru_clock_hz = shm.header.pru_clock_hz
-        sample_period_cycles = shm.header.sample_period_cycles
+        # Verify PRU is actually running by checking if total_samples is increasing
+        # (indicating active data collection)
+        current_total = shm.header.total_samples
+        
+        # Wait a tiny bit and check again
+        time.sleep(0.05)
+        
+        # Try to reconnect to get fresh data
+        try:
+            shm.connect()
+        except:
+            pass
+        
+        if shm.header:
+            new_total = shm.header.total_samples
+            # If total_samples increased, PRU is running
+            pru_connected = (new_total > current_total)
+            
+            if pru_connected:
+                sample_rate = shm.header.sample_rate
+                pru_clock_hz = shm.header.pru_clock_hz
+                sample_period_cycles = shm.header.sample_period_cycles
     
     # Calculate actual sample rate from PRU timing
     actual_sample_rate = 0
     if pru_clock_hz > 0 and sample_period_cycles > 0:
         actual_sample_rate = pru_clock_hz / sample_period_cycles
     
-    learned_voltage = calibration_service.get_learned_voltage()
+    learned_voltage = calibration_service.get_calibration_values()["nominal_vrms"]
+    learned_transformer_ratio = calibration_service.get_calibration_values()["transformer_ratio"]
+    
+    # Calculate learned ADC VRMS from nominal_vrms and transformer_ratio
+    # learned_adc_vrms = nominal_vrms / transformer_ratio
+    learned_adc_vrms = 0.0
+    if learned_transformer_ratio > 0:
+        learned_adc_vrms = learned_voltage / learned_transformer_ratio
+    
+    # Check if datalogger is running by looking at calibration_status.txt modification time
+    datalogger_running = False
+    try:
+        status_file = os.path.join(settings.data_dir, "calibration_status.txt")
+        if os.path.exists(status_file):
+            # If file was modified within the last 10 seconds, datalogger is likely running
+            mtime = os.path.getmtime(status_file)
+            current_time = time.time()
+            datalogger_running = (current_time - mtime) < 10
+    except Exception as e:
+        logger.warning(f"Could not check datalogger status: {e}")
         
     return {
         "status": "ok",
-        "pru_connected": shm.header is not None,
+        "pru_connected": pru_connected,
+        "datalogger_running": datalogger_running,
         "shm_magic": hex(shm.header.magic) if shm.header else "N/A",
         "sample_rate": sample_rate,
         "actual_sample_rate": actual_sample_rate,
         "pru_clock_hz": pru_clock_hz,
         "sample_period_cycles": sample_period_cycles,
-        "learned_voltage": learned_voltage
+        "learned_voltage": learned_voltage,
+        "learned_adc_vrms": learned_adc_vrms,
+        "learned_transformer_ratio": learned_transformer_ratio
     }
 
 # --- REST APIs ---
@@ -100,6 +144,17 @@ async def get_history_api():
 async def get_events_api():
     from app.services.event_service import event_service
     return event_service.get_recent_events(limit=10)
+
+@app.get("/api/v1/events/{event_id}/data")
+async def get_event_data_api(event_id: int):
+    from app.services.event_service import event_service
+    logger.info(f"Fetching event data for event_id={event_id} (type: {type(event_id)})")
+    data = event_service.get_event_data(event_id)
+    if data is None:
+        logger.warning(f"Event {event_id} not found")
+        return {"error": "Event not found"}, 404
+    logger.info(f"Successfully retrieved event {event_id}")
+    return data
 
 @app.post("/api/v1/config/sample-rate")
 async def update_sample_rate(request: Request):
@@ -145,6 +200,8 @@ async def update_sample_rate(request: Request):
             
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+@app.post("/api/v1/events/delete")
 async def delete_events_api():
     """Delete all event data from the datalogger storage."""
     from app.services.event_service import event_service

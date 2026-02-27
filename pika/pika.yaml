@@ -3,12 +3,12 @@
 
 # Sampling Configuration
 sampling:
-  nominal_rate_hz: 10000     # ADC sampling rate in Hz
+  nominal_rate_hz: 20000     # ADC sampling rate in Hz
 
 # Storage Configuration
 storage:
   decimation:
-    rate: 1000                # Store 1/1000th of samples
+    rate: 500                # Store 1/1000th of samples
     max_mb: 20                # Rotate decimated.bin when it exceeds this
   events:
     pre_sec: 0.5              # Seconds of data before event
@@ -57,7 +57,7 @@ sensor:
 detection:
   ac_freq_hz: 60              # mains frequency (60 for NA, 50 for EU)
   rms_window_cycles: 30       # RMS window = N full 60Hz AC cycles
-  learn_cycles: 1000          # auto-learn nominal VRMS from first N cycles (~16s at 60Hz)
+  learn_cycles: 5000          # auto-learn nominal VRMS from first N cycles (~16s at 60Hz)
 
 # Anomaly Thresholds
 anomalies:
@@ -73,4 +73,4 @@ anomalies:
 
 # Logging Configuration
 logging:
-  level: warn                 # Log level: debug, info, warn, error
+  level: info                 # Log level: debug, info, warn, error

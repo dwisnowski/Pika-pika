@@ -52,6 +52,7 @@ typedef struct {
   float adc_vref;           // AD7606 input range (e.g. 5.0 for +/-5V)
   uint32_t adc_bits;        // ADC resolution (16)
   float transformer_ratio;  // ZMPT101B: mains_vrms / adc_output_amplitude
+  float target_mains_vrms;  // Target steady-state mains voltage (120V for NA, 230V for EU)
   uint32_t active_channels; // Channels actively in use (1 = ch0 only)
   uint32_t ch_enable[8];    // Per-channel enable flags (1 = read, 0 = skip)
 } sensor_config_t;

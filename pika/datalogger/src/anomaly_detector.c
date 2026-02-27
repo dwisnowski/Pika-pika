@@ -141,50 +141,51 @@ anomaly_event_t *anomaly_detector_process(anomaly_detector_t *ad,
     if (rms_adc < 0.0f)
       continue;
 
-    /* 4. Apply transformer ratio to get estimated mains VRMS */
-    float vrms_mains = rms_adc * ad->sensor.transformer_ratio;
-
-    /* 5. Auto-learn nominal VRMS and calibrate transformer ratio */
+    /* 4. Auto-learn transformer ratio from measured ADC RMS */
     if (ad->learn_samples_left > 0) {
-      /* Accumulate squared ADC-side RMS (before transformer scaling) */
-      ad->learn_sq_sum += rms_adc * rms_adc;
+      /* Accumulate squared AC voltage samples (DC already removed by EMA) */
+      ad->learn_sq_sum += v_ac * v_ac;
       ad->learn_count++;
       ad->learn_samples_left--;
 
       if (ad->learn_samples_left == 0) {
-        /* Learning complete: compute RMS-equivalent average of ADC voltage */
+        /* Learning complete: compute RMS from accumulated squared samples */
         float measured_adc_rms = sqrtf(ad->learn_sq_sum / (float)ad->learn_count);
         
-        /* Assume steady-state should be 120V RMS (US mains standard) */
-        const float TARGET_MAINS_VRMS = 120.0f;
-        
-        /* Auto-calibrate transformer ratio: ratio = mains_voltage / adc_voltage */
+        /* Learn transformer ratio: ratio = target_mains_vrms / measured_adc_rms */
         if (measured_adc_rms > 0.001f) {  /* avoid divide-by-zero */
-          ad->sensor.transformer_ratio = TARGET_MAINS_VRMS / measured_adc_rms;
-          ad->nominal_vrms = TARGET_MAINS_VRMS;
+          /* Calculate learned transformer ratio */
+          float target_vrms = ad->sensor.target_mains_vrms;
+          ad->sensor.transformer_ratio = target_vrms / measured_adc_rms;
+          ad->nominal_vrms = target_vrms;
           
           printf("[Detector] Auto-calibration complete:\n");
-          printf("  Measured ADC RMS: %.4f V\n", measured_adc_rms);
-          printf("  Target Mains: %.1f V\n", TARGET_MAINS_VRMS);
+          printf("  Measured ADC RMS (DC-removed): %.4f V\n", measured_adc_rms);
+          printf("  Target Mains VRMS: %.1f V\n", target_vrms);
           printf("  Learned transformer_ratio: %.2f\n", ad->sensor.transformer_ratio);
           printf("  Nominal VRMS set to: %.1f V\n", ad->nominal_vrms);
+          // [Detector] Auto-calibration complete:
+          //   Measured ADC RMS (DC-removed): 0.7170 V
+          //   Target Mains VRMS: 120.0 V
+          //   Learned transformer_ratio: 167.36
+          //   Nominal VRMS set to: 120.0 V
           
-          /* Write learned voltage to status file for webapp to read */
+          /* Write learned voltage and transformer ratio to status file for webapp to read */
           FILE *status_file = fopen("data/calibration_status.txt", "w");
           if (status_file) {
-            fprintf(status_file, "%.2f\n", ad->nominal_vrms);
+            fprintf(status_file, "%.2f\n%.2f\n", ad->nominal_vrms, ad->sensor.transformer_ratio);
             fclose(status_file);
           }
         } else {
-          /* Fallback: use config value if measurement failed */
-          ad->nominal_vrms = TARGET_MAINS_VRMS;
-          printf("[Detector] WARNING: ADC RMS too low (%.4f V), using config transformer_ratio=%.2f\n",
-                 measured_adc_rms, ad->sensor.transformer_ratio);
+          /* Fallback: use config values if measurement failed */
+          ad->nominal_vrms = ad->sensor.target_mains_vrms;
+          printf("[Detector] WARNING: ADC RMS too low (%.4f V), using default nominal_vrms=%.1f V and transformer_ratio=%.2f\n",
+                 measured_adc_rms, ad->nominal_vrms, ad->sensor.transformer_ratio);
           
-          /* Write fallback voltage to status file */
+          /* Write fallback voltage and transformer ratio to status file */
           FILE *status_file = fopen("data/calibration_status.txt", "w");
           if (status_file) {
-            fprintf(status_file, "%.2f\n", ad->nominal_vrms);
+            fprintf(status_file, "%.2f\n%.2f\n", ad->nominal_vrms, ad->sensor.transformer_ratio);
             fclose(status_file);
           }
         }
@@ -192,6 +193,9 @@ anomaly_event_t *anomaly_detector_process(anomaly_detector_t *ad,
       /* Still learning — suppress event detection */
       continue;
     }
+
+    /* 5. Apply learned transformer ratio to get estimated mains VRMS */
+    float vrms_mains = rms_adc * ad->sensor.transformer_ratio;
 
     /* 6. Compute thresholds from learned nominal */
     float sag_threshold_vrms =

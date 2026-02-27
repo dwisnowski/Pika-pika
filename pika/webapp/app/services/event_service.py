@@ -80,6 +80,7 @@ class EventService:
         data_path = os.path.join(self.data_dir, "events.bin")
 
         if not os.path.exists(index_path) or not os.path.exists(data_path):
+            print(f"[EventService] Index or data file not found")
             return None
 
         try:
@@ -87,6 +88,8 @@ class EventService:
                 f.seek(0, os.SEEK_END)
                 size = f.tell()
                 count = size // INDEX_SIZE
+                
+                print(f"[EventService] Searching for event_id={event_id} in {count} total events")
                 
                 # Scan backwards for the ID
                 for i in range(count - 1, -1, -1):
@@ -96,7 +99,10 @@ class EventService:
                         INDEX_FORMAT, record_data
                     )
                     
+                    print(f"[EventService] Checking index {i}: eid={eid}, ts={ts}, type={etype}")
+                    
                     if eid == event_id:
+                        print(f"[EventService] Found matching event at index {i}")
                         # Find the length of this event's data
                         next_offset = None
                         if i < count - 1:
@@ -132,8 +138,12 @@ class EventService:
                                 "samples": volts,
                                 "sample_rate": 10000
                             }
+                
+                print(f"[EventService] Event {event_id} not found after scanning all {count} events")
         except Exception as e:
             print(f"[EventService] Error fetching event data: {e}")
+            import traceback
+            traceback.print_exc()
             
         return None
 

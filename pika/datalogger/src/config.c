@@ -104,6 +104,8 @@ static int config_load_file(const char *path, logger_config_t *config) {
           config->sensor.adc_bits = (uint32_t)atoi(val);
         else if (strcmp(last_key, "transformer_ratio") == 0)
           config->sensor.transformer_ratio = (float)atof(val);
+        else if (strcmp(last_key, "target_mains_vrms") == 0)
+          config->sensor.target_mains_vrms = (float)atof(val);
         else if (strcmp(last_key, "active_channels") == 0)
           config->sensor.active_channels = (uint32_t)atoi(val);
         else if (strcmp(last_key, "ch0_enable") == 0)
@@ -185,6 +187,7 @@ int config_load(const char *path, logger_config_t *config) {
   config->sensor.adc_vref = 5.0f;
   config->sensor.adc_bits = 16;
   config->sensor.transformer_ratio = 120.0f;
+  config->sensor.target_mains_vrms = 120.0f;
   config->sensor.active_channels = 1;
   for (int i = 0; i < 8; i++) {
     config->sensor.ch_enable[i] = (i == 0) ? 1 : 0;  /* Default: ch0 only */
