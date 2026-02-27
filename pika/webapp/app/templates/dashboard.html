@@ -515,9 +515,6 @@
         if (health.sample_rate) {
             latestSampleRate = health.sample_rate;
             document.getElementById('pru-samplerate').innerText = (health.sample_rate / 1000).toFixed(1) + ' kHz';
-            // Sync slider with current rate
-            document.getElementById('sample-rate-slider').value = health.sample_rate;
-            document.getElementById('sample-rate-display').innerText = (health.sample_rate / 1000).toFixed(1) + ' kHz';
         }
         
         if (health.actual_sample_rate) {
