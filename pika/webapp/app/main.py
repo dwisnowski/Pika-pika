@@ -64,6 +64,35 @@ async def get_events_api():
     from app.services.event_service import event_service
     return event_service.get_recent_events(limit=10)
 
+@app.post("/api/v1/events/delete")
+async def delete_events_api():
+    """Delete all event data from the datalogger storage."""
+    from app.services.event_service import event_service
+    import os
+    
+    try:
+        events_path = os.path.join(event_service.data_dir, "events.bin")
+        index_path = os.path.join(event_service.data_dir, "index.bin")
+        
+        # Check if files exist
+        if not os.path.exists(events_path) and not os.path.exists(index_path):
+            return {"error": "No event data found"}
+        
+        # Delete the files
+        deleted = []
+        for path in [events_path, index_path]:
+            if os.path.exists(path):
+                os.remove(path)
+                deleted.append(os.path.basename(path))
+        
+        return {
+            "success": True,
+            "message": f"Deleted {', '.join(deleted)}",
+            "deleted_files": deleted
+        }
+    except Exception as e:
+        return {"error": str(e), "success": False}, 500
+
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()

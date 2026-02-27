@@ -60,7 +60,7 @@ int anomaly_detector_init(anomaly_detector_t *ad, anomaly_config_t config,
   ad->learn_count = 0;
 
   printf("[Detector] Init: rate=%u Hz, rms_window=%u samples (%u cycles), "
-         "learn=%u samples (%u cycles), adc_vref=%.1f, ratio=%.1f\n",
+         "learn=%u samples (%u cycles), adc_vref=%.1f, initial_ratio=%.1f (will auto-calibrate)\n",
          nominal_rate_hz, ad->rms_window_samples, detection.rms_window_cycles,
          ad->learn_samples_total, detection.learn_cycles, sensor.adc_vref,
          sensor.transformer_ratio);
@@ -144,22 +144,36 @@ anomaly_event_t *anomaly_detector_process(anomaly_detector_t *ad,
     /* 4. Apply transformer ratio to get estimated mains VRMS */
     float vrms_mains = rms_adc * ad->sensor.transformer_ratio;
 
-    /* 5. Auto-learn nominal VRMS */
+    /* 5. Auto-learn nominal VRMS and calibrate transformer ratio */
     if (ad->learn_samples_left > 0) {
-      /* Accumulate squared mains RMS so we can take RMS-of-RMS at the end */
-      ad->learn_sq_sum += vrms_mains * vrms_mains;
+      /* Accumulate squared ADC-side RMS (before transformer scaling) */
+      ad->learn_sq_sum += rms_adc * rms_adc;
       ad->learn_count++;
       ad->learn_samples_left--;
 
       if (ad->learn_samples_left == 0) {
-        /* Learning complete: compute RMS-equivalent average */
-        ad->nominal_vrms = sqrtf(ad->learn_sq_sum / (float)ad->learn_count);
-        printf("[Detector] Auto-learned nominal VRMS = %.2f V",
-               ad->nominal_vrms);
-        if (ad->nominal_vrms < 114.0f || ad->nominal_vrms > 126.0f) {
-          printf(" [WARNING: outside ANSI 114-126 V tolerance range!]");
+        /* Learning complete: compute RMS-equivalent average of ADC voltage */
+        float measured_adc_rms = sqrtf(ad->learn_sq_sum / (float)ad->learn_count);
+        
+        /* Assume steady-state should be 120V RMS (US mains standard) */
+        const float TARGET_MAINS_VRMS = 120.0f;
+        
+        /* Auto-calibrate transformer ratio: ratio = mains_voltage / adc_voltage */
+        if (measured_adc_rms > 0.001f) {  /* avoid divide-by-zero */
+          ad->sensor.transformer_ratio = TARGET_MAINS_VRMS / measured_adc_rms;
+          ad->nominal_vrms = TARGET_MAINS_VRMS;
+          
+          printf("[Detector] Auto-calibration complete:\n");
+          printf("  Measured ADC RMS: %.4f V\n", measured_adc_rms);
+          printf("  Target Mains: %.1f V\n", TARGET_MAINS_VRMS);
+          printf("  Learned transformer_ratio: %.2f\n", ad->sensor.transformer_ratio);
+          printf("  Nominal VRMS set to: %.1f V\n", ad->nominal_vrms);
+        } else {
+          /* Fallback: use config value if measurement failed */
+          ad->nominal_vrms = TARGET_MAINS_VRMS;
+          printf("[Detector] WARNING: ADC RMS too low (%.4f V), using config transformer_ratio=%.2f\n",
+                 measured_adc_rms, ad->sensor.transformer_ratio);
         }
-        printf("\n");
       }
       /* Still learning — suppress event detection */
       continue;

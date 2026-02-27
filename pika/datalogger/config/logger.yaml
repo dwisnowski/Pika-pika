@@ -28,13 +28,14 @@ debounce:
 
 detection:
   rms_window_cycles: 30      # RMS window = N full 60Hz AC cycles
-  learn_cycles: 300          # auto-learn nominal VRMS from first N cycles (~5s at 60Hz)
+  learn_cycles: 1000          # auto-learn nominal VRMS from first N cycles (~16s at 60Hz)
   ac_freq_hz: 60             # mains frequency (60 for NA, 50 for EU)
 
 sensor:
-  adc_vref: 5.0              # AD7606 input range (+/-5V)
+  adc_vref: 4.95              # AD7606 input range (+/-5V)
   adc_bits: 16
-  transformer_ratio: 110.3   # Changed from 120.0 to compensate for the op-amp clipping shape factor   # ZMPT101B: mains / adc_output_amplitude
+  transformer_ratio: 120     # ZMPT101B scaling factor (auto-calibrated on startup to 120V target)
+                              # This value is used as fallback only; system learns actual ratio
   active_channels: 1         # only ch0 in use; events store this many channels
 
 buffers:

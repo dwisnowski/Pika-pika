@@ -98,6 +98,8 @@
         <div class="card-header">
             <span class="material-icons-outlined">warning_amber</span>
             <h2 class="card-title">Recent Events</h2>
+            <button onclick="showDeleteConfirm(event)"
+                style="margin-left: auto; background: rgba(244, 67, 54, 0.1); color: #F44336; border: 1px solid #F44336; border-radius: 4px; padding: 4px 12px; cursor: pointer; font-size: 12px; font-weight: 500; text-transform: uppercase;">Delete Event Data</button>
         </div>
         <table style="width: 100%; border-collapse: collapse; text-align: left;">
             <thead>
@@ -114,6 +116,23 @@
                 </tr>
             </tbody>
         </table>
+    </div>
+    <!-- Delete Confirmation Popover -->
+    <div id="delete-confirm-popover"
+        style="display: none; position: fixed; z-index: 1000; width: 300px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(244, 67, 54, 0.3); padding: 16px; pointer-events: auto;">
+        <div style="font-size: 14px; font-weight: 500; color: #F44336; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;"
+            id="delete-confirm-title">Confirm Deletion</div>
+        <div style="font-size: 12px; opacity: 0.8; margin-bottom: 16px; line-height: 1.5;">
+            This will permanently delete all event data from <code style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;">pika/datalogger/data/events.bin</code>.
+            <br><br>
+            Are you sure you want to proceed?
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+            <button onclick="hideDeleteConfirm()"
+                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 500;">Cancel</button>
+            <button onclick="confirmDeleteEvents()"
+                style="background: #F44336; color: white; border: none; border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 12px; font-weight: 500;">Delete</button>
+        </div>
     </div>
     <!-- Popover for Event Previews -->
     <div id="event-popover"
@@ -664,6 +683,50 @@
 
     function hideEventPreview() {
         document.getElementById('event-popover').style.display = 'none';
+    }
+
+    // Delete Event Data Functions
+    let deletePopoverX = 0;
+    let deletePopoverY = 0;
+
+    function showDeleteConfirm(event) {
+        const popover = document.getElementById('delete-confirm-popover');
+        deletePopoverX = event.clientX;
+        deletePopoverY = event.clientY;
+        
+        popover.style.display = 'block';
+        popover.style.left = (event.clientX - 150) + 'px';
+        popover.style.top = (event.clientY - 100) + 'px';
+    }
+
+    function hideDeleteConfirm() {
+        document.getElementById('delete-confirm-popover').style.display = 'none';
+    }
+
+    async function confirmDeleteEvents() {
+        hideDeleteConfirm();
+        
+        const deleteBtn = document.querySelector('button[onclick="showDeleteConfirm()"]');
+        const originalText = deleteBtn.innerText;
+        deleteBtn.innerText = 'Deleting...';
+        deleteBtn.disabled = true;
+
+        try {
+            const response = await fetch('/api/v1/events/delete', { method: 'POST' });
+            const result = await response.json();
+
+            if (response.ok) {
+                alert('Event data deleted successfully. The page will refresh.');
+                window.location.reload();
+            } else {
+                alert('Error: ' + (result.error || 'Failed to delete event data'));
+            }
+        } catch (err) {
+            alert('Error: ' + err.message);
+        } finally {
+            deleteBtn.innerText = originalText;
+            deleteBtn.disabled = false;
+        }
     }
 
     let eventDetailChart = null;
