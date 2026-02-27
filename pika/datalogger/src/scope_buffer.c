@@ -41,6 +41,8 @@ int scope_buffer_init(scope_buffer_t *sb, uint32_t sample_rate) {
   sb->shm->sample_rate = sample_rate;
   sb->shm->channels = SCOPE_CHANNELS;
   sb->shm->capacity = SCOPE_CAPACITY;
+  sb->shm->pru_clock_hz = 200000000;  /* 200 MHz on BeagleBone Black */
+  sb->shm->sample_period_cycles = 0;  /* Will be set by datalogger */
   // Don't reset total_samples if another reader is already synced?
   // Actually, safest to reset so we know the buffer is fresh on startup.
   sb->shm->total_samples = 0;

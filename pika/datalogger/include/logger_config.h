@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+/* AD7606 always has 8 channels */
+#define CHANNELS 8
+
 typedef struct {
   int32_t sag_threshold_pct;
   uint32_t sag_min_duration_ms;
@@ -18,8 +21,19 @@ typedef struct {
 } anomaly_config_t;
 
 typedef struct {
-  uint32_t max_decimated_mb; // Rotate decimated.bin when it exceeds this
-  uint32_t max_events_mb;    // Rotate events.bin when it exceeds this
+  uint32_t rate;             // Store 1/Nth of samples
+  uint32_t max_mb;           // Rotate decimated.bin when it exceeds this
+} decimation_config_t;
+
+typedef struct {
+  double pre_sec;            // Seconds of data before event
+  double post_sec;           // Seconds of data after event
+  uint32_t max_mb;           // Rotate events.bin when it exceeds this
+} events_config_t;
+
+typedef struct {
+  decimation_config_t decimation;
+  events_config_t events;
 } storage_config_t;
 
 typedef struct {
@@ -39,21 +53,17 @@ typedef struct {
   uint32_t adc_bits;        // ADC resolution (16)
   float transformer_ratio;  // ZMPT101B: mains_vrms / adc_output_amplitude
   uint32_t active_channels; // Channels actively in use (1 = ch0 only)
+  uint32_t ch_enable[8];    // Per-channel enable flags (1 = read, 0 = skip)
 } sensor_config_t;
 
 typedef struct {
   uint32_t nominal_rate_hz;
-  uint32_t channels;
-  uint32_t normal_decimation_rate;
 
   anomaly_config_t anomalies;
   storage_config_t storage;
   debounce_config_t debounce;
   detection_config_t detection;
   sensor_config_t sensor;
-
-  double pre_event_sec;
-  double post_event_sec;
 
   uint32_t ram_flush_mb;
 } logger_config_t;

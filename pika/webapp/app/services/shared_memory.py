@@ -3,12 +3,7 @@ import ctypes
 import os
 import time
 from typing import Optional, Tuple
-
-# Sensor calibration constants — matching datalogger config/logger.yaml
-ADC_VREF          = 5.0      # AD7606 input range (±5V)
-ADC_FULL_SCALE    = 32768.0  # 2^15 (signed 16-bit)
-TRANSFORMER_RATIO = 120.0    # ZMPT101B: mains / adc_output_amplitude
-_CALIBRATION_SCALE = (ADC_VREF / ADC_FULL_SCALE) * TRANSFORMER_RATIO
+from app.services.config_service import config_service
 
 SCOPE_SHM_PATH = "/dev/shm/pika_scope_shm"
 
@@ -18,6 +13,8 @@ class ScopeSHM(ctypes.Structure):
         ("sample_rate", ctypes.c_uint32),
         ("channels", ctypes.c_uint32),
         ("capacity", ctypes.c_uint32),
+        ("pru_clock_hz", ctypes.c_uint32),
+        ("sample_period_cycles", ctypes.c_uint32),
         ("total_samples", ctypes.c_uint64),
     ]
 
@@ -26,6 +23,7 @@ class SHMService:
         self.fd = -1
         self.mm = None
         self.header: Optional[ScopeSHM] = None
+        self._calibration_scale = config_service.get_calibration_scale()
 
     def connect(self):
         try:
@@ -100,7 +98,7 @@ class SHMService:
 
         if ch_raw:
             mean = sum(ch_raw) / len(ch_raw)
-            return [round((r - mean) * _CALIBRATION_SCALE, 2) for r in ch_raw]
+            return [round((r - mean) * self._calibration_scale, 2) for r in ch_raw]
         else:
             return []
 

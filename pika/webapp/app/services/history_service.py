@@ -23,7 +23,7 @@ class HistoryService:
     def get_decimated_data(self, max_points: int = 1000) -> Dict:
         path = os.path.join(self.data_dir, "decimated.bin")
         if not os.path.exists(path):
-            return {"samples": [], "rate": 0}
+            return {"samples": [], "samples_raw": [], "rate": 0}
 
         samples_raw: List[int] = []
         sample_rate = 0
@@ -68,11 +68,14 @@ class HistoryService:
         except Exception as e:
             print(f"[HistoryService] Error reading history: {e}")
 
+        print(f"[HistoryService] Read {len(samples_raw)} raw samples from decimated.bin")
+
         # Calibrate: raw ADC count → instantaneous mains voltage
         # v_adc = raw * (vref / 32768)
         # v_mains = v_adc * transformer_ratio
         scale = (ADC_VREF / ADC_FULL_SCALE) * TRANSFORMER_RATIO
         samples_volts = [raw * scale for raw in samples_raw[-max_points:]]
+        samples_raw_sliced = samples_raw[-max_points:]
 
         # Remove DC bias for display: subtract the mean of this window.
         # The resting ZMPT101B DC offset (scaled up by TRANSFORMER_RATIO)
@@ -84,6 +87,7 @@ class HistoryService:
 
         return {
             "samples": [round(v, 2) for v in samples_volts],
+            "samples_raw": samples_raw_sliced,
             "rate":    sample_rate,
         }
 

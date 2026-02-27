@@ -20,13 +20,16 @@ typedef struct {
   volatile uint32_t magic;
   volatile uint32_t version;
   volatile uint32_t sample_period_cycles;
-  volatile uint32_t channel_mask;
   volatile uint32_t block_size;
   volatile uint32_t num_blocks;
   volatile uint32_t write_block_idx;
   volatile uint32_t error_flags;
   volatile uint32_t sample_count;
-  uint32_t reserved[7];
+  volatile uint32_t sample_rate;      /* ADC sampling rate in Hz (set by datalogger) */
+  volatile uint32_t pru_clock_hz;     /* PRU clock frequency in Hz (200MHz on BBB) */
+  /* Per-channel enable flags (1 = read, 0 = skip) */
+  volatile uint32_t ch_enable[8];     /* ch_enable[0] = CH0, ch_enable[1] = CH1, etc. */
+  uint32_t reserved[2];
 } __attribute__((packed)) pru_shared_memory_t;
 
 #endif /* SHM_LAYOUT_H */

@@ -168,11 +168,25 @@ anomaly_event_t *anomaly_detector_process(anomaly_detector_t *ad,
           printf("  Target Mains: %.1f V\n", TARGET_MAINS_VRMS);
           printf("  Learned transformer_ratio: %.2f\n", ad->sensor.transformer_ratio);
           printf("  Nominal VRMS set to: %.1f V\n", ad->nominal_vrms);
+          
+          /* Write learned voltage to status file for webapp to read */
+          FILE *status_file = fopen("data/calibration_status.txt", "w");
+          if (status_file) {
+            fprintf(status_file, "%.2f\n", ad->nominal_vrms);
+            fclose(status_file);
+          }
         } else {
           /* Fallback: use config value if measurement failed */
           ad->nominal_vrms = TARGET_MAINS_VRMS;
           printf("[Detector] WARNING: ADC RMS too low (%.4f V), using config transformer_ratio=%.2f\n",
                  measured_adc_rms, ad->sensor.transformer_ratio);
+          
+          /* Write fallback voltage to status file */
+          FILE *status_file = fopen("data/calibration_status.txt", "w");
+          if (status_file) {
+            fprintf(status_file, "%.2f\n", ad->nominal_vrms);
+            fclose(status_file);
+          }
         }
       }
       /* Still learning — suppress event detection */

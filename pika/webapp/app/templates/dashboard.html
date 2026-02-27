@@ -16,8 +16,18 @@
         </div>
         <div id="health-info">
             <p><span class="status-dot"></span> PRU: <strong id="pru-status">Connecting...</strong></p>
-            <p>ADC Rate: <strong id="pru-samplerate">--</strong></p>
-            <p>Uptime: <strong id="uptime">--</strong></p>
+            <p>Configured Rate: <strong id="pru-samplerate">--</strong></p>
+            <p>Actual Rate: <strong id="pru-actual-samplerate">--</strong></p>
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                <label for="sample-rate-slider" style="font-size: 12px; opacity: 0.8;">Adjust Sample Rate:</label>
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px;">
+                    <input type="range" id="sample-rate-slider" min="1000" max="100000" step="1000" value="10000" 
+                        style="flex: 1; cursor: pointer;" onchange="updateSampleRate(this.value)">
+                    <span id="sample-rate-display" style="min-width: 50px; text-align: right; font-weight: 500;">10.0 kHz</span>
+                </div>
+                <div style="font-size: 11px; opacity: 0.6; margin-top: 4px;">Range: 1 - 100 kHz</div>
+            </div>
+            <p style="margin-top: 12px;">Uptime: <strong id="uptime">--</strong></p>
             <p>Storage: <strong id="storage">Stable</strong></p>
         </div>
     </div>
@@ -31,8 +41,26 @@
         <div id="live-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
             <div>Avg: <strong id="stat-avg">--</strong></div>
             <div>RMS: <strong id="stat-rms">--</strong></div>
-            <div>Min: <strong id="stat-min">--</strong></div>
-            <div>Max: <strong id="stat-max">--</strong></div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="flex: 1;">Min: <strong id="stat-min">--</strong></div>
+                </div>
+                <div style="width: 100%; height: 24px; background: rgba(33, 150, 243, 0.1); border: 1px solid #2196F3; border-radius: 4px; position: relative; overflow: hidden; cursor: pointer;" 
+                     id="stat-min-bar" title="Min ADC value as % of 32767">
+                    <div style="height: 100%; background: linear-gradient(90deg, #2196F3, #1976D2); width: 0%; transition: width 0.1s ease;" id="stat-min-bar-fill"></div>
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 11px; font-weight: 600; color: #2196F3; white-space: nowrap; pointer-events: none;" id="stat-min-bar-label">--</div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="flex: 1;">Max: <strong id="stat-max">--</strong></div>
+                </div>
+                <div style="width: 100%; height: 24px; background: rgba(244, 67, 54, 0.1); border: 1px solid #F44336; border-radius: 4px; position: relative; overflow: hidden; cursor: pointer;" 
+                     id="stat-max-bar" title="Max ADC value as % of 32767">
+                    <div style="height: 100%; background: linear-gradient(90deg, #F44336, #D32F2F); width: 0%; transition: width 0.1s ease;" id="stat-max-bar-fill"></div>
+                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 11px; font-weight: 600; color: #F44336; white-space: nowrap; pointer-events: none;" id="stat-max-bar-label">--</div>
+                </div>
+            </div>
             <div style="grid-column: span 2; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px;">
                 Frequency: <strong id="stat-freq">--</strong>
             </div>
@@ -41,6 +69,9 @@
             </div>
             <div style="grid-column: span 2; opacity: 0.7; font-size: 12px;">
                 Stability: <strong id="stat-p2p">--</strong> (P-P)
+            </div>
+            <div style="grid-column: span 2; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px; opacity: 0.8; font-size: 12px;">
+                Learned Baseline: <strong id="stat-learned-voltage" style="color: var(--primary);">--</strong>
             </div>
         </div>
     </div>
@@ -154,6 +185,37 @@
     let latestSamples = [];
     let currentFrequency = 0;
     let fftYMax = 150;
+
+    function updateSampleRate(value) {
+        const sampleRate = parseInt(value);
+        document.getElementById('sample-rate-display').innerText = (sampleRate / 1000).toFixed(1) + ' kHz';
+        
+        // Send update to backend
+        fetch('/api/v1/config/sample-rate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ sample_rate: sampleRate })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('Sample rate updated to ' + sampleRate + ' Hz');
+                // Update the configured rate display immediately
+                document.getElementById('pru-samplerate').innerText = (sampleRate / 1000).toFixed(1) + ' kHz';
+            } else {
+                console.error('Failed to update sample rate:', data.error);
+                // Revert slider on error
+                updateDashboard();
+            }
+        })
+        .catch(error => {
+            console.error('Error updating sample rate:', error);
+            // Revert slider on error
+            updateDashboard();
+        });
+    }
 
     function adjustFFTYScale(delta) {
         fftYMax = Math.max(5, fftYMax + delta);
@@ -414,9 +476,21 @@
         const health = await healthRes.json();
         document.getElementById('pru-status').innerText = health.pru_connected ? 'RUNNING' : 'ERROR';
         document.getElementById('pru-status').style.color = health.pru_connected ? '#4CAF50' : '#F44336';
+        
         if (health.sample_rate) {
             latestSampleRate = health.sample_rate;
             document.getElementById('pru-samplerate').innerText = (health.sample_rate / 1000).toFixed(1) + ' kHz';
+            // Sync slider with current rate
+            document.getElementById('sample-rate-slider').value = health.sample_rate;
+            document.getElementById('sample-rate-display').innerText = (health.sample_rate / 1000).toFixed(1) + ' kHz';
+        }
+        
+        if (health.actual_sample_rate) {
+            document.getElementById('pru-actual-samplerate').innerText = (health.actual_sample_rate / 1000).toFixed(1) + ' kHz';
+        }
+        
+        if (health.learned_voltage) {
+            document.getElementById('stat-learned-voltage').innerText = health.learned_voltage.toFixed(1) + ' VAC';
         }
 
         // 2. Fetch Events
@@ -442,7 +516,7 @@
         // 3. Fetch Trend Data
         const trendRes = await fetch('/api/v1/history');
         const trendData = await trendRes.json();
-        const stats = updateLiveStats(trendData.samples, trendData.rate);
+        const stats = updateLiveStats(trendData.samples, trendData.rate, trendData.samples_raw);
         renderTrend(trendData.samples, stats);
 
         // 4. Update FFT (matched to 5s timer)
@@ -462,7 +536,7 @@
         }
     }
 
-    function updateLiveStats(samples, rate) {
+    function updateLiveStats(samples, rate, samples_raw) {
         if (!samples || samples.length === 0) return null;
 
         const absSum = samples.reduce((a, b) => a + Math.abs(b), 0);
@@ -479,6 +553,28 @@
         document.getElementById('stat-rms').innerText = rms.toFixed(1) + ' VAC';
         document.getElementById('stat-min').innerText = min.toFixed(1) + ' VAC';
         document.getElementById('stat-max').innerText = max.toFixed(1) + ' VAC';
+
+        // Use raw ADC values for percentage calculation
+        const adc_max_raw = 32767;
+        let min_raw = 0;
+        let max_raw = 0;
+        
+        if (samples_raw && samples_raw.length > 0) {
+            min_raw = Math.abs(Math.min(...samples_raw));
+            max_raw = Math.abs(Math.max(...samples_raw));
+        }
+        
+        const min_pct = (min_raw / adc_max_raw * 100);
+        const max_pct = (max_raw / adc_max_raw * 100);
+        
+        // Update progress bars
+        document.getElementById('stat-min-bar-fill').style.width = min_pct + '%';
+        document.getElementById('stat-min-bar-label').innerText = min_raw + ' / ' + adc_max_raw;
+        document.getElementById('stat-min-bar').title = 'Min: ' + min_raw + ' / ' + adc_max_raw + ' (' + min_pct.toFixed(1) + '%)';
+        
+        document.getElementById('stat-max-bar-fill').style.width = max_pct + '%';
+        document.getElementById('stat-max-bar-label').innerText = max_raw + ' / ' + adc_max_raw;
+        document.getElementById('stat-max-bar').title = 'Max: ' + max_raw + ' / ' + adc_max_raw + ' (' + max_pct.toFixed(1) + '%)';
 
         let windowStr = windowSec.toFixed(0) + 's';
         if (windowSec > 60) windowStr = (windowSec / 60).toFixed(1) + 'm';

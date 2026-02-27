@@ -30,9 +30,20 @@ void main(void) {
   shm->num_blocks = 4;
   shm->block_size = 128;
   shm->sample_period_cycles = 20000;
-  shm->channel_mask = 0xFF; // All 8 channels
   shm->write_block_idx = 0;
   shm->sample_count = 0;
+  shm->pru_clock_hz = 200000000;  /* 200 MHz on BeagleBone Black */
+  shm->sample_rate = 0;  /* Will be set by datalogger (default: 10000 Hz) */
+  
+  /* Default: CH0 only enabled */
+  shm->ch_enable[0] = 1;
+  shm->ch_enable[1] = 0;
+  shm->ch_enable[2] = 0;
+  shm->ch_enable[3] = 0;
+  shm->ch_enable[4] = 0;
+  shm->ch_enable[5] = 0;
+  shm->ch_enable[6] = 0;
+  shm->ch_enable[7] = 0;
 
   /* Hardcoded defaults for local logic */
   uint32_t block_size = shm->block_size;
@@ -70,10 +81,16 @@ void main(void) {
     total_cycles += shm->sample_period_cycles;
 
     uint32_t ch_ptr = smp_in_blk * 8;
-    int ch;
-    for (ch = 0; ch < 8; ch++) {
-      b_data[ch_ptr + ch] = adc_read_next();
-    }
+    
+    /* Conditionally read each channel based on enable flags */
+    if (shm->ch_enable[0]) b_data[ch_ptr + 0] = adc_read_next(); else b_data[ch_ptr + 0] = 0;
+    if (shm->ch_enable[1]) b_data[ch_ptr + 1] = adc_read_next(); else b_data[ch_ptr + 1] = 0;
+    if (shm->ch_enable[2]) b_data[ch_ptr + 2] = adc_read_next(); else b_data[ch_ptr + 2] = 0;
+    if (shm->ch_enable[3]) b_data[ch_ptr + 3] = adc_read_next(); else b_data[ch_ptr + 3] = 0;
+    if (shm->ch_enable[4]) b_data[ch_ptr + 4] = adc_read_next(); else b_data[ch_ptr + 4] = 0;
+    if (shm->ch_enable[5]) b_data[ch_ptr + 5] = adc_read_next(); else b_data[ch_ptr + 5] = 0;
+    if (shm->ch_enable[6]) b_data[ch_ptr + 6] = adc_read_next(); else b_data[ch_ptr + 6] = 0;
+    if (shm->ch_enable[7]) b_data[ch_ptr + 7] = adc_read_next(); else b_data[ch_ptr + 7] = 0;
 
     smp_in_blk++;
     shm->sample_count++;

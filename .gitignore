@@ -13,8 +13,7 @@
 # Datalogger
 pika/datalogger/bin/
 pika/datalogger/obj/
-pika/datalogger/data/*.bin
-pika/datalogger/data/*.idx
+pika/datalogger/data/
 
 # Python / Webapp (Plan 4 prep)
 __pycache__/

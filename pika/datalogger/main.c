@@ -34,7 +34,7 @@ void *reader_thread_func(void *arg) {
     volatile block_descriptor_t *desc = shm_reader_poll(&shm_reader, &data);
 
     if (desc) {
-      size_t data_size = desc->num_samples * global_config.channels * 2;
+      size_t data_size = desc->num_samples * CHANNELS * 2;
 
       uint8_t temp_buf[2064];
       memcpy(temp_buf, (void *)desc, 16);
@@ -74,15 +74,15 @@ void *processor_thread_func(void *arg) {
   }
 
   decimator_t dec;
-  decimator_init(&dec, global_config.normal_decimation_rate);
+  decimator_init(&dec, global_config.storage.decimation.rate);
 
   time_sync_t t_sync;
   time_sync_init(&t_sync, 0, global_config.nominal_rate_hz);
 
   event_window_t ew;
-  event_window_init(&ew, global_config.pre_event_sec,
-                    global_config.post_event_sec, global_config.nominal_rate_hz,
-                    global_config.channels);
+  event_window_init(&ew, global_config.storage.events.pre_sec,
+                    global_config.storage.events.post_sec, global_config.nominal_rate_hz,
+                    CHANNELS);
 
   uint8_t temp_buf[2064];
   uint16_t decimated_samples[128 * 8];
@@ -114,7 +114,7 @@ void *processor_thread_func(void *arg) {
 
       // 2. Anomaly Detection (processes ch0, applies RMS + debounce)
       anomaly_event_t *event = anomaly_detector_process(
-          &ad, samples, desc->num_samples, global_config.channels, block_time);
+          &ad, samples, desc->num_samples, CHANNELS, block_time);
       if (event) {
         printf("[Processor] EVENT DETECTED: Type %d, VRMS=%.2f V at %llu ns\n",
                event->type, event->rms_vrms,
@@ -130,12 +130,12 @@ void *processor_thread_func(void *arg) {
       if (event_data) {
         // event_data is interleaved multi-channel int16; extract ch0 only
         uint32_t total_frames =
-            (uint32_t)(event_data_size / (global_config.channels * 2));
+            (uint32_t)(event_data_size / (CHANNELS * 2));
         uint32_t ch0_sample_count = total_frames;
 
         if (ch0_sample_count <= 50000) {
           extract_ch0((const int16_t *)event_data, total_frames,
-                      global_config.channels, ch0_scratch);
+                      CHANNELS, ch0_scratch);
 
           printf("[Processor] Saving ch0 event data: %u samples (~%zu KB)\n",
                  ch0_sample_count, (ch0_sample_count * sizeof(int16_t)) / 1024);
@@ -166,9 +166,9 @@ void *processor_thread_func(void *arg) {
             decimated_chunk_header_t header = {
                 .start_time_ns = block_time,
                 .sample_rate = global_config.nominal_rate_hz /
-                               global_config.normal_decimation_rate,
+                               global_config.storage.decimation.rate,
                 .sample_count = decimated_count,
-                .channels = global_config.channels};
+                .channels = CHANNELS};
             writer_write_decimated(&disk_writer, &header, decimated_samples);
             decimated_count = 0;
           }
@@ -193,7 +193,7 @@ int main(int argc, char **argv) {
   printf("Pika Datalogger starting...\n");
 
   // 1. Load Config
-  if (config_load("config/logger.yaml", &global_config) != 0) {
+  if (config_load("../pika.yaml", &global_config) != 0) {
     fprintf(stderr, "Failed to load config, using defaults\n");
   }
 
@@ -202,13 +202,28 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  /* Set channel enable flags from config (PRU will use these to skip inactive channels) */
+  if (shm_reader.header) {
+    for (int i = 0; i < 8; i++) {
+      shm_reader.header->ch_enable[i] = global_config.sensor.ch_enable[i];
+    }
+    shm_reader.header->sample_rate = global_config.nominal_rate_hz;
+    
+    printf("[Main] Set PRU channel enables: ");
+    for (int i = 0; i < 8; i++) {
+      printf("%d ", global_config.sensor.ch_enable[i]);
+    }
+    printf("(%d active channels)\n", global_config.sensor.active_channels);
+    printf("[Main] Set PRU sample_rate to %u Hz\n", global_config.nominal_rate_hz);
+  }
+
   // 3. Init Ring Buffer
-  size_t element_size = 16 + (128 * global_config.channels * 2);
+  size_t element_size = 16 + (128 * CHANNELS * 2);
   ring_buffer_init(&raw_block_rb, 100, element_size);
 
   // 4. Init Writer (with size limits from config)
-  if (writer_init(&disk_writer, "data", global_config.storage.max_decimated_mb,
-                  global_config.storage.max_events_mb) != 0) {
+  if (writer_init(&disk_writer, "data", global_config.storage.decimation.max_mb,
+                  global_config.storage.events.max_mb) != 0) {
     fprintf(stderr, "Failed to init writer\n");
     return 1;
   }
@@ -218,6 +233,14 @@ int main(int argc, char **argv) {
       0) {
     fprintf(stderr, "Failed to init scope buffer\n");
     return 1;
+  }
+
+  /* Set PRU timing info in scope buffer for webapp */
+  if (live_scope_buffer.shm) {
+    live_scope_buffer.shm->pru_clock_hz = 200000000;  /* 200 MHz on BBB */
+    if (shm_reader.header) {
+      live_scope_buffer.shm->sample_period_cycles = shm_reader.header->sample_period_cycles;
+    }
   }
 
   // 5. Start PRU

@@ -15,6 +15,8 @@ typedef struct {
   uint32_t sample_rate;
   uint32_t channels;
   uint32_t capacity;
+  uint32_t pru_clock_hz;           /* PRU clock frequency (200MHz on BBB) */
+  uint32_t sample_period_cycles;   /* Cycles between samples */
 
   // Total multi-channel samples written.
   // Array index = (total_samples % capacity) * channels

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import time
+import logging
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -8,8 +9,26 @@ from fastapi.responses import HTMLResponse
 
 from app.core.config import settings
 from app.services.shared_memory import shm
+from app.services.config_service import config_service
 
 app = FastAPI(title="Pika Power Monitor")
+
+# Configure logging based on config file
+log_level = config_service.get_log_level().upper()
+log_level_enum = getattr(logging, log_level, logging.INFO)
+
+# Configure root logger
+logging.basicConfig(
+    level=log_level_enum,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+# Configure uvicorn loggers
+logging.getLogger("uvicorn").setLevel(log_level_enum)
+logging.getLogger("uvicorn.access").setLevel(log_level_enum)
+logging.getLogger("uvicorn.error").setLevel(log_level_enum)
+
+logger = logging.getLogger(__name__)
 
 # Templates and Static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -19,9 +38,9 @@ templates = Jinja2Templates(directory="app/templates")
 async def startup_event():
     try:
         shm.connect()
-        print("Connected to PRU Shared Memory")
+        logger.info("Connected to PRU Shared Memory")
     except Exception as e:
-        print(f"Warning: Could not connect to SHM: {e}")
+        logger.warning(f"Could not connect to SHM: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -41,15 +60,33 @@ async def get_events_view(request: Request):
 
 @app.get("/health")
 async def health():
+    from app.services.calibration_service import calibration_service
+    
     sample_rate = 0
+    pru_clock_hz = 0
+    sample_period_cycles = 0
+    
     if shm.header:
         sample_rate = shm.header.sample_rate
+        pru_clock_hz = shm.header.pru_clock_hz
+        sample_period_cycles = shm.header.sample_period_cycles
+    
+    # Calculate actual sample rate from PRU timing
+    actual_sample_rate = 0
+    if pru_clock_hz > 0 and sample_period_cycles > 0:
+        actual_sample_rate = pru_clock_hz / sample_period_cycles
+    
+    learned_voltage = calibration_service.get_learned_voltage()
         
     return {
         "status": "ok",
         "pru_connected": shm.header is not None,
         "shm_magic": hex(shm.header.magic) if shm.header else "N/A",
-        "sample_rate": sample_rate
+        "sample_rate": sample_rate,
+        "actual_sample_rate": actual_sample_rate,
+        "pru_clock_hz": pru_clock_hz,
+        "sample_period_cycles": sample_period_cycles,
+        "learned_voltage": learned_voltage
     }
 
 # --- REST APIs ---
@@ -64,7 +101,50 @@ async def get_events_api():
     from app.services.event_service import event_service
     return event_service.get_recent_events(limit=10)
 
-@app.post("/api/v1/events/delete")
+@app.post("/api/v1/config/sample-rate")
+async def update_sample_rate(request: Request):
+    """Update the ADC sample rate and persist to config file."""
+    try:
+        body = await request.json()
+        sample_rate = int(body.get("sample_rate", 10000))
+        
+        # Validate range
+        if sample_rate < 1000 or sample_rate > 100000:
+            return {"success": False, "error": "Sample rate must be between 1000 and 100000 Hz"}
+        
+        # Update the datalogger config file
+        import yaml
+        from pathlib import Path
+        
+        config_path = Path("../pika.yaml")
+        if config_path.exists():
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
+            
+            # Update the sample rate
+            if 'sampling' not in config:
+                config['sampling'] = {}
+            config['sampling']['nominal_rate_hz'] = sample_rate
+            
+            # Write back to file
+            with open(config_path, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False)
+            
+            # Update the global config in memory
+            from app.services.calibration_service import config_service
+            global_config_updated = True
+            
+            return {
+                "success": True,
+                "message": f"Sample rate updated to {sample_rate} Hz",
+                "sample_rate": sample_rate,
+                "note": "Restart datalogger for changes to take effect"
+            }
+        else:
+            return {"success": False, "error": "Config file not found"}
+            
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 async def delete_events_api():
     """Delete all event data from the datalogger storage."""
     from app.services.event_service import event_service
@@ -96,7 +176,7 @@ async def delete_events_api():
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    print("WebSocket client connected")
+    logger.info("WebSocket client connected")
     
     # Defaults
     req_window = 0.1  # 100ms default view
@@ -117,7 +197,7 @@ async def websocket_endpoint(websocket: WebSocket):
         except WebSocketDisconnect:
             pass
         except Exception as e:
-            print(f"WS receive error: {e}")
+            logger.error(f"WS receive error: {e}")
 
     # Spin up async listener
     listen_task = asyncio.create_task(receive_messages())
@@ -138,8 +218,8 @@ async def websocket_endpoint(websocket: WebSocket):
             # Throttle to 20Hz update (smooth UI)
             await asyncio.sleep(0.05)
     except WebSocketDisconnect:
-        print("WebSocket client disconnected")
+        logger.info("WebSocket client disconnected")
     except Exception as e:
-        print(f"WebSocket send error: {e}")
+        logger.error(f"WebSocket send error: {e}")
     finally:
         listen_task.cancel()

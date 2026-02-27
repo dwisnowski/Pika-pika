@@ -7,8 +7,10 @@
  * YAML config loader using libyaml.
  * Handles nested sections via a simple state machine tracking the last
  * parent section key seen.
+ * 
+ * Loads pika.yaml which contains all configuration for all components.
  */
-int config_load(const char *path, logger_config_t *config) {
+static int config_load_file(const char *path, logger_config_t *config) {
   FILE *fh = fopen(path, "r");
   if (!fh) {
     perror("Failed to open config file");
@@ -25,44 +27,7 @@ int config_load(const char *path, logger_config_t *config) {
 
   yaml_parser_set_input_file(&parser, fh);
 
-  /* ---- Defaults ---- */
-  config->nominal_rate_hz = 10000;
-  config->channels = 8;
-  config->normal_decimation_rate = 1000;
-  config->ram_flush_mb = 64;
-  config->pre_event_sec = 0.5;
-  config->post_event_sec = 0.5;
-
-  /* storage */
-  config->storage.max_decimated_mb = 250;
-  config->storage.max_events_mb = 250;
-
-  /* debounce */
-  config->debounce.sag_cooldown_ms = 1000;
-  config->debounce.swell_cooldown_ms = 1000;
-  config->debounce.spike_cooldown_ms = 1000;
-
-  /* detection */
-  config->detection.rms_window_cycles = 30;
-  config->detection.learn_cycles = 300;
-  config->detection.ac_freq_hz = 60;
-
-  /* sensor */
-  config->sensor.adc_vref = 5.0f;
-  config->sensor.adc_bits = 16;
-  config->sensor.transformer_ratio = 120.0f;
-  config->sensor.active_channels = 1;
-
-  /* anomalies */
-  config->anomalies.sag_threshold_pct = -10;
-  config->anomalies.sag_min_duration_ms = 8;
-  config->anomalies.swell_threshold_pct = 10;
-  config->anomalies.swell_min_duration_ms = 8;
-  config->anomalies.spike_threshold_pct = 20;
-  config->anomalies.spike_max_duration_ms = 100;
-
-  /* ---- Parse ---- */
-  char section[64] = ""; /* top-level section tracker */
+  char section[64] = "";
   char *last_key = NULL;
   int expect_val = 0;
 
@@ -86,59 +51,53 @@ int config_load(const char *path, logger_config_t *config) {
       char *val = (char *)token.data.scalar.value;
 
       if (!expect_val) {
-        /* This is a key */
         free(last_key);
         last_key = strdup(val);
-        /* Track top-level section changes */
-        if (strcmp(val, "sampling") == 0 || strcmp(val, "decimation") == 0 ||
-            strcmp(val, "anomalies") == 0 || strcmp(val, "sag") == 0 ||
-            strcmp(val, "swell") == 0 || strcmp(val, "spike") == 0 ||
-            strcmp(val, "event_window") == 0 || strcmp(val, "storage") == 0 ||
+        if (strcmp(val, "sampling") == 0 || strcmp(val, "anomalies") == 0 || 
+            strcmp(val, "sag") == 0 || strcmp(val, "swell") == 0 || 
+            strcmp(val, "spike") == 0 || strcmp(val, "storage") == 0 || 
+            strcmp(val, "decimation") == 0 || strcmp(val, "events") == 0 ||
             strcmp(val, "debounce") == 0 || strcmp(val, "detection") == 0 ||
             strcmp(val, "sensor") == 0 || strcmp(val, "buffers") == 0) {
           strncpy(section, val, sizeof(section) - 1);
         }
       } else {
-        /* This is a value — map key+section to struct field */
         if (!last_key)
           break;
 
-        /* sampling */
+        /* sampling (shared config) */
         if (strcmp(last_key, "nominal_rate_hz") == 0)
           config->nominal_rate_hz = (uint32_t)atoi(val);
-        else if (strcmp(last_key, "channels") == 0)
-          config->channels = (uint32_t)atoi(val);
-        /* decimation */
-        else if (strcmp(last_key, "normal_rate") == 0)
-          config->normal_decimation_rate = (uint32_t)atoi(val);
-        /* event_window */
-        else if (strcmp(last_key, "pre_event_sec") == 0)
-          config->pre_event_sec = atof(val);
-        else if (strcmp(last_key, "post_event_sec") == 0)
-          config->post_event_sec = atof(val);
-        /* buffers */
+        /* buffers (datalogger config) */
         else if (strcmp(last_key, "ram_flush_mb") == 0)
           config->ram_flush_mb = (uint32_t)atoi(val);
-        /* storage */
-        else if (strcmp(last_key, "max_decimated_mb") == 0)
-          config->storage.max_decimated_mb = (uint32_t)atoi(val);
-        else if (strcmp(last_key, "max_events_mb") == 0)
-          config->storage.max_events_mb = (uint32_t)atoi(val);
-        /* debounce */
+        /* storage.decimation (datalogger config) */
+        else if (strcmp(section, "decimation") == 0 && strcmp(last_key, "rate") == 0)
+          config->storage.decimation.rate = (uint32_t)atoi(val);
+        else if (strcmp(section, "decimation") == 0 && strcmp(last_key, "max_mb") == 0)
+          config->storage.decimation.max_mb = (uint32_t)atoi(val);
+        /* storage.events (datalogger config) */
+        else if (strcmp(section, "events") == 0 && strcmp(last_key, "pre_sec") == 0)
+          config->storage.events.pre_sec = atof(val);
+        else if (strcmp(section, "events") == 0 && strcmp(last_key, "post_sec") == 0)
+          config->storage.events.post_sec = atof(val);
+        else if (strcmp(section, "events") == 0 && strcmp(last_key, "max_mb") == 0)
+          config->storage.events.max_mb = (uint32_t)atoi(val);
+        /* debounce (datalogger config) */
         else if (strcmp(last_key, "sag_cooldown_ms") == 0)
           config->debounce.sag_cooldown_ms = (uint32_t)atoi(val);
         else if (strcmp(last_key, "swell_cooldown_ms") == 0)
           config->debounce.swell_cooldown_ms = (uint32_t)atoi(val);
         else if (strcmp(last_key, "spike_cooldown_ms") == 0)
           config->debounce.spike_cooldown_ms = (uint32_t)atoi(val);
-        /* detection */
+        /* detection (shared config) */
         else if (strcmp(last_key, "rms_window_cycles") == 0)
           config->detection.rms_window_cycles = (uint32_t)atoi(val);
         else if (strcmp(last_key, "learn_cycles") == 0)
           config->detection.learn_cycles = (uint32_t)atoi(val);
         else if (strcmp(last_key, "ac_freq_hz") == 0)
           config->detection.ac_freq_hz = (uint32_t)atoi(val);
-        /* sensor */
+        /* sensor (shared config) */
         else if (strcmp(last_key, "adc_vref") == 0)
           config->sensor.adc_vref = (float)atof(val);
         else if (strcmp(last_key, "adc_bits") == 0)
@@ -147,7 +106,23 @@ int config_load(const char *path, logger_config_t *config) {
           config->sensor.transformer_ratio = (float)atof(val);
         else if (strcmp(last_key, "active_channels") == 0)
           config->sensor.active_channels = (uint32_t)atoi(val);
-        /* anomalies — use section to disambiguate threshold_pct/min_duration */
+        else if (strcmp(last_key, "ch0_enable") == 0)
+          config->sensor.ch_enable[0] = (uint32_t)atoi(val);
+        else if (strcmp(last_key, "ch1_enable") == 0)
+          config->sensor.ch_enable[1] = (uint32_t)atoi(val);
+        else if (strcmp(last_key, "ch2_enable") == 0)
+          config->sensor.ch_enable[2] = (uint32_t)atoi(val);
+        else if (strcmp(last_key, "ch3_enable") == 0)
+          config->sensor.ch_enable[3] = (uint32_t)atoi(val);
+        else if (strcmp(last_key, "ch4_enable") == 0)
+          config->sensor.ch_enable[4] = (uint32_t)atoi(val);
+        else if (strcmp(last_key, "ch5_enable") == 0)
+          config->sensor.ch_enable[5] = (uint32_t)atoi(val);
+        else if (strcmp(last_key, "ch6_enable") == 0)
+          config->sensor.ch_enable[6] = (uint32_t)atoi(val);
+        else if (strcmp(last_key, "ch7_enable") == 0)
+          config->sensor.ch_enable[7] = (uint32_t)atoi(val);
+        /* anomalies (shared config) */
         else if (strcmp(last_key, "threshold_pct") == 0) {
           if (strcmp(section, "sag") == 0)
             config->anomalies.sag_threshold_pct = atoi(val);
@@ -181,11 +156,58 @@ int config_load(const char *path, logger_config_t *config) {
   yaml_parser_delete(&parser);
   fclose(fh);
 
+  return 0;
+}
+
+int config_load(const char *path, logger_config_t *config) {
+  /* ---- Defaults ---- */
+  config->nominal_rate_hz = 10000;
+  config->ram_flush_mb = 64;
+
+  /* storage */
+  config->storage.decimation.rate = 1000;
+  config->storage.decimation.max_mb = 250;
+  config->storage.events.pre_sec = 0.5;
+  config->storage.events.post_sec = 0.5;
+  config->storage.events.max_mb = 250;
+
+  /* debounce */
+  config->debounce.sag_cooldown_ms = 1000;
+  config->debounce.swell_cooldown_ms = 1000;
+  config->debounce.spike_cooldown_ms = 1000;
+
+  /* detection */
+  config->detection.rms_window_cycles = 30;
+  config->detection.learn_cycles = 300;
+  config->detection.ac_freq_hz = 60;
+
+  /* sensor */
+  config->sensor.adc_vref = 5.0f;
+  config->sensor.adc_bits = 16;
+  config->sensor.transformer_ratio = 120.0f;
+  config->sensor.active_channels = 1;
+  for (int i = 0; i < 8; i++) {
+    config->sensor.ch_enable[i] = (i == 0) ? 1 : 0;  /* Default: ch0 only */
+  }
+
+  /* anomalies */
+  config->anomalies.sag_threshold_pct = -10;
+  config->anomalies.sag_min_duration_ms = 8;
+  config->anomalies.swell_threshold_pct = 10;
+  config->anomalies.swell_min_duration_ms = 8;
+  config->anomalies.spike_threshold_pct = 20;
+  config->anomalies.spike_max_duration_ms = 100;
+
+  /* Load pika.yaml (single source of truth) */
+  if (config_load_file(path, config) != 0) {
+    fprintf(stderr, "[Config] Warning: Failed to load config\n");
+  }
+
   printf("[Config] nominal_rate=%u, rms_window_cycles=%u, learn_cycles=%u, "
          "ac_freq=%u, transformer_ratio=%.1f, max_events_mb=%u\n",
          config->nominal_rate_hz, config->detection.rms_window_cycles,
          config->detection.learn_cycles, config->detection.ac_freq_hz,
-         config->sensor.transformer_ratio, config->storage.max_events_mb);
+         config->sensor.transformer_ratio, config->storage.events.max_mb);
 
   return 0;
 }

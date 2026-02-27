@@ -1,0 +1,76 @@
+# Pika Configuration
+# Single source of truth for all Pika components (datalogger and webapp)
+
+# Sampling Configuration
+sampling:
+  nominal_rate_hz: 10000     # ADC sampling rate in Hz
+
+# Storage Configuration
+storage:
+  decimation:
+    rate: 1000                # Store 1/1000th of samples
+    max_mb: 20                # Rotate decimated.bin when it exceeds this
+  events:
+    pre_sec: 0.5              # Seconds of data before event
+    post_sec: 0.5             # Seconds of data after event
+    max_mb: 20                # Rotate events.bin when it exceeds this
+
+# Debounce Configuration
+debounce:
+  sag_cooldown_ms: 1000
+  swell_cooldown_ms: 1000
+  spike_cooldown_ms: 1000
+
+# Buffer Configuration
+buffers:
+  ram_flush_mb: 64
+
+# Sensor Configuration
+sensor:
+  # AD7606 ADC Configuration
+  adc_vref: 5                 # AD7606 input range (+/-5V)
+  adc_bits: 16                # 16-bit signed ADC
+  
+  # ZMPT101B Sensor Configuration
+  transformer_ratio: 120      # ZMPT101B scaling factor (auto-calibrated on startup to 120V target)
+                              # This value is used as fallback only; system learns actual ratio
+  target_mains_vrms: 120.0    # Target steady-state mains voltage (120V for NA, 230V for EU)
+  
+  # Channel Configuration (per-channel enable flags)
+  active_channels: 1          # Number of active channels for event detection
+  ch0_enable: 1               # Channel 0 (mains voltage) - enabled by default
+  ch1_enable: 0               # Channel 1 - disabled by default
+  ch2_enable: 0               # Channel 2 - disabled by default
+  ch3_enable: 0               # Channel 3 - disabled by default
+  ch4_enable: 0               # Channel 4 - disabled by default
+  ch5_enable: 0               # Channel 5 - disabled by default
+  ch6_enable: 0               # Channel 6 - disabled by default
+  ch7_enable: 0               # Channel 7 - disabled by default
+                              # Sampling Speed Improvement:
+                                # Channels	Read Time	Possible Rate
+                                # 1 (0x01)	~1 µs	~200 kHz
+                                # 2 (0x03)	~2 µs	~167 kHz
+                                # 4 (0x0F)	~4 µs	~125 kHz
+                                # 8 (0xFF)	~8 µs	~83 kHz
+
+# Detection Configuration
+detection:
+  ac_freq_hz: 60              # mains frequency (60 for NA, 50 for EU)
+  rms_window_cycles: 30       # RMS window = N full 60Hz AC cycles
+  learn_cycles: 1000          # auto-learn nominal VRMS from first N cycles (~16s at 60Hz)
+
+# Anomaly Thresholds
+anomalies:
+  sag:
+    threshold_pct: -10        # SAG threshold: 10% below nominal
+    min_duration_ms: 8
+  swell:
+    threshold_pct: 10         # SWELL threshold: 10% above nominal
+    min_duration_ms: 8
+  spike:
+    threshold_pct: 20
+    max_duration_ms: 100
+
+# Logging Configuration
+logging:
+  level: warn                 # Log level: debug, info, warn, error

@@ -2,16 +2,17 @@ import struct
 import os
 from typing import List
 from app.core.config import settings
-
-# Sensor calibration constants — matching datalogger config/logger.yaml
-ADC_VREF          = 5.0      # AD7606 input range (±5V)
-ADC_FULL_SCALE    = 32768.0  # 2^15 (signed 16-bit)
-TRANSFORMER_RATIO = 120.0    # ZMPT101B: mains / adc_output_amplitude
+from app.services.config_service import config_service
 
 def raw_to_mains_volts(raw: int) -> float:
     """Convert a raw signed int16 ADC count to instantaneous mains voltage."""
-    v_adc = raw * (ADC_VREF / ADC_FULL_SCALE)
-    return v_adc * TRANSFORMER_RATIO
+    adc_vref = config_service.get_adc_vref()
+    adc_bits = config_service.get_adc_bits()
+    transformer_ratio = config_service.get_transformer_ratio()
+    
+    full_scale = float(1 << (adc_bits - 1))  # 2^(bits-1)
+    v_adc = raw * (adc_vref / full_scale)
+    return v_adc * transformer_ratio
 
 # Index record binary layout (packed, matches storage_format.h):
 #   uint64 event_id   (8)
