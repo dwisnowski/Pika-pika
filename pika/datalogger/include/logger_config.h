@@ -21,8 +21,8 @@ typedef struct {
 } anomaly_config_t;
 
 typedef struct {
-  uint32_t rate;             // Store 1/Nth of samples
-  uint32_t max_mb;           // Rotate decimated.bin when it exceeds this
+  uint32_t target_output_rate_hz;  // Target decimated output rate (samples/sec)
+  uint32_t max_mb;                 // Rotate decimated.bin when it exceeds this
 } decimation_config_t;
 
 typedef struct {

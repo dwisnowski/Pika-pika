@@ -72,8 +72,8 @@ static int config_load_file(const char *path, logger_config_t *config) {
         else if (strcmp(last_key, "ram_flush_mb") == 0)
           config->ram_flush_mb = (uint32_t)atoi(val);
         /* storage.decimation (datalogger config) */
-        else if (strcmp(section, "decimation") == 0 && strcmp(last_key, "rate") == 0)
-          config->storage.decimation.rate = (uint32_t)atoi(val);
+        else if (strcmp(section, "decimation") == 0 && strcmp(last_key, "target_output_rate_hz") == 0)
+          config->storage.decimation.target_output_rate_hz = (uint32_t)atoi(val);
         else if (strcmp(section, "decimation") == 0 && strcmp(last_key, "max_mb") == 0)
           config->storage.decimation.max_mb = (uint32_t)atoi(val);
         /* storage.events (datalogger config) */
@@ -167,7 +167,7 @@ int config_load(const char *path, logger_config_t *config) {
   config->ram_flush_mb = 64;
 
   /* storage */
-  config->storage.decimation.rate = 1000;
+  config->storage.decimation.target_output_rate_hz = 50;
   config->storage.decimation.max_mb = 250;
   config->storage.events.pre_sec = 0.5;
   config->storage.events.post_sec = 0.5;

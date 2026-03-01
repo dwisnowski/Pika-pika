@@ -74,7 +74,8 @@ void *processor_thread_func(void *arg) {
   }
 
   decimator_t dec;
-  decimator_init(&dec, global_config.storage.decimation.rate);
+  decimator_init(&dec, global_config.nominal_rate_hz,
+                 global_config.storage.decimation.target_output_rate_hz);
 
   time_sync_t t_sync;
   time_sync_init(&t_sync, 0, global_config.nominal_rate_hz);
@@ -85,8 +86,9 @@ void *processor_thread_func(void *arg) {
                     CHANNELS);
 
   uint8_t temp_buf[2064];
-  uint16_t decimated_samples[128 * 8];
+  int16_t decimated_samples[128 * 8];
   uint32_t decimated_count = 0;
+  uint64_t last_block_time = 0;  /* Track last block time for final flush */
 
   // Scratch buffer for channel-0 extraction — large enough for max event window
   // Max event window: (pre + post) seconds * sample_rate samples * 2 bytes
@@ -108,6 +110,7 @@ void *processor_thread_func(void *arg) {
       scope_buffer_push(&live_scope_buffer, samples, desc->num_samples);
 
       uint64_t block_time = cycles_to_ns(&t_sync, desc->timestamp_cycles);
+      last_block_time = block_time;  /* Save for final flush */
 
       // 1. Snapshot for pre-event history (full multi-channel block)
       event_window_push_block(&ew, samples);
@@ -155,20 +158,26 @@ void *processor_thread_func(void *arg) {
         }
       }
 
-      // 4. Decimation (multi-channel, unchanged)
+      // 4. Decimation (multi-channel, min/max bucketing on ch0)
       for (uint32_t i = 0; i < desc->num_samples; i++) {
-        if (decimator_process(&dec)) {
-          memcpy(&decimated_samples[decimated_count * 8], &samples[i * 8],
-                 8 * 2);
+        int16_t ch0_sample = samples[i * CHANNELS];  /* Extract channel 0 */
+        if (decimator_process(&dec, ch0_sample)) {
+          /* Bucket complete - store min/max for ch0 only (we're decimating ch0) */
+          decimated_samples[decimated_count * 2] = dec.min_val;
+          decimated_samples[decimated_count * 2 + 1] = dec.max_val;
           decimated_count++;
+          
+          /* Reset for next bucket */
+          dec.min_val = INT16_MAX;
+          dec.max_val = INT16_MIN;
 
           if (decimated_count >= 10) {
             decimated_chunk_header_t header = {
                 .start_time_ns = block_time,
-                .sample_rate = global_config.nominal_rate_hz /
-                               global_config.storage.decimation.rate,
+                .sample_rate = global_config.nominal_rate_hz,
                 .sample_count = decimated_count,
-                .channels = CHANNELS};
+                .channels = 1,  /* Only decimating ch0 */
+                .values_per_sample = 2};  /* Store min/max (2 values per sample) */
             writer_write_decimated(&disk_writer, &header, decimated_samples);
             decimated_count = 0;
           }
@@ -177,6 +186,18 @@ void *processor_thread_func(void *arg) {
     } else {
       usleep(5000);
     }
+  }
+
+  /* Flush any remaining decimated data */
+  if (decimated_count > 0) {
+    decimated_chunk_header_t header = {
+        .start_time_ns = last_block_time,
+        .sample_rate = global_config.nominal_rate_hz,
+        .sample_count = decimated_count,
+        .channels = 1,  /* Only decimating ch0 */
+        .values_per_sample = 2};  /* Store min/max (2 values per sample) */
+    writer_write_decimated(&disk_writer, &header, decimated_samples);
+    printf("[Processor] Flushed final %u decimated samples\n", decimated_count);
   }
 
   printf("[Processor] Stopped\n");

@@ -17,6 +17,7 @@
         <div id="health-info">
             <p><span class="status-dot"></span> PRU: <strong id="pru-status">Connecting...</strong></p>
             <p><span class="status-dot"></span> Datalogger: <strong id="datalogger-status">Connecting...</strong></p>
+            <p><span class="status-dot"></span> Webserver: <strong id="webserver-status">Connecting...</strong></p>
             <p>Configured Rate: <strong id="pru-samplerate">--</strong></p>
             <p>Actual Rate: <strong id="pru-actual-samplerate">--</strong></p>
             <p style="margin-top: 12px;">Uptime: <strong id="uptime">--</strong></p>
@@ -282,6 +283,50 @@
         return rate / avgDist;
     }
 
+    let webserverHealthCheckInterval = null;
+
+    function startWebserverHealthCheck() {
+        // Poll health endpoint every 2 seconds when websocket is down
+        if (webserverHealthCheckInterval) clearInterval(webserverHealthCheckInterval);
+        
+        webserverHealthCheckInterval = setInterval(() => {
+            fetch('/health')
+                .then(res => {
+                    if (res.ok) {
+                        document.getElementById('webserver-status').innerText = 'RUNNING';
+                        document.getElementById('webserver-status').style.color = '#4CAF50';
+                        // Webserver is reachable, so we can trust PRU/Datalogger status from updateDashboard
+                    } else {
+                        // Webserver returned an error
+                        document.getElementById('webserver-status').innerText = 'ERROR';
+                        document.getElementById('webserver-status').style.color = '#F44336';
+                        // Can't determine PRU/Datalogger status if webserver has errors
+                        document.getElementById('pru-status').innerText = 'OFFLINE';
+                        document.getElementById('pru-status').style.color = '#888';
+                        document.getElementById('datalogger-status').innerText = 'OFFLINE';
+                        document.getElementById('datalogger-status').style.color = '#888';
+                    }
+                })
+                .catch(() => {
+                    // Webserver is completely unreachable
+                    document.getElementById('webserver-status').innerText = 'OFFLINE';
+                    document.getElementById('webserver-status').style.color = '#F44336';
+                    // Can't determine PRU/Datalogger status if webserver is offline
+                    document.getElementById('pru-status').innerText = 'OFFLINE';
+                    document.getElementById('pru-status').style.color = '#888';
+                    document.getElementById('datalogger-status').innerText = 'OFFLINE';
+                    document.getElementById('datalogger-status').style.color = '#888';
+                });
+        }, 2000);
+    }
+
+    function stopWebserverHealthCheck() {
+        if (webserverHealthCheckInterval) {
+            clearInterval(webserverHealthCheckInterval);
+            webserverHealthCheckInterval = null;
+        }
+    }
+
     // WebSocket for high-res frequency detection
     function setupWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -290,6 +335,7 @@
         ws.onopen = () => {
             document.getElementById('ws-status').innerHTML = '<span class="status-dot" style="background:#4CAF50"></span> LIVE STREAM ON';
             document.getElementById('ws-status').style.color = '#4CAF50';
+            stopWebserverHealthCheck();  // Stop polling when websocket is connected
             // Request a 100ms window (same as default but ensures backend task wakes up)
             ws.send(JSON.stringify({ time_window: 0.1, channel: 0 }));
         };
@@ -317,6 +363,7 @@
         ws.onclose = () => {
             document.getElementById('ws-status').innerHTML = '<span class="material-icons-outlined" style="font-size:14px;">cloud_off</span> LIVE STREAM OFF';
             document.getElementById('ws-status').style.color = '#f44336';
+            startWebserverHealthCheck();  // Start polling when websocket disconnects
             setTimeout(setupWebSocket, 5000);
         };
     }
@@ -503,64 +550,104 @@
     }
 
     async function updateDashboard() {
-        // 1. Fetch Health
-        const healthRes = await fetch('/health');
-        const health = await healthRes.json();
-        document.getElementById('pru-status').innerText = health.pru_connected ? 'RUNNING' : 'ERROR';
-        document.getElementById('pru-status').style.color = health.pru_connected ? '#4CAF50' : '#F44336';
-        
-        document.getElementById('datalogger-status').innerText = health.datalogger_running ? 'RUNNING' : 'IDLE';
-        document.getElementById('datalogger-status').style.color = health.datalogger_running ? '#4CAF50' : '#FFC107';
-        
-        if (health.sample_rate) {
-            latestSampleRate = health.sample_rate;
-            document.getElementById('pru-samplerate').innerText = (health.sample_rate / 1000).toFixed(1) + ' kHz';
-        }
-        
-        if (health.actual_sample_rate) {
-            document.getElementById('pru-actual-samplerate').innerText = (health.actual_sample_rate / 1000).toFixed(1) + ' kHz';
-        }
-        
-        if (health.learned_adc_vrms) {
-            document.getElementById('stat-learned-adc-vrms').innerText = health.learned_adc_vrms.toFixed(4) + ' V';
-        }
-        
-        if (health.learned_transformer_ratio) {
-            document.getElementById('stat-learned-transformer-ratio').innerText = health.learned_transformer_ratio.toFixed(2);
-        }
+        try {
+            // 1. Fetch Health
+            const healthRes = await fetch('/health');
+            if (!healthRes.ok) {
+                throw new Error('Health endpoint returned error');
+            }
+            const health = await healthRes.json();
+            
+            // Update PRU status based on state
+            if (health.pru_state === 'running') {
+                document.getElementById('pru-status').innerText = 'RUNNING';
+                document.getElementById('pru-status').style.color = '#4CAF50';
+            } else if (health.pru_state === 'offline') {
+                document.getElementById('pru-status').innerText = 'OFFLINE';
+                document.getElementById('pru-status').style.color = '#888';
+            } else {
+                // error or unknown
+                document.getElementById('pru-status').innerText = 'ERROR';
+                document.getElementById('pru-status').style.color = '#F44336';
+            }
+            
+            document.getElementById('datalogger-status').innerText = health.datalogger_running ? 'RUNNING' : 'IDLE';
+            document.getElementById('datalogger-status').style.color = health.datalogger_running ? '#4CAF50' : '#FFC107';
+            
+            // Webserver is running if we got a successful response
+            document.getElementById('webserver-status').innerText = 'RUNNING';
+            document.getElementById('webserver-status').style.color = '#4CAF50';
+            
+            if (health.sample_rate) {
+                latestSampleRate = health.sample_rate;
+                document.getElementById('pru-samplerate').innerText = (health.sample_rate / 1000).toFixed(1) + ' kHz';
+            }
+            
+            if (health.actual_sample_rate) {
+                document.getElementById('pru-actual-samplerate').innerText = (health.actual_sample_rate / 1000).toFixed(1) + ' kHz';
+            }
+            
+            if (health.learned_adc_vrms) {
+                document.getElementById('stat-learned-adc-vrms').innerText = health.learned_adc_vrms.toFixed(4) + ' V';
+            }
+            
+            if (health.learned_transformer_ratio) {
+                document.getElementById('stat-learned-transformer-ratio').innerText = health.learned_transformer_ratio.toFixed(2);
+            }
 
-        // 2. Fetch Events
-        const eventsRes = await fetch('/api/v1/events');
-        const events = await eventsRes.json();
-        const list = document.getElementById('event-list');
-        list.innerHTML = events.map(e => `
-            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: background 0.2s;" 
-                onclick="showEventModal(${e.id})"
-                onmouseover="this.style.background='rgba(255,214,0,0.05)'" 
-                onmouseout="this.style.background='transparent'">
-                <td style="padding: 12px 8px; font-weight: 500; color: #FFD600; cursor: help;" 
-                    onmouseenter="showEventPreview(event, '${e.type}'); event.stopPropagation();" 
-                    onmouseleave="hideEventPreview()">
-                    ${e.type}
-                </td>
-                <td style="font-size: 12px; opacity: 0.8;">${new Date(e.timestamp / 1000000).toLocaleTimeString()}</td>
-                <td>${e.peak_volts !== undefined ? e.peak_volts.toFixed(1) + ' V' : (e.peak_volts || '0.0 V')}</td>
-                <td>${e.duration_ms.toFixed(1)}ms</td>
-            </tr>
-        `).join('') || '<tr><td colspan="4" style="text-align: center;">No events detected yet</td></tr>';
+            // 2. Fetch Events
+            const eventsRes = await fetch('/api/v1/events');
+            const events = await eventsRes.json();
+            const list = document.getElementById('event-list');
+            list.innerHTML = events.map(e => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: background 0.2s;" 
+                    onclick="showEventModal(${e.id})"
+                    onmouseover="this.style.background='rgba(255,214,0,0.05)'" 
+                    onmouseout="this.style.background='transparent'">
+                    <td style="padding: 12px 8px; font-weight: 500; color: #FFD600; cursor: help;" 
+                        onmouseenter="showEventPreview(event, '${e.type}'); event.stopPropagation();" 
+                        onmouseleave="hideEventPreview()">
+                        ${e.type}
+                    </td>
+                    <td style="font-size: 12px; opacity: 0.8;">${new Date(e.timestamp / 1000000).toLocaleTimeString()}</td>
+                    <td>${e.peak_volts !== undefined ? e.peak_volts.toFixed(1) + ' V' : (e.peak_volts || '0.0 V')}</td>
+                    <td>${e.duration_ms.toFixed(1)}ms</td>
+                </tr>
+            `).join('') || '<tr><td colspan="4" style="text-align: center;">No events detected yet</td></tr>';
 
-        // 3. Fetch Trend Data
-        const trendRes = await fetch('/api/v1/history');
-        const trendData = await trendRes.json();
-        const stats = updateLiveStats(trendData.samples, trendData.rate, trendData.samples_raw);
-        renderTrend(trendData.samples, stats);
+            // 3. Fetch Trend Data
+            const trendRes = await fetch('/api/v1/history');
+            const trendData = await trendRes.json();
+            console.log('[Dashboard] Trend data received:', {
+                samples_count: trendData.samples ? trendData.samples.length : 0,
+                rate: trendData.rate,
+                raw_samples_count: trendData.samples_raw ? trendData.samples_raw.length : 0,
+                first_5_samples: trendData.samples ? trendData.samples.slice(0, 5) : []
+            });
+            const stats = updateLiveStats(trendData.samples, trendData.rate, trendData.samples_raw);
+            if (stats) {
+                console.log('[Dashboard] Stats calculated, rendering trend chart');
+                renderTrend(trendData.samples, stats);
+            } else {
+                console.warn('[Dashboard] No stats returned, skipping chart render');
+            }
 
-        // 4. Update FFT (matched to 5s timer)
-        if (latestSamples.length > 0) {
-            updateFFT(latestSamples, latestEffectiveRate);
-        } else if (trendData.samples && trendData.samples.length >= 128) {
-            // Fallback to trend data if live stream is missing (lower resolution)
-            updateFFT(trendData.samples, trendData.rate);
+            // 4. Update FFT (matched to 5s timer)
+            if (latestSamples.length > 0) {
+                updateFFT(latestSamples, latestEffectiveRate);
+            } else if (trendData.samples && trendData.samples.length >= 128) {
+                // Fallback to trend data if live stream is missing (lower resolution)
+                updateFFT(trendData.samples, trendData.rate);
+            }
+        } catch (error) {
+            // Webserver is unreachable or returned an error
+            console.error('Failed to update dashboard:', error);
+            document.getElementById('webserver-status').innerText = 'OFFLINE';
+            document.getElementById('webserver-status').style.color = '#F44336';
+            document.getElementById('pru-status').innerText = 'OFFLINE';
+            document.getElementById('pru-status').style.color = '#888';
+            document.getElementById('datalogger-status').innerText = 'OFFLINE';
+            document.getElementById('datalogger-status').style.color = '#888';
         }
     }
 
@@ -573,7 +660,16 @@
     }
 
     function updateLiveStats(samples, rate, samples_raw) {
-        if (!samples || samples.length === 0) return null;
+        console.log('[updateLiveStats] Called with:', {
+            samples_length: samples ? samples.length : 0,
+            rate: rate,
+            samples_raw_length: samples_raw ? samples_raw.length : 0
+        });
+        
+        if (!samples || samples.length === 0) {
+            console.warn('[updateLiveStats] No samples provided, returning null');
+            return null;
+        }
 
         const absSum = samples.reduce((a, b) => a + Math.abs(b), 0);
         const avg = absSum / samples.length; // Average Rectified Value
@@ -622,65 +718,48 @@
 
     let trendChart = null;
     function renderTrend(samples, stats) {
+        console.log('[renderTrend] Called with:', {
+            samples_length: samples ? samples.length : 0,
+            stats: stats,
+            first_5_samples: samples ? samples.slice(0, 5) : []
+        });
+        
         const ctx = document.getElementById('trendChart').getContext('2d');
 
         // If chart exists, just update data instead of destroying to preserve zoom state
         if (trendChart) {
+            console.log('[renderTrend] Updating existing chart');
             trendChart.data.labels = samples.map((_, i) => i);
             trendChart.data.datasets[0].data = samples;
-            trendChart.data.datasets[3].data = new Array(samples.length).fill(stats.rms);
-            trendChart.data.datasets[4].data = new Array(samples.length).fill(stats.avg);
-
-            // Re-find min/max for annotations
-            const minIdx = samples.indexOf(stats.min);
-            const maxIdx = samples.indexOf(stats.max);
-            trendChart.data.datasets[1].data = samples.map((v, i) => i === minIdx ? v : null);
-            trendChart.data.datasets[2].data = samples.map((v, i) => i === maxIdx ? v : null);
+            trendChart.data.datasets[1].data = new Array(samples.length).fill(stats.rms);
+            trendChart.data.datasets[2].data = new Array(samples.length).fill(stats.avg);
 
             trendChart.update('none'); // Update without animation
             return;
         }
 
-        if (!samples || samples.length === 0) return;
+        if (!samples || samples.length === 0) {
+            console.warn('[renderTrend] No samples provided, skipping chart creation');
+            return;
+        }
 
-        const minIdx = samples.indexOf(stats.min);
-        const maxIdx = samples.indexOf(stats.max);
+        console.log('[renderTrend] Creating new chart with', samples.length, 'samples');
 
         trendChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: samples.map((_, i) => i),
+                // labels: samples.map((_, i) => i),
                 datasets: [
                     {
                         label: 'Line Voltage (VAC)',
                         data: samples,
                         borderColor: '#FFD600',
-                        borderWidth: 2,
+                        borderWidth: 1.5,
                         pointRadius: 0,
                         fill: true,
-                        backgroundColor: 'rgba(255, 214, 0, 0.05)',
-                        tension: 0.1,
+                        backgroundColor: 'rgba(255, 214, 0, 0.1)',
+                        tension: 0,  /* No tension for min/max bucketed data - show exact values */
                         order: 10
-                    },
-                    {
-                        label: 'Min',
-                        data: samples.map((v, i) => i === minIdx ? v : null),
-                        pointBackgroundColor: '#2196F3',
-                        pointBorderColor: '#FFF',
-                        pointBorderWidth: 1,
-                        pointRadius: 6,
-                        showLine: false,
-                        order: 1
-                    },
-                    {
-                        label: 'Max',
-                        data: samples.map((v, i) => i === maxIdx ? v : null),
-                        pointBackgroundColor: '#F44336',
-                        pointBorderColor: '#FFF',
-                        pointBorderWidth: 1,
-                        pointRadius: 6,
-                        showLine: false,
-                        order: 1
                     },
                     {
                         label: 'RMS',
@@ -710,6 +789,10 @@
                 animation: false,
                 plugins: {
                     legend: { display: false },
+                    decimation: {
+                        enabled: true,
+                        algorithm: 'lttb',  /* Largest-Triangle-Three-Buckets algorithm */
+                    },
                     zoom: {
                         zoom: {
                             wheel: { enabled: true },
@@ -724,17 +807,31 @@
                     tooltip: {
                         enabled: true,
                         callbacks: {
-                            label: (context) => `${context.dataset.label}: ${context.raw !== null ? context.raw.toFixed(1) : ''}  VAC`
+                            label: (context) => {
+                                if (context.dataset.label === 'Line Voltage (VAC)') {
+                                    return `${context.raw !== null ? context.raw.toFixed(2) : 'N/A'} VAC`;
+                                }
+                                return `${context.dataset.label}: ${context.raw !== null ? context.raw.toFixed(1) : 'N/A'} VAC`;
+                            }
                         }
                     }
                 },
                 scales: {
-                    x: { display: false },
+                    x: { 
+                        display: false,
+                        grid: { display: false }
+                    },
                     y: {
                         grid: { color: 'rgba(255,255,255,0.05)' },
                         ticks: {
                             color: '#888',
                             font: { size: 10 }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Voltage (VAC)',
+                            color: '#888',
+                            font: { size: 11 }
                         }
                     }
                 }

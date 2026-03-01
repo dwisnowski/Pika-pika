@@ -106,7 +106,7 @@ PRU0_FIRMWARE := /sys/class/remoteproc/remoteproc1/firmware
 # =============================================================================
 # Phony Targets
 # =============================================================================
-.PHONY: all build bringup load load-bringup clean clean-tests overlay install-overlay help build_dir firmware_dir
+.PHONY: all build bringup load load-bringup clean clean-tests overlay install-overlay help build_dir firmware_dir run
 
 # =============================================================================
 # Default Target
@@ -164,6 +164,8 @@ pru-status:
 	@for r in $(PRU_PATH)/remoteproc*; do \
 		echo "$$(basename $$r): $$(cat $$r/name) -> $$(cat $$r/state)"; \
 	done
+
+run: load
 
 # Load main sampling firmware
 load: $(MAIN_OUT)
@@ -334,9 +336,9 @@ install-overlay: $(DTBO_FILE)
 # Clean
 # =============================================================================
 clean:
-	@rm -rf $(BUILD_DIR)
-	@rm -rf $(FIRMWARE_DIR)/*.out
-	@rm -f $(DTBO_FILE)
+	@sudo rm -rf $(BUILD_DIR)
+	@sudo rm -rf $(FIRMWARE_DIR)/*.out
+	@sudo rm -f $(DTBO_FILE)
 	@echo "Clean complete"
 
 # =============================================================================

@@ -91,7 +91,7 @@ stop:
 clean:
 	$(MAKE) -C pru clean
 	$(MAKE) -C datalogger clean
-	$(MAKE) -C webapp clean
+# 	$(MAKE) -C webapp clean  #  Not needed most of the time. <-----
 
 # Help
 help:

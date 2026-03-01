@@ -26,10 +26,15 @@ $(OBJ_DIR)/main.o: main.c
 	@mkdir -p $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-clean:
-	rm -rf $(OBJ_DIR) $(BIN_DIR)
+clean-compiled:
+	@sudo rm -rf $(OBJ_DIR) $(BIN_DIR)
+
+clean-data:
+	@sudo rm -f data/*.bin
+
+clean: clean-compiled clean-data
 
 run: all
 	@sudo ./$(TARGET)
 
-.PHONY: all clean run
+.PHONY: all clean clean-data clean-all run

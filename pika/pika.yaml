@@ -3,13 +3,13 @@
 
 # Sampling Configuration
 sampling:
-  nominal_rate_hz: 20000     # ADC sampling rate in Hz
+  nominal_rate_hz: 10000     # ADC sampling rate in Hz
 
 # Storage Configuration
 storage:
   decimation:
-    rate: 500                # Store 1/1000th of samples
-    max_mb: 20                # Rotate decimated.bin when it exceeds this
+    target_output_rate_hz: 50  # Target decimated output rate (samples/sec) - 50 Hz gives ~1200 samples/min
+    max_mb: 20                 # Rotate decimated.bin when it exceeds this
   events:
     pre_sec: 0.5              # Seconds of data before event
     post_sec: 0.5             # Seconds of data after event
@@ -74,3 +74,7 @@ anomalies:
 # Logging Configuration
 logging:
   level: info                 # Log level: debug, info, warn, error
+
+# Webapp Configuration
+webapp:
+  history_max_points: 6000    # Maximum number of decimated points to load for trend chart

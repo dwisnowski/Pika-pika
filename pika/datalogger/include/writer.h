@@ -24,7 +24,7 @@ int writer_init(writer_t *w, const char *base_path, uint32_t max_decimated_mb,
 void writer_cleanup(writer_t *w);
 
 void writer_write_decimated(writer_t *w, decimated_chunk_header_t *header,
-                            uint16_t *data);
+                            int16_t *data);
 
 /**
  * Write a single-channel event.

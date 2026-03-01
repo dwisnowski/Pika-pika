@@ -92,13 +92,14 @@ void writer_cleanup(writer_t *w) {
 }
 
 void writer_write_decimated(writer_t *w, decimated_chunk_header_t *header,
-                            uint16_t *data) {
+                            int16_t *data) {
   if (!w->decimated_file)
     return;
 
   fwrite(header, sizeof(decimated_chunk_header_t), 1, w->decimated_file);
-  fwrite(data, sizeof(uint16_t), header->sample_count * header->channels,
-         w->decimated_file);
+  /* Write all values: sample_count * channels * values_per_sample */
+  uint32_t total_values = header->sample_count * header->channels * header->values_per_sample;
+  fwrite(data, sizeof(int16_t), total_values, w->decimated_file);
   fflush(w->decimated_file);
 
   /* Check rotation after write */

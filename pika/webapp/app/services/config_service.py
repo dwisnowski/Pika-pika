@@ -109,5 +109,9 @@ class ConfigService:
         """Get logging level from config"""
         return self.config.get('logging', {}).get('level', 'info')
 
+    def get_history_max_points(self) -> int:
+        """Get maximum number of decimated points to load for trend chart"""
+        return self.config.get('webapp', {}).get('history_max_points', 6000)
+
 # Global instance
 config_service = ConfigService()

@@ -63,35 +63,60 @@ async def health():
     from app.services.calibration_service import calibration_service
     import os
     import time
+    import glob
     
     sample_rate = 0
     pru_clock_hz = 0
     sample_period_cycles = 0
-    pru_connected = False
+    pru_state = "unknown"  # Can be: "running", "offline", "error", "unknown"
     
-    if shm.header:
-        # Verify PRU is actually running by checking if total_samples is increasing
-        # (indicating active data collection)
-        current_total = shm.header.total_samples
+    # Check PRU status from remoteproc state file
+    # Find PRU0 by looking for "4a334000.pru" in remoteproc names
+    try:
+        remoteproc_path = "/sys/class/remoteproc"
+        pru_found = False
+        for name_file in glob.glob(f"{remoteproc_path}/remoteproc*/name"):
+            with open(name_file, 'r') as f:
+                name = f.read().strip()
+                if "4a334000.pru" in name:
+                    pru_found = True
+                    # Found PRU0, check its state
+                    state_file = name_file.replace("/name", "/state")
+                    with open(state_file, 'r') as sf:
+                        state = sf.read().strip()
+                        # State can be: "offline", "running", "crashed", etc.
+                        if state == "running":
+                            pru_state = "running"
+                        elif state == "offline":
+                            pru_state = "offline"
+                        else:
+                            pru_state = "error"  # crashed or other unexpected state
+                    break
         
-        # Wait a tiny bit and check again
-        time.sleep(0.05)
-        
-        # Try to reconnect to get fresh data
-        try:
-            shm.connect()
-        except:
-            pass
-        
-        if shm.header:
-            new_total = shm.header.total_samples
-            # If total_samples increased, PRU is running
-            pru_connected = (new_total > current_total)
+        if not pru_found:
+            pru_state = "error"  # PRU0 not found in remoteproc
             
-            if pru_connected:
-                sample_rate = shm.header.sample_rate
-                pru_clock_hz = shm.header.pru_clock_hz
-                sample_period_cycles = shm.header.sample_period_cycles
+    except Exception as e:
+        logger.warning(f"Could not check PRU remoteproc state: {e}")
+        pru_state = "error"
+        # Fallback to old method if remoteproc check fails
+        if shm.header:
+            current_total = shm.header.total_samples
+            time.sleep(0.05)
+            try:
+                shm.connect()
+            except:
+                pass
+            if shm.header:
+                new_total = shm.header.total_samples
+                if new_total > current_total:
+                    pru_state = "running"
+    
+    # Get sample rate info from shared memory if PRU is running
+    if pru_state == "running" and shm.header:
+        sample_rate = shm.header.sample_rate
+        pru_clock_hz = shm.header.pru_clock_hz
+        sample_period_cycles = shm.header.sample_period_cycles
     
     # Calculate actual sample rate from PRU timing
     actual_sample_rate = 0
@@ -121,7 +146,8 @@ async def health():
         
     return {
         "status": "ok",
-        "pru_connected": pru_connected,
+        "pru_state": pru_state,  # "running", "offline", "error", "unknown"
+        "pru_connected": pru_state == "running",  # Keep for backward compatibility
         "datalogger_running": datalogger_running,
         "shm_magic": hex(shm.header.magic) if shm.header else "N/A",
         "sample_rate": sample_rate,
@@ -138,7 +164,51 @@ async def health():
 @app.get("/api/v1/history")
 async def get_history_api():
     from app.services.history_service import history_service
-    return history_service.get_decimated_data(max_points=500)
+    max_points = config_service.get_history_max_points()
+    return history_service.get_decimated_data(max_points=max_points)
+
+@app.get("/api/v1/history/debug")
+async def get_history_debug():
+    """Debug endpoint: returns raw samples without calibration"""
+    from app.services.history_service import history_service
+    import struct
+    import os
+    
+    path = os.path.join(history_service.data_dir, "decimated.bin")
+    if not os.path.exists(path):
+        return {"error": "decimated.bin not found", "path": path}
+    
+    samples_raw = []
+    try:
+        with open(path, "rb") as f:
+            f.seek(0)
+            chunk_idx = 0
+            while f.tell() < os.path.getsize(path) and chunk_idx < 5:  # Read first 5 chunks only
+                hdr_data = f.read(24)
+                if len(hdr_data) < 24:
+                    break
+                ts, rate, count, channels, values_per_sample = struct.unpack("<QIIII", hdr_data)
+                total_values = count * channels * values_per_sample
+                raw_bytes = f.read(total_values * 2)
+                if len(raw_bytes) < total_values * 2:
+                    break
+                shorts = struct.unpack(f"<{total_values}h", raw_bytes)
+                if values_per_sample == 2:
+                    ch0 = shorts[1::values_per_sample]
+                else:
+                    ch0 = shorts[0::values_per_sample]
+                samples_raw.extend(ch0)
+                chunk_idx += 1
+    except Exception as e:
+        return {"error": str(e)}
+    
+    return {
+        "raw_samples_count": len(samples_raw),
+        "first_20_raw": list(samples_raw[:20]),
+        "min": min(samples_raw) if samples_raw else 0,
+        "max": max(samples_raw) if samples_raw else 0,
+        "mean": sum(samples_raw) / len(samples_raw) if samples_raw else 0
+    }
 
 @app.get("/api/v1/events")
 async def get_events_api():

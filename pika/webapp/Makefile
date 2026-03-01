@@ -19,6 +19,14 @@ stop:
 	@echo "Stopping webapp..."
 	-sudo pkill -9 -f uvicorn
 
+inspect-decimated:
+	@echo "Inspecting decimated.bin file structure..."
+	python3 inspect_decimated.py ../datalogger/data/decimated.bin 20
+
+inspect-decimated-full:
+	@echo "Inspecting all chunks in decimated.bin..."
+	python3 inspect_decimated.py ../datalogger/data/decimated.bin 1000
+
 clean:
 	rm -rf .venv
 	find . -type d -name "__pycache__" -exec rm -rf {} +
