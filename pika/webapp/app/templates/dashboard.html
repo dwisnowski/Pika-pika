@@ -728,14 +728,16 @@
 
         // If chart exists, just update data instead of destroying to preserve zoom state
         if (trendChart) {
-            console.log('[renderTrend] Updating existing chart');
-            trendChart.data.labels = samples.map((_, i) => i);
-            trendChart.data.datasets[0].data = samples;
-            trendChart.data.datasets[1].data = new Array(samples.length).fill(stats.rms);
-            trendChart.data.datasets[2].data = new Array(samples.length).fill(stats.avg);
-
-            trendChart.update('none'); // Update without animation
-            return;
+            console.log('[renderTrend] Updating existing chart with', samples.length, 'samples');
+            try {
+                // Destroy and recreate to ensure proper update
+                trendChart.destroy();
+                trendChart = null;
+                console.log('[renderTrend] Chart destroyed, recreating...');
+            } catch (e) {
+                console.error('[renderTrend] Error destroying chart:', e);
+                trendChart = null;
+            }
         }
 
         if (!samples || samples.length === 0) {
@@ -748,7 +750,7 @@
         trendChart = new Chart(ctx, {
             type: 'line',
             data: {
-                // labels: samples.map((_, i) => i),
+                labels: samples.map((_, i) => i),
                 datasets: [
                     {
                         label: 'Line Voltage (VAC)',
@@ -792,6 +794,7 @@
                     decimation: {
                         enabled: true,
                         algorithm: 'lttb',  /* Largest-Triangle-Three-Buckets algorithm */
+                        samples: 150  /* Target number of points to display */
                     },
                     zoom: {
                         zoom: {

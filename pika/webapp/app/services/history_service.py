@@ -61,78 +61,79 @@ class HistoryService:
                     print(f"[HistoryService] decimated.bin is empty (0 bytes)")
                     return {"samples": [], "samples_raw": [], "rate": 0}
 
-                # Read all chunks from the beginning to get the most recent data
-                f.seek(0)
+                # Strategy: Read file backwards in chunks to find the most recent data
+                # This is much faster than reading the entire file
                 all_chunks = []
                 chunk_idx = 0
+                bytes_remaining = file_size
                 
-                while f.tell() < file_size:
-                    hdr_data = f.read(HEADER_SIZE)
-                    if not hdr_data or len(hdr_data) < HEADER_SIZE:
-                        break
-
-                    ts, rate, count, channels, values_per_sample = struct.unpack(HEADER_FORMAT, hdr_data)
-
-                    # Sanity check - separate checks for each field
-                    if count == 0 or count > 100000:
-                        print(f"[HistoryService] Skipping corrupt chunk {chunk_idx}: count={count}")
-                        if chunk_idx == 0:
-                            print(f"[HistoryService] First chunk is corrupt - file may be in old format.")
-                            print(f"[HistoryService] Please delete decimated.bin and restart the datalogger:")
-                            print(f"[HistoryService]   rm {path}")
-                            print(f"[HistoryService]   rm {path}.old")
-                            return {"samples": [], "samples_raw": [], "rate": 0}
-                        break
+                # Read backwards in 64KB blocks
+                while bytes_remaining > 0 and len(all_chunks) < 100:  # Limit to 100 chunks max
+                    block_size = min(65536, bytes_remaining)
+                    read_pos = bytes_remaining - block_size
                     
-                    if channels == 0 or channels > 32:
-                        print(f"[HistoryService] Skipping corrupt chunk {chunk_idx}: channels={channels}")
-                        if chunk_idx == 0:
-                            print(f"[HistoryService] First chunk is corrupt - file may be in old format.")
-                            print(f"[HistoryService] Please delete decimated.bin and restart the datalogger:")
-                            print(f"[HistoryService]   rm {path}")
-                            print(f"[HistoryService]   rm {path}.old")
-                            return {"samples": [], "samples_raw": [], "rate": 0}
-                        break
+                    f.seek(read_pos)
+                    block_data = f.read(block_size)
+                    bytes_remaining -= block_size
                     
-                    if values_per_sample == 0 or values_per_sample > 10:
-                        print(f"[HistoryService] Skipping corrupt chunk {chunk_idx}: values_per_sample={values_per_sample}")
-                        if chunk_idx == 0:
-                            print(f"[HistoryService] First chunk is corrupt - file may be in old format.")
-                            print(f"[HistoryService] Please delete decimated.bin and restart the datalogger:")
-                            print(f"[HistoryService]   rm {path}")
-                            print(f"[HistoryService]   rm {path}.old")
-                            return {"samples": [], "samples_raw": [], "rate": 0}
-                        break
-
-                    sample_rate = rate
-                    # Total values = sample_count * channels * values_per_sample
-                    total_values = count * channels * values_per_sample
-                    raw_bytes   = f.read(total_values * 2)
-                    if len(raw_bytes) < total_values * 2:
-                        print(f"[HistoryService] Incomplete data at chunk {chunk_idx}: expected {total_values * 2} bytes, got {len(raw_bytes)}")
-                        break
-
-                    # Parse the data
-                    if total_values > 0:
-                        shorts  = struct.unpack(f"<{total_values}h", raw_bytes)
-                        # For min/max bucketed data: values_per_sample=2 means [min, max]
-                        # Extract the max value (index 1) from each [min, max] pair
-                        if values_per_sample == 2:
-                            # For each sample, take the max value (index 1 of the pair)
-                            ch0 = shorts[1::values_per_sample]
-                        else:
-                            # Fallback: take first value per sample
-                            ch0 = shorts[0::values_per_sample]
-                        all_chunks.append(list(ch0))
+                    # Parse chunks from this block (forward order within block)
+                    offset = 0
+                    block_chunks = []
                     
-                    chunk_idx += 1
+                    while offset + HEADER_SIZE <= len(block_data):
+                        hdr_data = block_data[offset:offset + HEADER_SIZE]
+                        try:
+                            ts, rate, count, channels, values_per_sample = struct.unpack(HEADER_FORMAT, hdr_data)
+                        except:
+                            break
+                        
+                        offset += HEADER_SIZE
+                        
+                        # Sanity checks
+                        if count == 0 or count > 100000 or channels == 0 or channels > 32 or values_per_sample == 0 or values_per_sample > 10:
+                            break
+                        
+                        sample_rate = rate
+                        total_values = count * channels * values_per_sample
+                        data_size = total_values * 2
+                        
+                        if offset + data_size > len(block_data):
+                            break
+                        
+                        raw_bytes = block_data[offset:offset + data_size]
+                        offset += data_size
+                        
+                        if len(raw_bytes) < data_size:
+                            break
+                        
+                        # Parse the data
+                        if total_values > 0:
+                            shorts = struct.unpack(f"<{total_values}h", raw_bytes)
+                            if values_per_sample == 2:
+                                ch0 = shorts[1::values_per_sample]
+                            else:
+                                ch0 = shorts[0::values_per_sample]
+                            block_chunks.append(list(ch0))
+                            chunk_idx += 1
+                    
+                    # Add chunks from this block (in reverse order since we're reading backwards)
+                    block_chunks.reverse()
+                    all_chunks.extend(block_chunks)
+                    
+                    # Check if we have enough samples
+                    total_samples = sum(len(chunk) for chunk in all_chunks)
+                    if total_samples >= max_points:
+                        break
 
-                # Keep only the most recent max_points samples
+                # Reverse all chunks to get chronological order
+                all_chunks.reverse()
+                
+                # Flatten and keep only the most recent max_points
                 for chunk in all_chunks:
                     samples_raw.extend(chunk)
                 
                 samples_raw = samples_raw[-max_points:] if len(samples_raw) > max_points else samples_raw
-                print(f"[HistoryService] Successfully read {chunk_idx} chunks, using {len(samples_raw)} samples")
+                print(f"[HistoryService] Successfully read {chunk_idx} chunks, using {len(samples_raw)} samples (file_size={file_size})")
 
         except Exception as e:
             print(f"[HistoryService] Error reading history: {e}")

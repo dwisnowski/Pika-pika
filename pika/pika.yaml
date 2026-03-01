@@ -77,4 +77,4 @@ logging:
 
 # Webapp Configuration
 webapp:
-  history_max_points: 6000    # Maximum number of decimated points to load for trend chart
+  history_max_points: 1000    # Maximum number of decimated points to load for trend chart
