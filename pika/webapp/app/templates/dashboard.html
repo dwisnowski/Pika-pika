@@ -598,6 +598,8 @@
             // 2. Fetch Events
             const eventsRes = await fetch('/api/v1/events');
             const events = await eventsRes.json();
+            // Sort events by timestamp descending (most recent first)
+            events.sort((a, b) => b.timestamp - a.timestamp);
             const list = document.getElementById('event-list');
             list.innerHTML = events.map(e => `
                 <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: background 0.2s;" 
