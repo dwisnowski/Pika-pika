@@ -1,0 +1,20 @@
+[Unit]
+Description=Pika auto-start (PRU + datalogger + webapp)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/debian/pika/pika
+ExecStart=/usr/bin/make run-all
+Restart=always
+RestartSec=3
+User=root
+Environment=HOME=/root
+
+# Optional logs to journal (default)
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -16,7 +16,7 @@
 #   to maintain its own build logic while providing a unified interface
 #   at the top level.
 
-.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all stop help setup run-pru-datalogger
+.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all stop help setup run-pru-datalogger daemon-install daemon-status daemon-stop daemon-uninstall daemon-enable daemon-disable
 
 # Build all components
 all: pru datalogger web
@@ -92,6 +92,64 @@ stop:
 	-@$(MAKE) -C pru stop
 	@echo "Stopped."
 
+# Systemd daemon management targets
+daemon-install:
+	@echo "Checking pika-run-all systemd service..."
+	@if sudo systemctl list-unit-files pika-run-all.service 2>/dev/null | grep -q pika-run-all; then \
+		echo "✓ Service already installed."; \
+		echo "  To reinstall: make daemon-uninstall && make daemon-install"; \
+		make daemon-status; \
+	else \
+		echo "Installing pika-run-all systemd service..."; \
+		sudo cp ../etc/systemd/system/pika-run-all.service /etc/systemd/system/; \
+		sudo systemctl daemon-reload; \
+		sudo systemctl enable pika-run-all.service; \
+		echo "✓ Service installed and enabled at boot."; \
+		echo "  To start now: make daemon-start"; \
+		echo "  To check status: make daemon-status"; \
+	fi
+
+daemon-enable:
+	@echo "Enabling pika-run-all service at boot..."
+	@sudo systemctl enable pika-run-all.service
+	@echo "Service enabled."
+
+daemon-disable:
+	@echo "Disabling pika-run-all service at boot..."
+	@sudo systemctl disable pika-run-all.service
+	@echo "Service disabled."
+
+daemon-status:
+	@echo "Checking pika-run-all service status..."
+	@sudo systemctl status pika-run-all.service --no-pager || echo "Service not found or not running"
+
+daemon-start:
+	@echo "Starting pika-run-all service..."
+	@sudo systemctl start pika-run-all.service
+	@echo "Service started."
+
+daemon-stop:
+	@echo "Stopping pika-run-all service..."
+	@sudo systemctl stop pika-run-all.service
+	@echo "Service stopped."
+
+daemon-restart:
+	@echo "Restarting pika-run-all service..."
+	@sudo systemctl restart pika-run-all.service
+	@echo "Service restarted."
+
+daemon-logs:
+	@echo "Displaying pika-run-all service logs..."
+	@sudo journalctl -u pika-run-all.service -n 100 --no-pager -f
+
+daemon-uninstall:
+	@echo "Uninstalling pika-run-all systemd service..."
+	@sudo systemctl disable pika-run-all.service || true
+	@sudo systemctl stop pika-run-all.service || true
+	@sudo rm -f /etc/systemd/system/pika-run-all.service
+	@sudo systemctl daemon-reload
+	@echo "Service uninstalled."
+
 # Clean all build artifacts - delegates to all subproject Makefiles
 clean:
 	$(MAKE) -C pru clean
@@ -114,6 +172,17 @@ help:
 	@echo "  run-datalogger   - Build and run datalogger (run make pru-load once first)"
 	@echo "  run-all          - Build pru + datalogger, then run datalogger"
 	@echo "  stop             - Force stop all background components"
+	@echo ""
+	@echo "Daemon/Systemd Targets (run on BBB):"
+	@echo "  daemon-install   - Install pika-run-all service and enable at boot"
+	@echo "  daemon-enable    - Enable service to start at boot"
+	@echo "  daemon-disable   - Disable service from starting at boot"
+	@echo "  daemon-start     - Start the service now"
+	@echo "  daemon-stop      - Stop the service"
+	@echo "  daemon-restart   - Restart the service"
+	@echo "  daemon-status    - Show service status"
+	@echo "  daemon-logs      - Follow service logs in real-time"
+	@echo "  daemon-uninstall - Uninstall and remove the service"
 	@echo ""
 	@echo "PRU Targets:"
 	@echo "  test-pru         - Run PRU firmware tests"

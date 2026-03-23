@@ -15,6 +15,7 @@ typedef struct {
   uint32_t pru_shm_phys_addr;
   volatile pru_shared_memory_t *header;
   uint32_t last_read_block_idx;
+  uint32_t last_completed_blocks;
 } shm_reader_t;
 
 /**

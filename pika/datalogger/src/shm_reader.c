@@ -109,6 +109,7 @@ int shm_reader_init(shm_reader_t *reader) {
   // Use UINT32_MAX as "unsynced" sentinel. First poll will latch current
   // write_block_idx to avoid consuming potentially stale pre-start data.
   reader->last_read_block_idx = UINT32_MAX;
+  reader->last_completed_blocks = UINT32_MAX;
 
   return 0;
 }
@@ -137,8 +138,8 @@ int shm_pru_set_state(const char *state) {
 volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
                                              uint8_t **data_ptr) {
   static uint32_t poll_count = 0;
-  static uint32_t invalid_idx_count = 0;
   static uint32_t unstable_idx_count = 0;
+  static uint32_t invalid_idx_count = 0;
   poll_count++;
 
   // Safety: Don't trust the header until PRU has written the magic number
@@ -160,7 +161,18 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
     return NULL;
   }
 
-  // Read twice to avoid transient/torn observations while PRU updates SHM.
+  uint32_t block_size = reader->header->block_size;
+  if (block_size == 0 || block_size > 1024) {
+    if (poll_count % 5000 == 0) {
+      printf("[SHM Reader] Waiting for valid block_size (got %u)\n",
+             block_size);
+    }
+    return NULL;
+  }
+
+  // Read write_block_idx twice for diagnostics only. We do not use it as
+  // source-of-truth for progression because some systems intermittently read
+  // it as 0xFFFFFFFF.
   uint32_t current_blk_a = reader->header->write_block_idx;
   uint32_t current_blk_b = reader->header->write_block_idx;
   if (current_blk_a != current_blk_b) {
@@ -169,38 +181,63 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
       printf("[SHM Reader] Unstable write_idx read: a=%u b=%u (count=%u)\n",
              current_blk_a, current_blk_b, unstable_idx_count);
     }
-    return NULL;
   }
 
-  uint32_t current_blk = current_blk_b;
-  if (current_blk >= num_blocks) {
+  uint32_t raw_write_idx = current_blk_b;
+  if (raw_write_idx >= num_blocks) {
     invalid_idx_count++;
     if (invalid_idx_count % 1000 == 0) {
-      printf("[SHM Reader] Invalid write_idx=%u (num_blocks=%u, count=%u)\n",
-             current_blk, num_blocks, invalid_idx_count);
+      printf("[SHM Reader] Invalid raw write_idx=%u (num_blocks=%u, count=%u)\n",
+             raw_write_idx, num_blocks, invalid_idx_count);
     }
-    return NULL;
   }
+
+  // Read sample_count twice and require stability before deriving completed
+  // blocks. This is our source-of-truth for producer progress.
+  uint32_t sample_count_a = reader->header->sample_count;
+  uint32_t sample_count_b = reader->header->sample_count;
+  uint32_t sample_count = sample_count_b;
+  if (sample_count_a != sample_count_b && poll_count % 5000 == 0) {
+    printf("[SHM Reader] sample_count moved during read: a=%u b=%u\n",
+           sample_count_a, sample_count_b);
+  }
+  uint32_t completed_blocks = sample_count / block_size;
+  uint32_t derived_write_idx = completed_blocks % num_blocks;
 
   if (poll_count % 5000 == 0) {
     // Periodic debug log
-    printf("[SHM Reader] Tick: write_idx=%u, last_idx=%u, num_blocks=%u, "
-           "heartbeat=%u, err=0x%08X\n",
-           current_blk, reader->last_read_block_idx,
+    printf("[SHM Reader] Tick: write_idx(raw=%u, derived=%u), "
+           "last_idx=%u, num_blocks=%u, block_size=%u, sample_count=%u, "
+           "completed_blocks=%u, heartbeat=%u, err=0x%08X\n",
+           raw_write_idx, derived_write_idx,
+           reader->last_read_block_idx,
            num_blocks,
+           block_size,
+           sample_count,
+           completed_blocks,
            (uint32_t)reader->header->heartbeat,
            (uint32_t)reader->header->error_flags);
   }
 
-  // Initial synchronization: latch current writer position and wait for
-  // PRU to advance before returning the first complete block.
-  if (reader->last_read_block_idx == UINT32_MAX) {
-    reader->last_read_block_idx = current_blk;
+  // Initial synchronization: latch the current completed-block counter and
+  // wait for the next completed block before returning data.
+  if (reader->last_completed_blocks == UINT32_MAX) {
+    reader->last_completed_blocks = completed_blocks;
+    reader->last_read_block_idx =
+        (completed_blocks == 0) ? UINT32_MAX : ((completed_blocks - 1) % num_blocks);
     return NULL;
   }
 
-  // Check if PRU has advanced past our last read index
-  if (current_blk == reader->last_read_block_idx) {
+  // No new full block completed yet.
+  if (completed_blocks == reader->last_completed_blocks) {
+    return NULL;
+  }
+
+  // If counter moved backwards, resync.
+  if (completed_blocks < reader->last_completed_blocks) {
+    reader->last_completed_blocks = completed_blocks;
+    reader->last_read_block_idx =
+        (completed_blocks == 0) ? UINT32_MAX : ((completed_blocks - 1) % num_blocks);
     return NULL;
   }
 
@@ -212,23 +249,22 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   // This means write_block_idx is where the PRU IS CURRENTLY WRITING or WILL
   // WRITE. So the data we want to read is at the PREVIOUS index.
 
-  uint32_t ready_idx = (current_blk + num_blocks - 1) % num_blocks;
+  uint32_t next_completed_blocks = reader->last_completed_blocks + 1;
+  if (completed_blocks < next_completed_blocks) {
+    return NULL;
+  }
+
+  // Consume one completed block per poll to preserve ordering.
+  uint32_t ready_idx = (next_completed_blocks - 1) % num_blocks;
 
   // If we've already read this "ready" block, nothing new.
   // This logic needs to handle the very first block correctly.
   // Let's keep it simple: if current_blk changed, update last_read and return
   // the PREVIOUS block.
 
-  reader->last_read_block_idx = current_blk;
-
   // Calculate memory offset for the ready block
   // Header is 128 bytes (SHM_HEADER_OFFSET).
   // block_total_size = 16 (desc) + (samples * channels * 2)
-  uint32_t block_size = reader->header->block_size;
-  if (block_size == 0 || block_size > 1024) {
-    return NULL; // Invalid block size
-  }
-
   uint32_t block_total_size =
       16 + (block_size * 8 * 2); // 8 channels hardcoded for now
 
@@ -249,6 +285,10 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   if (desc->num_samples == 0 || desc->num_samples > block_size) {
     return NULL;
   }
+
+  // Mark progress only after validating descriptor.
+  reader->last_completed_blocks = next_completed_blocks;
+  reader->last_read_block_idx = ready_idx;
 
   return desc;
 }
