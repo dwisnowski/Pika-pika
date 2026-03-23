@@ -16,7 +16,7 @@
 #   to maintain its own build logic while providing a unified interface
 #   at the top level.
 
-.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all stop help setup
+.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all stop help setup run-pru-datalogger
 
 # Build all components
 all: pru datalogger web
@@ -71,6 +71,11 @@ run-web:
 
 # Run datalogger (builds first). PRU firmware must be installed: run make pru-load once.
 run-datalogger: datalogger
+	@sudo $(MAKE) -C datalogger run
+
+# Build PRU firmware and datalogger, then run both.
+run-pru-datalogger: pru datalogger
+	@echo "Starting Datalogger (C)..."
 	@sudo $(MAKE) -C datalogger run
 
 # Build PRU firmware and datalogger, then run both.

@@ -12,6 +12,7 @@
 typedef struct {
   int mem_fd;
   void *mmap_base;
+  uint32_t pru_shm_phys_addr;
   volatile pru_shared_memory_t *header;
   uint32_t last_read_block_idx;
 } shm_reader_t;

@@ -5,16 +5,22 @@
 #include <time.h>
 
 typedef struct {
-  struct timespec start_time;
+  uint64_t start_time_ns;
   uint64_t start_cycles;
-  double cycles_per_ns;
+  uint32_t pru_clock_hz;
 } time_sync_t;
 
 /**
  * Initializes time synchronization using the current clock and PRU cycles.
  */
 void time_sync_init(time_sync_t *sync, uint64_t initial_cycles,
-                    uint32_t sample_rate_hz);
+                    uint32_t pru_clock_hz);
+
+/**
+ * Initializes time synchronization using an explicit base time.
+ */
+void time_sync_init_at(time_sync_t *sync, uint64_t initial_cycles,
+                       uint32_t pru_clock_hz, uint64_t base_time_ns);
 
 /**
  * Converts a PRU cycle count to a nanosecond timestamp (CLOCK_MONOTONIC).

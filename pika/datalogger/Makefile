@@ -30,11 +30,20 @@ clean-compiled:
 	@sudo rm -rf $(OBJ_DIR) $(BIN_DIR)
 
 clean-data:
-	@sudo rm -f data/*.bin
+	@sudo rm -f data/*.bin data/*.old
 
 clean: clean-compiled clean-data
 
 run: all
 	@sudo ./$(TARGET)
 
-.PHONY: all clean clean-data clean-all run
+validate:
+	python3 validate_data.py
+
+validate-verbose:
+	python3 validate_data.py --verbose
+
+validate-diagnose:
+	sudo python3 validate_data.py --verbose --diagnose
+
+.PHONY: all clean clean-data clean-all run validate validate-verbose validate-diagnose

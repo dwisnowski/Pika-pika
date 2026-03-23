@@ -27,13 +27,28 @@ scope_buffer_t live_scope_buffer;
 void handle_sigint(int sig) { keep_running = 0; }
 
 // Reader Thread: Pulls from PRU SHM, pushes to Ring Buffer
+
 void *reader_thread_func(void *arg) {
   printf("[Reader] Started\n");
+
+  uint64_t blocks_pushed = 0;
+  uint64_t null_polls    = 0;
+  uint32_t first_seen    = 0;
+
   while (keep_running) {
     uint8_t *data;
     volatile block_descriptor_t *desc = shm_reader_poll(&shm_reader, &data);
 
     if (desc) {
+      if (!first_seen) {
+        printf("[Reader] First valid block from PRU: num_samples=%u  "
+               "timestamp_cycles=%llu  flags=0x%08X\n",
+               desc->num_samples,
+               (unsigned long long)desc->timestamp_cycles,
+               desc->flags);
+        first_seen = 1;
+      }
+
       size_t data_size = desc->num_samples * CHANNELS * 2;
 
       uint8_t temp_buf[2064];
@@ -42,15 +57,34 @@ void *reader_thread_func(void *arg) {
 
       if (!ring_buffer_push(&raw_block_rb, temp_buf)) {
         fprintf(stderr, "[Reader] Warning: Ring buffer overflow!\n");
+      } else {
+        blocks_pushed++;
+        if (blocks_pushed % 5000 == 0) {
+          printf("[Reader] Blocks pushed to ring buffer: %llu\n",
+                 (unsigned long long)blocks_pushed);
+        }
+      }
+    } else {
+      null_polls++;
+      if (null_polls % 10000 == 0) {
+        volatile pru_shared_memory_t *h = shm_reader.header;
+        printf("[Reader] Polling (no new blocks): null_polls=%llu  "
+               "write_block_idx=%u  heartbeat=%u  magic=0x%08X  "
+               "blocks_pushed_ever=%llu\n",
+               (unsigned long long)null_polls,
+               h ? (uint32_t)h->write_block_idx : 0u,
+               h ? (uint32_t)h->heartbeat        : 0u,
+               h ? (uint32_t)h->magic             : 0u,
+               (unsigned long long)blocks_pushed);
       }
     }
 
     usleep(1000); // 1ms poll
   }
-  printf("[Reader] Stopped\n");
+  printf("[Reader] Stopped — total blocks pushed: %llu\n",
+         (unsigned long long)blocks_pushed);
   return NULL;
 }
-
 // Extract channel 0 samples from an interleaved multi-channel buffer.
 // out_ch0 must be pre-allocated with at least (total_frames) int16 slots.
 static void extract_ch0(const int16_t *interleaved, uint32_t total_frames,
@@ -78,17 +112,24 @@ void *processor_thread_func(void *arg) {
                  global_config.storage.decimation.target_output_rate_hz);
 
   time_sync_t t_sync;
-  time_sync_init(&t_sync, 0, global_config.nominal_rate_hz);
+  time_sync_init(&t_sync, 0, 200000000U);
 
   event_window_t ew;
   event_window_init(&ew, global_config.storage.events.pre_sec,
-                    global_config.storage.events.post_sec, global_config.nominal_rate_hz,
-                    CHANNELS);
+                    global_config.storage.events.post_sec,
+                    global_config.nominal_rate_hz, CHANNELS);
 
   uint8_t temp_buf[2064];
   int16_t decimated_samples[128 * 8];
   uint32_t decimated_count = 0;
-  uint64_t last_block_time = 0;  /* Track last block time for final flush */
+  uint64_t decimated_chunk_start_ns = 0;
+
+  uint32_t pru_clock_hz = 200000000U;
+  if (shm_reader.header && shm_reader.header->pru_clock_hz) {
+    pru_clock_hz = shm_reader.header->pru_clock_hz;
+  }
+  uint64_t ns_per_sample = 1000000000ULL / global_config.nominal_rate_hz;
+  uint64_t current_bucket_start_ns = 0;
 
   // Scratch buffer for channel-0 extraction — large enough for max event window
   // Max event window: (pre + post) seconds * sample_rate samples * 2 bytes
@@ -101,16 +142,33 @@ void *processor_thread_func(void *arg) {
     return NULL;
   }
 
+  bool time_synced = false;
   while (keep_running) {
     if (ring_buffer_pop(&raw_block_rb, temp_buf)) {
       block_descriptor_t *desc = (block_descriptor_t *)temp_buf;
       int16_t *samples = (int16_t *)(temp_buf + 16);
 
+      if (!time_synced) {
+        uint64_t now_ns = get_now_ns();
+        uint64_t block_duration_ns =
+          (uint64_t)desc->num_samples * ns_per_sample;
+        uint64_t first_sample_est_ns =
+          (now_ns > block_duration_ns) ? (now_ns - block_duration_ns)
+                        : now_ns;
+
+        printf(
+          "[Processor] First block received. Syncing time to %llu cycles "
+          "(PRU %u Hz)\n",
+          (unsigned long long)desc->timestamp_cycles, pru_clock_hz);
+        time_sync_init_at(&t_sync, desc->timestamp_cycles, pru_clock_hz,
+                  first_sample_est_ns);
+        time_synced = true;
+      }
+
       // Push raw interleaved frame to the real-time oscilloscope buffer
       scope_buffer_push(&live_scope_buffer, samples, desc->num_samples);
 
       uint64_t block_time = cycles_to_ns(&t_sync, desc->timestamp_cycles);
-      last_block_time = block_time;  /* Save for final flush */
 
       // 1. Snapshot for pre-event history (full multi-channel block)
       event_window_push_block(&ew, samples);
@@ -132,13 +190,12 @@ void *processor_thread_func(void *arg) {
           event_window_get_ready(&ew, &event_data_size, &captured_event);
       if (event_data) {
         // event_data is interleaved multi-channel int16; extract ch0 only
-        uint32_t total_frames =
-            (uint32_t)(event_data_size / (CHANNELS * 2));
+        uint32_t total_frames = (uint32_t)(event_data_size / (CHANNELS * 2));
         uint32_t ch0_sample_count = total_frames;
 
         if (ch0_sample_count <= 50000) {
-          extract_ch0((const int16_t *)event_data, total_frames,
-                      CHANNELS, ch0_scratch);
+          extract_ch0((const int16_t *)event_data, total_frames, CHANNELS,
+                      ch0_scratch);
 
           printf("[Processor] Saving ch0 event data: %u samples (~%zu KB)\n",
                  ch0_sample_count, (ch0_sample_count * sizeof(int16_t)) / 1024);
@@ -160,24 +217,35 @@ void *processor_thread_func(void *arg) {
 
       // 4. Decimation (multi-channel, min/max bucketing on ch0)
       for (uint32_t i = 0; i < desc->num_samples; i++) {
-        int16_t ch0_sample = samples[i * CHANNELS];  /* Extract channel 0 */
+        uint64_t sample_time_ns = block_time + ((uint64_t)i * ns_per_sample);
+        if (dec.samples_in_bucket == 0) {
+          current_bucket_start_ns = sample_time_ns;
+        }
+
+        int16_t ch0_sample = samples[i * CHANNELS]; /* Extract channel 0 */
         if (decimator_process(&dec, ch0_sample)) {
-          /* Bucket complete - store min/max for ch0 only (we're decimating ch0) */
+          if (decimated_count == 0) {
+            decimated_chunk_start_ns = current_bucket_start_ns;
+          }
+
+          /* Bucket complete - store min/max for ch0 only (we're decimating ch0)
+           */
           decimated_samples[decimated_count * 2] = dec.min_val;
           decimated_samples[decimated_count * 2 + 1] = dec.max_val;
           decimated_count++;
-          
+
           /* Reset for next bucket */
           dec.min_val = INT16_MAX;
           dec.max_val = INT16_MIN;
 
           if (decimated_count >= 10) {
             decimated_chunk_header_t header = {
-                .start_time_ns = block_time,
+                .start_time_ns = decimated_chunk_start_ns,
                 .sample_rate = global_config.nominal_rate_hz,
                 .sample_count = decimated_count,
-                .channels = 1,  /* Only decimating ch0 */
-                .values_per_sample = 2};  /* Store min/max (2 values per sample) */
+                .channels = 1, /* Only decimating ch0 */
+                .values_per_sample =
+                    2}; /* Store min/max (2 values per sample) */
             writer_write_decimated(&disk_writer, &header, decimated_samples);
             decimated_count = 0;
           }
@@ -191,11 +259,11 @@ void *processor_thread_func(void *arg) {
   /* Flush any remaining decimated data */
   if (decimated_count > 0) {
     decimated_chunk_header_t header = {
-        .start_time_ns = last_block_time,
+        .start_time_ns = decimated_chunk_start_ns,
         .sample_rate = global_config.nominal_rate_hz,
         .sample_count = decimated_count,
-        .channels = 1,  /* Only decimating ch0 */
-        .values_per_sample = 2};  /* Store min/max (2 values per sample) */
+        .channels = 1,           /* Only decimating ch0 */
+        .values_per_sample = 2}; /* Store min/max (2 values per sample) */
     writer_write_decimated(&disk_writer, &header, decimated_samples);
     printf("[Processor] Flushed final %u decimated samples\n", decimated_count);
   }
@@ -223,19 +291,21 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  /* Set channel enable flags from config (PRU will use these to skip inactive channels) */
+  /* Set channel enable flags from config (PRU will use these to skip inactive
+   * channels) */
   if (shm_reader.header) {
     for (int i = 0; i < 8; i++) {
       shm_reader.header->ch_enable[i] = global_config.sensor.ch_enable[i];
     }
     shm_reader.header->sample_rate = global_config.nominal_rate_hz;
-    
+
     printf("[Main] Set PRU channel enables: ");
     for (int i = 0; i < 8; i++) {
       printf("%d ", global_config.sensor.ch_enable[i]);
     }
     printf("(%d active channels)\n", global_config.sensor.active_channels);
-    printf("[Main] Set PRU sample_rate to %u Hz\n", global_config.nominal_rate_hz);
+    printf("[Main] Set PRU sample_rate to %u Hz\n",
+           global_config.nominal_rate_hz);
   }
 
   // 3. Init Ring Buffer
@@ -258,9 +328,10 @@ int main(int argc, char **argv) {
 
   /* Set PRU timing info in scope buffer for webapp */
   if (live_scope_buffer.shm) {
-    live_scope_buffer.shm->pru_clock_hz = 200000000;  /* 200 MHz on BBB */
+    live_scope_buffer.shm->pru_clock_hz = 200000000; /* 200 MHz on BBB */
     if (shm_reader.header) {
-      live_scope_buffer.shm->sample_period_cycles = shm_reader.header->sample_period_cycles;
+      live_scope_buffer.shm->sample_period_cycles =
+          shm_reader.header->sample_period_cycles;
     }
   }
 

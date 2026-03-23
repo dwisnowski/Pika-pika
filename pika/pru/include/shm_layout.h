@@ -9,6 +9,8 @@
 
 #define SHM_MAGIC 0xDEADBEEF
 #define SHM_VERSION 1
+#define SHM_HEADER_OFFSET                                                      \
+  128 /* Bytes reserved for pru_shared_memory_t structure */
 
 typedef struct {
   uint64_t timestamp_cycles;
@@ -25,11 +27,15 @@ typedef struct {
   volatile uint32_t write_block_idx;
   volatile uint32_t error_flags;
   volatile uint32_t sample_count;
-  volatile uint32_t sample_rate;      /* ADC sampling rate in Hz (set by datalogger) */
-  volatile uint32_t pru_clock_hz;     /* PRU clock frequency in Hz (200MHz on BBB) */
+  volatile uint32_t
+      sample_rate; /* ADC sampling rate in Hz (set by datalogger) */
+  volatile uint32_t
+      pru_clock_hz;            /* PRU clock frequency in Hz (200MHz on BBB) */
+  volatile uint32_t heartbeat; /* Incremented every main loop iteration */
   /* Per-channel enable flags (1 = read, 0 = skip) */
-  volatile uint32_t ch_enable[8];     /* ch_enable[0] = CH0, ch_enable[1] = CH1, etc. */
-  uint32_t reserved[2];
+  volatile uint32_t
+      ch_enable[8]; /* ch_enable[0] = CH0, ch_enable[1] = CH1, etc. */
+  uint32_t reserved[1];
 } __attribute__((packed)) pru_shared_memory_t;
 
 #endif /* SHM_LAYOUT_H */

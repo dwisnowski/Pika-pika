@@ -141,4 +141,14 @@ volatile register uint32_t __R31;
 /** Default number of ring buffer blocks */
 #define DEFAULT_NUM_BLOCKS 4
 
+/* ============================================================================
+ * IEP Timer Registers (Requirement 2.6)
+ * ============================================================================
+ */
+
+#define IEP_BASE 0x2E000
+#define IEP_TMR_GLB_CFG (*(volatile uint32_t *)(IEP_BASE + 0x00))
+#define IEP_TMR_GLB_STS (*(volatile uint32_t *)(IEP_BASE + 0x04))
+#define IEP_TMR_CNT (*(volatile uint32_t *)(IEP_BASE + 0x0C))
+
 #endif /* PRU_CONFIG_H */
