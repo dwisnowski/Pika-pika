@@ -1,8 +1,100 @@
 #include "writer.h"
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
+
+/* Probe that we can create/write/fsync in the output directory. */
+static void writer_probe_io(const char *base_path) {
+  char probe_path[300];
+  snprintf(probe_path, sizeof(probe_path), "%s/write_probe.txt", base_path);
+
+  FILE *pf = fopen(probe_path, "w");
+  if (!pf) {
+    fprintf(stderr, "[Writer] PROBE FAIL: fopen(%s) failed: %s\n", probe_path,
+            strerror(errno));
+    return;
+  }
+
+  int w = fprintf(pf, "writer_probe_ok\n");
+  if (w < 0) {
+    fprintf(stderr, "[Writer] PROBE FAIL: fprintf(%s) failed: %s\n", probe_path,
+            strerror(errno));
+    fclose(pf);
+    return;
+  }
+
+  if (fflush(pf) != 0) {
+    fprintf(stderr, "[Writer] PROBE FAIL: fflush(%s) failed: %s\n", probe_path,
+            strerror(errno));
+    fclose(pf);
+    return;
+  }
+
+  if (fsync(fileno(pf)) != 0) {
+    fprintf(stderr, "[Writer] PROBE FAIL: fsync(%s) failed: %s\n", probe_path,
+            strerror(errno));
+    fclose(pf);
+    return;
+  }
+
+  long final_pos = ftell(pf);
+  fclose(pf);
+
+  printf("[Writer] PROBE OK: wrote %ld bytes to %s\n", final_pos, probe_path);
+}
+
+/* Optional startup self-test that appends one tiny valid decimated chunk.
+ * Enabled with PIKA_WRITER_SELFTEST_DECIMATED=1. */
+static void writer_selftest_decimated(writer_t *w) {
+  const char *enabled = getenv("PIKA_WRITER_SELFTEST_DECIMATED");
+  if (!enabled || strcmp(enabled, "1") != 0) {
+    return;
+  }
+
+  if (!w->decimated_file) {
+    fprintf(stderr,
+            "[Writer] SELFTEST skipped: decimated_file handle is not open\n");
+    return;
+  }
+
+  decimated_chunk_header_t header = {
+      .start_time_ns = 1,
+      .sample_rate = 10000,
+      .sample_count = 1,
+      .channels = 1,
+      .values_per_sample = 2,
+  };
+  int16_t payload[2] = {0, 0};
+
+  long before = ftell(w->decimated_file);
+  size_t header_written =
+      fwrite(&header, sizeof(decimated_chunk_header_t), 1, w->decimated_file);
+  size_t payload_written = fwrite(payload, sizeof(int16_t), 2, w->decimated_file);
+
+  if (header_written != 1 || payload_written != 2 || ferror(w->decimated_file)) {
+    fprintf(stderr,
+            "[Writer] SELFTEST FAIL: decimated.bin write failed "
+            "header_written=%zu payload_written=%zu errno=%d (%s)\n",
+            header_written, payload_written, errno, strerror(errno));
+    clearerr(w->decimated_file);
+    return;
+  }
+
+  if (fflush(w->decimated_file) != 0) {
+    fprintf(stderr,
+            "[Writer] SELFTEST FAIL: decimated.bin fflush failed errno=%d (%s)\n",
+            errno, strerror(errno));
+    return;
+  }
+
+  long after = ftell(w->decimated_file);
+  printf("[Writer] SELFTEST OK: appended debug decimated chunk to data/decimated.bin "
+         "(before=%ld after=%ld bytes)\n",
+         before, after);
+}
 
 /* Internal helper: rename current file to .old, then re-open fresh.
  * The existing .old is silently overwritten (keeps disk use bounded). */
@@ -70,6 +162,9 @@ int writer_init(writer_t *w, const char *base_path, uint32_t max_decimated_mb,
     return -1;
   }
 
+  writer_probe_io(base_path);
+  writer_selftest_decimated(w);
+
   printf("[Writer] Initialized: base='%s', max_decimated=%u MB, max_events=%u "
          "MB\n",
          base_path, max_decimated_mb, max_events_mb);
@@ -96,11 +191,42 @@ void writer_write_decimated(writer_t *w, decimated_chunk_header_t *header,
   if (!w->decimated_file)
     return;
 
-  fwrite(header, sizeof(decimated_chunk_header_t), 1, w->decimated_file);
-  /* Write all values: sample_count * channels * values_per_sample */
-  uint32_t total_values = header->sample_count * header->channels * header->values_per_sample;
-  fwrite(data, sizeof(int16_t), total_values, w->decimated_file);
-  fflush(w->decimated_file);
+  uint32_t total_values =
+      header->sample_count * header->channels * header->values_per_sample;
+
+  long before = ftell(w->decimated_file);
+  printf("[Writer] Decimated write attempt: start_time_ns=%llu sample_rate=%u "
+         "sample_count=%u channels=%u values_per_sample=%u total_values=%u "
+         "file_pos_before=%ld\n",
+         (unsigned long long)header->start_time_ns, header->sample_rate,
+         header->sample_count, header->channels, header->values_per_sample,
+         total_values, before);
+
+  size_t header_written =
+      fwrite(header, sizeof(decimated_chunk_header_t), 1, w->decimated_file);
+  size_t values_written =
+      fwrite(data, sizeof(int16_t), total_values, w->decimated_file);
+
+  if (header_written != 1 || values_written != total_values ||
+      ferror(w->decimated_file)) {
+    fprintf(stderr,
+            "[Writer] Decimated write FAIL: header_written=%zu values_written=%zu/%u "
+            "errno=%d (%s)\n",
+            header_written, values_written, total_values, errno,
+            strerror(errno));
+    clearerr(w->decimated_file);
+    return;
+  }
+
+  if (fflush(w->decimated_file) != 0) {
+    fprintf(stderr, "[Writer] Decimated fflush FAIL: errno=%d (%s)\n", errno,
+            strerror(errno));
+    return;
+  }
+
+  long after = ftell(w->decimated_file);
+  printf("[Writer] Decimated write OK: file_pos_after=%ld bytes_written=%ld\n",
+         after, (after >= before && before >= 0) ? (after - before) : -1L);
 
   /* Check rotation after write */
   char path[300];

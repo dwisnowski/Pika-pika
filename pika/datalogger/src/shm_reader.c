@@ -140,6 +140,7 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   static uint32_t poll_count = 0;
   static uint32_t unstable_idx_count = 0;
   static uint32_t invalid_idx_count = 0;
+  static uint32_t rejected_desc_count = 0;
   poll_count++;
 
   // Safety: Don't trust the header until PRU has written the magic number
@@ -277,12 +278,35 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
 
   volatile block_descriptor_t *desc = (volatile block_descriptor_t *)b_base;
 
+  if (poll_count % 5000 == 0) {
+    printf("[SHM Reader] Candidate desc: ready_idx=%u flags=0x%08X "
+           "num_samples=%u timestamp_cycles=%llu\n",
+           ready_idx, (uint32_t)desc->flags, (uint32_t)desc->num_samples,
+           (unsigned long long)desc->timestamp_cycles);
+  }
+
   // Final safety: only consume finalized descriptors with plausible sample
   // count.
   if (desc->flags != 0xAA55AA55) {
+    rejected_desc_count++;
+    if (rejected_desc_count % 1000 == 0) {
+      printf("[SHM Reader] Reject desc: ready_idx=%u bad flags=0x%08X "
+             "num_samples=%u timestamp_cycles=%llu (count=%u)\n",
+             ready_idx, (uint32_t)desc->flags, (uint32_t)desc->num_samples,
+             (unsigned long long)desc->timestamp_cycles,
+             rejected_desc_count);
+    }
     return NULL;
   }
   if (desc->num_samples == 0 || desc->num_samples > block_size) {
+    rejected_desc_count++;
+    if (rejected_desc_count % 1000 == 0) {
+      printf("[SHM Reader] Reject desc: ready_idx=%u invalid num_samples=%u "
+             "flags=0x%08X timestamp_cycles=%llu (count=%u)\n",
+             ready_idx, (uint32_t)desc->num_samples, (uint32_t)desc->flags,
+             (unsigned long long)desc->timestamp_cycles,
+             rejected_desc_count);
+    }
     return NULL;
   }
 

@@ -246,6 +246,11 @@ void *processor_thread_func(void *arg) {
                 .channels = 1, /* Only decimating ch0 */
                 .values_per_sample =
                     2}; /* Store min/max (2 values per sample) */
+
+            printf("[Processor] Decimated chunk ready: start_time_ns=%llu "
+                   "sample_count=%u (will call writer_write_decimated)\n",
+                   (unsigned long long)header.start_time_ns,
+                   header.sample_count);
             writer_write_decimated(&disk_writer, &header, decimated_samples);
             decimated_count = 0;
           }
@@ -264,6 +269,11 @@ void *processor_thread_func(void *arg) {
         .sample_count = decimated_count,
         .channels = 1,           /* Only decimating ch0 */
         .values_per_sample = 2}; /* Store min/max (2 values per sample) */
+
+    printf("[Processor] Final decimated flush: start_time_ns=%llu "
+           "sample_count=%u\n",
+           (unsigned long long)header.start_time_ns,
+           header.sample_count);
     writer_write_decimated(&disk_writer, &header, decimated_samples);
     printf("[Processor] Flushed final %u decimated samples\n", decimated_count);
   }
