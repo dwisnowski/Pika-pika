@@ -13,7 +13,7 @@ Before changing PRU or SHM code, read [docs/pru-development.md](docs/pru-develop
 - **Trust headers over docs.** Canonical contract is [`pika/pru/include/shm_layout.h`](pika/pru/include/shm_layout.h).
 - **Shared RAM (12 KB @ `0x4A310000`) is control-only.** Sample rings live in DDR.
 - **Host owns DDR PA.** Always publish verified `PIKA_DDR_RING_PHYS` (`0x9C000000`) after `mem=448M` check. PRU must wait for `ddr_phys_addr != 0` (`0xDEAD00DD`). Never let the PRU pick a carveout address on its own.
-- **DDR pointers must be `far`.** Build with `--mem_model:data=far`. Near/default pointers truncate high DDR addresses and hang the PRU on the first store.
+- **DDR pointers must be `far`.** Build with `--mem_model:data=far`. Use typedefs like `typedef volatile uint32_t * far ddr32_t` (far after `*`). Do not put `far` as a storage-class prefix on locals — clpru error #81. Near pointers truncate high DDR addresses and hang the PRU on the first store.
 - **Keep `mem=448M`.** Required for the fixed PA path. Do not remove it.
 - **PRU wipes SHM on boot.** Re-apply config after `magic == 0xDEADBEEF`.
 - **Reload firmware after PRU edits** (`make pru` / `make run-pru-datalogger`).

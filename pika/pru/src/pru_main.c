@@ -13,13 +13,13 @@
 #define PRU_CCNT_REG (*(volatile uint32_t *)(0x2200C))
 
 /*
- * DDR lives outside the PRU near (16-bit) address space. Without far, clpru
- * generates truncated addresses and OCP accesses hang. Requires
- * --mem_model:data=far in the Makefile.
+ * DDR is outside the PRU near address space. clpru requires far *pointer*
+ * types (far after '*'). Locals cannot use `far` as a storage-class prefix.
+ * Build with --mem_model:data=far.
  */
-#define DDR_U8(addr) ((volatile far uint8_t *)(uint32_t)(addr))
-#define DDR_U16(addr) ((volatile far uint16_t *)(uint32_t)(addr))
-#define DDR_U32(addr) ((volatile far uint32_t *)(uint32_t)(addr))
+typedef volatile uint8_t * far ddr8_t;
+typedef volatile uint16_t * far ddr16_t;
+typedef volatile uint32_t * far ddr32_t;
 
 extern void delay_cycles_runtime(uint32_t iterations);
 
@@ -82,7 +82,7 @@ void main(void) {
   uint32_t block_size = shm->block_size;
   uint32_t num_blocks = shm->num_blocks;
   uint32_t block_total_size = BLOCK_TOTAL_SIZE(block_size);
-  volatile far uint8_t *ddr_base = DDR_U8(ddr_phys);
+  ddr8_t ddr_base = (ddr8_t)ddr_phys;
 
   if ((uint32_t)num_blocks * block_total_size > ddr_size) {
     num_blocks = ddr_size / block_total_size;
@@ -91,19 +91,19 @@ void main(void) {
     shm->num_blocks = num_blocks;
   }
 
-  /* Probe DDR with a far store; hang here means addressing is still wrong */
+  /* Probe DDR; hang here means far addressing is still wrong */
   {
-    volatile far uint32_t *probe = DDR_U32(ddr_phys);
+    ddr32_t probe = (ddr32_t)ddr_phys;
     probe[0] = 0xA5A55A5Au;
-    shm->heartbeat++; /* prove we survived the probe store */
+    shm->heartbeat++;
   }
 
   {
-    volatile far uint32_t *p = DDR_U32(ddr_phys);
+    ddr32_t p = (ddr32_t)ddr_phys;
     for (i = 0; i < (int)(block_total_size / 4); i++)
       p[i] = 0;
   }
-  shm->heartbeat++; /* survived block clear */
+  shm->heartbeat++;
 
   uint32_t current_blk = 0;
   uint32_t smp_in_blk = 0;
@@ -139,10 +139,9 @@ void main(void) {
 
     ccnt_accum(&last_cycles, &total_cycles);
 
-    volatile far uint8_t *b_base = ddr_base + (current_blk * block_total_size);
-    volatile far uint32_t *desc_words = (volatile far uint32_t *)b_base;
-    volatile far uint16_t *b_data =
-        (volatile far uint16_t *)(b_base + BLOCK_DESCRIPTOR_SIZE);
+    ddr8_t b_base = ddr_base + (current_blk * block_total_size);
+    ddr32_t desc_words = (ddr32_t)(uint32_t)b_base;
+    ddr16_t b_data = (ddr16_t)(uint32_t)(b_base + BLOCK_DESCRIPTOR_SIZE);
 
     /*
      * Descriptor layout (little-endian, packed 24 B):
@@ -155,9 +154,9 @@ void main(void) {
     if (smp_in_blk == 0) {
       desc_words[0] = (uint32_t)(total_cycles & 0xFFFFFFFFu);
       desc_words[1] = (uint32_t)(total_cycles >> 32);
-      desc_words[2] = 0; /* num_samples */
-      desc_words[3] = 0; /* flags */
-      desc_words[4] = 0; /* period */
+      desc_words[2] = 0;
+      desc_words[3] = 0;
+      desc_words[4] = 0;
       desc_words[5] = 0;
       block_start_cycles = total_cycles;
     }
@@ -211,11 +210,12 @@ void main(void) {
     if (smp_in_blk >= block_size) {
       uint32_t period = period_target;
       if (block_size > 1) {
-        period = (uint32_t)((total_cycles - block_start_cycles) / (block_size - 1));
+        period =
+            (uint32_t)((total_cycles - block_start_cycles) / (block_size - 1));
       }
       desc_words[4] = period;
       desc_words[2] = smp_in_blk;
-      desc_words[3] = BLOCK_FLAG_COMPLETE; /* flags last */
+      desc_words[3] = BLOCK_FLAG_COMPLETE;
       current_blk = (current_blk + 1) % num_blocks;
       shm->write_block_idx = current_blk;
       smp_in_blk = 0;

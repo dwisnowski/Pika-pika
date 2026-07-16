@@ -57,7 +57,7 @@ DDR addresses (`0x80000000+`) are outside the PRU **near** data model. Using ord
 Required:
 
 - Compile with `--mem_model:data=far` (see `pika/pru/Makefile`)
-- Use `volatile far` pointers for all DDR accesses, e.g. `(volatile far uint32_t *)pa`
+- Use `far` **pointer** typedefs (`typedef volatile uint32_t * far ddr32_t`), not `far` as a local storage-class prefix (clpru error #81)
 - Clear `STANDBY_INIT` before touching DDR
 - Host publishes PA; PRU waits — do not invent carveout addresses in the PRU
 
