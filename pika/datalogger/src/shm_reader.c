@@ -159,14 +159,11 @@ static int cmdline_has_mem_448m(void) {
 }
 
 int shm_reader_publish_carveout_pa(shm_reader_t *reader) {
+  static int published_ok = 0;
   if (!reader || reader->mem_fd < 0 || !reader->header)
     return -1;
 
-  /*
-   * Host owns the DDR PA. Always use the mem=448M reserved region so PRU and
-   * ARM never disagree (do not trust carveout addresses from the PRU).
-   */
-  if (reader->header->ddr_phys_addr == PIKA_DDR_RING_PHYS &&
+  if (published_ok && reader->header->ddr_phys_addr == PIKA_DDR_RING_PHYS &&
       reader->header->error_flags != 0xDEAD00DD) {
     return 0;
   }
@@ -182,12 +179,6 @@ int shm_reader_publish_carveout_pa(shm_reader_t *reader) {
   uint32_t phys = PIKA_DDR_RING_PHYS;
   uint32_t len = PIKA_DDR_RING_SIZE;
 
-  if (reader->header->ddr_phys_addr != 0 &&
-      reader->header->ddr_phys_addr != phys) {
-    printf("[SHM Reader] Replacing PRU DDR PA 0x%08X with host PA 0x%08X\n",
-           (uint32_t)reader->header->ddr_phys_addr, phys);
-  }
-
   void *p =
       mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_SHARED, reader->mem_fd, phys);
   if (p == MAP_FAILED) {
@@ -198,7 +189,7 @@ int shm_reader_publish_carveout_pa(shm_reader_t *reader) {
   const uint32_t probe = 0xA5A55A5Au;
   w[0] = probe;
   uint32_t got = w[0];
-  w[0] = 0;
+  /* leave probe pattern so we can confirm PRU overwrites it after start */
   munmap(p, len);
   if (got != probe) {
     fprintf(stderr,
@@ -213,15 +204,17 @@ int shm_reader_publish_carveout_pa(shm_reader_t *reader) {
   if (reader->header->error_flags == 0xDEAD00DD)
     reader->header->error_flags = 0;
 
-  /* Force remap on next map_ddr if we had mapped a different PA */
   if (reader->ddr_mmap_base != MAP_FAILED && reader->ddr_mmap_base != NULL &&
       reader->ddr_phys_addr != phys) {
     munmap(reader->ddr_mmap_base, reader->ddr_size_bytes);
     reader->ddr_mmap_base = MAP_FAILED;
   }
 
-  printf("[SHM Reader] Published DDR PA 0x%08X (%u bytes) [mem=448M]\n", phys,
-         len);
+  if (!published_ok) {
+    printf("[SHM Reader] Published DDR PA 0x%08X (%u bytes) [mem=448M]\n", phys,
+           len);
+  }
+  published_ok = 1;
   return 0;
 }
 
@@ -270,27 +263,22 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   }
 
   if (reader->header->error_flags == 0xDEAD00DD ||
-      reader->header->ddr_phys_addr == 0 ||
-      reader->header->ddr_phys_addr != PIKA_DDR_RING_PHYS) {
-    /* Publish at most once per ~100ms of polls to avoid log spam */
-    if (poll_count == 1 || (poll_count % 1000) == 0 ||
-        reader->header->ddr_phys_addr != PIKA_DDR_RING_PHYS) {
-      if (shm_reader_publish_carveout_pa(reader) != 0) {
-        if (poll_count % 1000 == 0) {
-          printf("[SHM Reader] Waiting to publish DDR PA (err=0x%08X "
-                 "ddr=0x%08X)\n",
-                 (uint32_t)reader->header->error_flags,
-                 (uint32_t)reader->header->ddr_phys_addr);
-        }
-        return NULL;
+      reader->header->ddr_phys_addr == 0) {
+    if (shm_reader_publish_carveout_pa(reader) != 0) {
+      if (poll_count % 1000 == 0) {
+        printf("[SHM Reader] Waiting to publish DDR PA (err=0x%08X "
+               "ddr=0x%08X)\n",
+               (uint32_t)reader->header->error_flags,
+               (uint32_t)reader->header->ddr_phys_addr);
       }
+      return NULL;
     }
   }
 
-  /* Remap if header PA differs from current mapping */
   if (reader->ddr_mmap_base != NULL &&
       reader->ddr_mmap_base != MAP_FAILED &&
-      reader->ddr_phys_addr != reader->header->ddr_phys_addr) {
+      reader->ddr_phys_addr != reader->header->ddr_phys_addr &&
+      reader->header->ddr_phys_addr != 0) {
     munmap(reader->ddr_mmap_base, reader->ddr_size_bytes);
     reader->ddr_mmap_base = MAP_FAILED;
   }

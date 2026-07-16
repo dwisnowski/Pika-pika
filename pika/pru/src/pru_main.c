@@ -12,6 +12,15 @@
 #define PRU_CTRL_REG (*(volatile uint32_t *)(0x22000))
 #define PRU_CCNT_REG (*(volatile uint32_t *)(0x2200C))
 
+/*
+ * DDR lives outside the PRU near (16-bit) address space. Without far, clpru
+ * generates truncated addresses and OCP accesses hang. Requires
+ * --mem_model:data=far in the Makefile.
+ */
+#define DDR_U8(addr) ((volatile far uint8_t *)(uint32_t)(addr))
+#define DDR_U16(addr) ((volatile far uint16_t *)(uint32_t)(addr))
+#define DDR_U32(addr) ((volatile far uint32_t *)(uint32_t)(addr))
+
 extern void delay_cycles_runtime(uint32_t iterations);
 
 static inline uint32_t ccnt_read(void) { return PRU_CCNT_REG; }
@@ -23,6 +32,7 @@ static inline void ccnt_accum(uint32_t *last_cycles, uint64_t *total_cycles) {
 }
 
 void main(void) {
+  /* Enable OCP master port — required before any DDR access */
   CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
   PRU_CTRL_REG |= (1 << 3);
 
@@ -50,14 +60,13 @@ void main(void) {
   shm->ddr_phys_addr = 0; /* host must publish */
   shm->ddr_size_bytes = PIKA_DDR_RING_SIZE;
   shm->block_desc_size = BLOCK_DESCRIPTOR_SIZE;
-  shm->error_flags = 0xDEAD00DDu; /* waiting for host DDR PA */
+  shm->error_flags = 0xDEAD00DDu;
   shm->ch_enable[0] = 1;
   for (i = 1; i < 8; i++)
     shm->ch_enable[i] = 0;
 
   shm->magic = SHM_MAGIC;
 
-  /* Host verifies R/W then writes ddr_phys_addr (typically 0x9C000000 + mem=448M) */
   while (shm->ddr_phys_addr == 0) {
     shm->heartbeat++;
     __delay_cycles(20000000);
@@ -73,7 +82,7 @@ void main(void) {
   uint32_t block_size = shm->block_size;
   uint32_t num_blocks = shm->num_blocks;
   uint32_t block_total_size = BLOCK_TOTAL_SIZE(block_size);
-  volatile uint8_t *ddr_base = (volatile uint8_t *)(uint32_t)ddr_phys;
+  volatile far uint8_t *ddr_base = DDR_U8(ddr_phys);
 
   if ((uint32_t)num_blocks * block_total_size > ddr_size) {
     num_blocks = ddr_size / block_total_size;
@@ -82,17 +91,19 @@ void main(void) {
     shm->num_blocks = num_blocks;
   }
 
-  /* Probe: confirm PRU can store to the published PA before sampling */
+  /* Probe DDR with a far store; hang here means addressing is still wrong */
   {
-    volatile uint32_t *probe = (volatile uint32_t *)ddr_base;
+    volatile far uint32_t *probe = DDR_U32(ddr_phys);
     probe[0] = 0xA5A55A5Au;
+    shm->heartbeat++; /* prove we survived the probe store */
   }
 
   {
-    volatile uint32_t *p = (volatile uint32_t *)ddr_base;
+    volatile far uint32_t *p = DDR_U32(ddr_phys);
     for (i = 0; i < (int)(block_total_size / 4); i++)
       p[i] = 0;
   }
+  shm->heartbeat++; /* survived block clear */
 
   uint32_t current_blk = 0;
   uint32_t smp_in_blk = 0;
@@ -128,16 +139,26 @@ void main(void) {
 
     ccnt_accum(&last_cycles, &total_cycles);
 
-    volatile uint8_t *b_base = ddr_base + (current_blk * block_total_size);
-    volatile block_descriptor_t *desc = (volatile block_descriptor_t *)b_base;
-    volatile uint16_t *b_data =
-        (volatile uint16_t *)(b_base + BLOCK_DESCRIPTOR_SIZE);
+    volatile far uint8_t *b_base = ddr_base + (current_blk * block_total_size);
+    volatile far uint32_t *desc_words = (volatile far uint32_t *)b_base;
+    volatile far uint16_t *b_data =
+        (volatile far uint16_t *)(b_base + BLOCK_DESCRIPTOR_SIZE);
 
+    /*
+     * Descriptor layout (little-endian, packed 24 B):
+     *   [0..1] timestamp_cycles u64
+     *   [2]    num_samples
+     *   [3]    flags
+     *   [4]    period_cycles
+     *   [5]    reserved
+     */
     if (smp_in_blk == 0) {
-      desc->timestamp_cycles = total_cycles;
-      desc->flags = 0;
-      desc->num_samples = 0;
-      desc->period_cycles = 0;
+      desc_words[0] = (uint32_t)(total_cycles & 0xFFFFFFFFu);
+      desc_words[1] = (uint32_t)(total_cycles >> 32);
+      desc_words[2] = 0; /* num_samples */
+      desc_words[3] = 0; /* flags */
+      desc_words[4] = 0; /* period */
+      desc_words[5] = 0;
       block_start_cycles = total_cycles;
     }
 
@@ -188,19 +209,16 @@ void main(void) {
     smp_in_blk++;
 
     if (smp_in_blk >= block_size) {
+      uint32_t period = period_target;
       if (block_size > 1) {
-        desc->period_cycles =
-            (uint32_t)((total_cycles - block_start_cycles) / (block_size - 1));
-      } else {
-        desc->period_cycles = period_target;
+        period = (uint32_t)((total_cycles - block_start_cycles) / (block_size - 1));
       }
-      desc->num_samples = smp_in_blk;
-      /* flags last — host must not see a partial descriptor as complete */
-      desc->flags = BLOCK_FLAG_COMPLETE;
+      desc_words[4] = period;
+      desc_words[2] = smp_in_blk;
+      desc_words[3] = BLOCK_FLAG_COMPLETE; /* flags last */
       current_blk = (current_blk + 1) % num_blocks;
       shm->write_block_idx = current_blk;
       smp_in_blk = 0;
-      /* bump sample_count only after the block is visible as complete */
       shm->sample_count += block_size;
     }
   }

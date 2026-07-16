@@ -40,10 +40,12 @@ COMMON_FLAGS := -v3 \
                 --define=PRU0
 
 # PRU Compiler Flags for CGT 2.3.3
+# --mem_model:data=far is required for absolute DDR pointers (0x8xxxxxxx+)
 PRU_CFLAGS := $(COMMON_FLAGS) \
               -O2 \
               --hardware_mac=on \
               --display_error_number \
+              --mem_model:data=far \
               $(INCLUDE)
 
 # Linker flags

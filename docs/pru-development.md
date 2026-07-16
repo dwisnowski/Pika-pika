@@ -43,16 +43,25 @@ AD7606 ──(CONVST/BUSY/RD + parallel DB)──► PRU0
 
 Put **only** `pru_shared_memory_t` here (first 128 bytes reserved). It is too small for a deep high-rate ring.
 
-### DDR sample ring (required for ≥ tens of ms buffering)
-
-**Current reliable approach on this project:**
+### DDR sample ring + host-owned PA
 
 1. Boot with `mem=448M` so Linux does not use the top of 512 MiB DRAM.
 2. Fixed ring PA: `PIKA_DDR_RING_PHYS = 0x9C000000`, size 1 MiB.
-3. **Host always publishes that PA** (verify R/W first). Do not trust carveout addresses the PRU might invent (`0x98A…`).
-4. **PRU always waits** for `ddr_phys_addr != 0` (`error_flags = 0xDEAD00DD` meanwhile), then probes/writes that PA only.
+3. Host verifies R/W, publishes that PA into SHM; PRU waits (`0xDEAD00DD`) then uses only that PA.
+4. Do **not** remove `mem=448M` while this path is in use.
 
-Do **not** remove `mem=448M` while this path is in use. Carveout resource-table entries are intentionally unused.
+### Accessing DDR from PRU C (critical)
+
+DDR addresses (`0x80000000+`) are outside the PRU **near** data model. Using ordinary pointers truncates the address and the OCP transaction **hangs**.
+
+Required:
+
+- Compile with `--mem_model:data=far` (see `pika/pru/Makefile`)
+- Use `volatile far` pointers for all DDR accesses, e.g. `(volatile far uint32_t *)pa`
+- Clear `STANDBY_INIT` before touching DDR
+- Host publishes PA; PRU waits — do not invent carveout addresses in the PRU
+
+Symptom of missing `far`: host maps DDR fine, `error_flags` clears, `sample_count` stays 0, heartbeat freezes right after the wait loop.
 
 ### Remoteproc carveout (optional / fragile on 4.19-ti)
 
