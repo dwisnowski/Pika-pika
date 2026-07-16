@@ -8,8 +8,6 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#define REMOTEPROC_BASE "/sys/class/remoteproc"
-
 static char discovered_remoteproc_path[256] = "";
 
 static const char *discover_pru0_info(uint32_t *out_shm_phys) {
@@ -68,12 +66,11 @@ int shm_reader_init(shm_reader_t *reader) {
   memset(reader, 0, sizeof(*reader));
   reader->mem_fd = -1;
   reader->ddr_mmap_base = MAP_FAILED;
+  reader->mmap_base = MAP_FAILED;
 
   uint32_t shm_phys = 0;
   discover_pru0_info(&shm_phys);
   reader->pru_shm_phys_addr = shm_phys;
-  reader->ddr_phys_addr = PIKA_DDR_RING_PHYS;
-  reader->ddr_size_bytes = PIKA_DDR_RING_SIZE;
 
   reader->mem_fd = open("/dev/mem", O_RDWR | O_SYNC);
   if (reader->mem_fd < 0) {
@@ -91,24 +88,10 @@ int shm_reader_init(shm_reader_t *reader) {
     return -1;
   }
 
-  reader->ddr_mmap_base =
-      mmap(NULL, reader->ddr_size_bytes, PROT_READ | PROT_WRITE, MAP_SHARED,
-           reader->mem_fd, reader->ddr_phys_addr);
-  if (reader->ddr_mmap_base == MAP_FAILED) {
-    perror("mmap DDR sample ring");
-    munmap(reader->mmap_base, PRU_SHM_SIZE);
-    reader->mmap_base = NULL;
-    close(reader->mem_fd);
-    reader->mem_fd = -1;
-    return -1;
-  }
-
   reader->header = (volatile pru_shared_memory_t *)reader->mmap_base;
 
-  printf("[SHM Reader] Mapped Shared RAM @ phys 0x%08X, DDR ring @ phys "
-         "0x%08X (%u bytes)\n",
-         reader->pru_shm_phys_addr, reader->ddr_phys_addr,
-         reader->ddr_size_bytes);
+  printf("[SHM Reader] Mapped Shared RAM @ phys 0x%08X\n",
+         reader->pru_shm_phys_addr);
 
   if (reader->header->magic != SHM_MAGIC) {
     printf("[SHM Reader] Header uninitialized (magic=0x%08X), preparing clean "
@@ -122,6 +105,43 @@ int shm_reader_init(shm_reader_t *reader) {
   reader->last_read_block_idx = UINT32_MAX;
   reader->last_completed_blocks = UINT32_MAX;
 
+  return 0;
+}
+
+int shm_reader_map_ddr(shm_reader_t *reader) {
+  if (!reader->header)
+    return -1;
+
+  uint32_t phys = reader->header->ddr_phys_addr;
+  uint32_t size = reader->header->ddr_size_bytes;
+  if (phys == 0 || size == 0) {
+    fprintf(stderr,
+            "[SHM Reader] DDR ring not published yet (phys=0x%08X size=%u)\n",
+            phys, size);
+    return -1;
+  }
+
+  if (reader->ddr_mmap_base != MAP_FAILED && reader->ddr_mmap_base != NULL &&
+      reader->ddr_phys_addr == phys && reader->ddr_size_bytes == size) {
+    return 0; /* already mapped */
+  }
+
+  if (reader->ddr_mmap_base != MAP_FAILED && reader->ddr_mmap_base != NULL) {
+    munmap(reader->ddr_mmap_base, reader->ddr_size_bytes);
+    reader->ddr_mmap_base = MAP_FAILED;
+  }
+
+  reader->ddr_phys_addr = phys;
+  reader->ddr_size_bytes = size;
+  reader->ddr_mmap_base =
+      mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, reader->mem_fd, phys);
+  if (reader->ddr_mmap_base == MAP_FAILED) {
+    perror("mmap DDR sample ring");
+    return -1;
+  }
+
+  printf("[SHM Reader] Mapped DDR sample ring @ phys 0x%08X (%u bytes)\n",
+         phys, size);
   return 0;
 }
 
@@ -169,14 +189,20 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
     return NULL;
   }
 
-  /* Prefer geometry published by PRU once alive */
-  if (reader->header->ddr_phys_addr != 0 &&
-      reader->header->ddr_phys_addr != reader->ddr_phys_addr) {
-    /* Address changed after init — not remapped here; log once */
-    if (poll_count == 1 || poll_count % 5000 == 0) {
-      printf("[SHM Reader] Warning: PRU ddr_phys_addr=0x%08X differs from "
-             "mapped 0x%08X\n",
-             (uint32_t)reader->header->ddr_phys_addr, reader->ddr_phys_addr);
+  if (reader->header->error_flags == 0xDEAD00DD) {
+    if (poll_count % 1000 == 0) {
+      printf("[SHM Reader] PRU reports DDR carveout missing "
+             "(error_flags=0xDEAD00DD)\n");
+    }
+    return NULL;
+  }
+
+  if (reader->ddr_mmap_base == NULL || reader->ddr_mmap_base == MAP_FAILED) {
+    if (shm_reader_map_ddr(reader) != 0) {
+      if (poll_count % 1000 == 0) {
+        printf("[SHM Reader] Waiting to map DDR ring...\n");
+      }
+      return NULL;
     }
   }
 
@@ -230,11 +256,11 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   if (poll_count % 5000 == 0) {
     printf("[SHM Reader] Tick: write_idx(raw=%u, derived=%u), "
            "last_idx=%u, num_blocks=%u, block_size=%u, sample_count=%u, "
-           "completed_blocks=%u, heartbeat=%u, err=0x%08X\n",
+           "completed_blocks=%u, heartbeat=%u, err=0x%08X, ddr=0x%08X\n",
            raw_write_idx, derived_write_idx, reader->last_read_block_idx,
            num_blocks, block_size, sample_count, completed_blocks,
            (uint32_t)reader->header->heartbeat,
-           (uint32_t)reader->header->error_flags);
+           (uint32_t)reader->header->error_flags, reader->ddr_phys_addr);
   }
 
   if (reader->last_completed_blocks == UINT32_MAX) {
@@ -262,7 +288,6 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
     return NULL;
   }
 
-  /* If we fell far behind, skip to newest-num_blocks+1 to avoid stale wrap */
   uint32_t pending = completed_blocks - reader->last_completed_blocks;
   if (pending > num_blocks) {
     printf("[SHM Reader] Overrun: pending=%u blocks (ring=%u) — skipping to "

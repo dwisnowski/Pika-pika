@@ -11,8 +11,8 @@
 
 typedef struct {
   int mem_fd;
-  void *mmap_base;       /* PRU Shared RAM (header) */
-  void *ddr_mmap_base;   /* DDR sample ring */
+  void *mmap_base;     /* PRU Shared RAM (header) */
+  void *ddr_mmap_base; /* DDR sample ring (mapped after PRU publishes PA) */
   uint32_t pru_shm_phys_addr;
   uint32_t ddr_phys_addr;
   uint32_t ddr_size_bytes;
@@ -22,10 +22,17 @@ typedef struct {
 } shm_reader_t;
 
 /**
- * Initializes the SHM reader by mapping /dev/mem (Shared RAM + DDR ring).
- * Returns 0 on success.
+ * Initializes the SHM reader by mapping Shared RAM control header.
+ * DDR ring is mapped later via shm_reader_map_ddr() once PRU publishes PA.
  */
 int shm_reader_init(shm_reader_t *reader);
+
+/**
+ * Map the DDR sample ring using phys/size from the PRU header (or overrides).
+ * Safe to call more than once; remaps if the address changes.
+ * Returns 0 on success.
+ */
+int shm_reader_map_ddr(shm_reader_t *reader);
 
 /**
  * Cleans up SHM reader (unmaps memory).
@@ -33,9 +40,7 @@ int shm_reader_init(shm_reader_t *reader);
 void shm_reader_cleanup(shm_reader_t *reader);
 
 /**
- * Polls for a new completed block.
- * If available, returns pointer to the block descriptor in the DDR mapping
- * and sets *data_ptr to the sample payload. Marks the block as consumed.
+ * Polls for a new completed block in the DDR ring.
  */
 volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
                                              uint8_t **data_ptr);

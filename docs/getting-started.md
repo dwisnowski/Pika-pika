@@ -149,16 +149,15 @@ sudo nano /boot/uEnv.txt
 # Uncomment or add:
 uboot_overlay_pru=/lib/firmware/AM335X-PRU-RPROC-4-19-TI-00A0.dtbo
 
-# Reserve top of DDR for the PRU sample ring (1 MiB @ 0x9C000000).
-# On 512 MiB BBB, mem=448M leaves 0x9C000000–0x9FFFFFFF unused by Linux.
-# Merge with your existing cmdline= line if you already have one:
-cmdline=coherent_pool=1M net.ifnames=0 quiet mem=448M
+# Reserve top of DDR only if you use a fixed-PA experiment; the production
+# path uses a remoteproc carveout and does not need mem=448M.
+# cmdline=coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 quiet
 
 # Save and reboot
 sudo reboot
 ```
 
-See [memory-map.md](memory-map.md) for Shared RAM vs DDR layout and timestamp contract.
+See [memory-map.md](memory-map.md) for Shared RAM vs DDR carveout layout and timestamp contract.
 
 ## Step 5: Clone and Build Pika
 

@@ -22,17 +22,15 @@ Layout version: **`SHM_VERSION = 2`** (see [`pika/pru/include/shm_layout.h`](../
 | Region | PRU view | ARM physical | Size | Role |
 |--------|----------|--------------|------|------|
 | Shared RAM | `0x00010000` | `0x4A310000` | 12 KB | Control header only |
-| DDR carve-out | same as physical | `0x9C000000` | 1 MiB | Sample ring |
+| DDR carveout | phys from remoteproc | same as phys | 1 MiB | Sample ring (`pika_sample_ring`) |
 
-### DDR carve-out requirement
+### DDR sample ring (remoteproc carveout)
 
-The sample ring at **`PIKA_DDR_RING_PHYS = 0x9C000000`** (1 MiB) must not be used by Linux. On a 512 MiB BeagleBone Black, reserve the top of DDR with boot cmdline, e.g. in `/boot/uEnv.txt`:
+The sample ring is **not** a fixed physical address. The PRU firmware requests 1 MiB via a `TYPE_CARVEOUT` entry in its resource table (`pika_sample_ring`). Linux remoteproc allocates contiguous CMA/DDR, patches `da`/`pa` into the resource table, and the PRU publishes that address in `pru_shared_memory_t.ddr_phys_addr`.
 
-```text
-cmdline=coherent_pool=1M net.ifnames=0 quiet mem=448M
-```
+The datalogger reads `ddr_phys_addr` after `magic` appears and `mmap`s `/dev/mem` at that PA.
 
-(`448 MiB` → DDR usable `0x80000000`–`0x9BFFFFFF`; ring starts at `0x9C000000`.)
+`mem=448M` in `uEnv.txt` is **not required** for this path (it was for an earlier fixed-PA approach). Keeping it is harmless.
 
 ## Control Header (`pru_shared_memory_t`)
 
@@ -128,8 +126,8 @@ Progress: consumer uses `sample_count / block_size` (not `write_block_idx` alone
 ```c
 /* Shared RAM header */
 mmap(..., 0x3000, ..., fd, 0x4A310000);
-/* DDR sample ring */
-mmap(..., 0x100000, ..., fd, 0x9C000000);
+/* DDR sample ring — physical address from header after PRU start */
+mmap(..., header->ddr_size_bytes, ..., fd, header->ddr_phys_addr);
 ```
 
 See [`pika/datalogger/src/shm_reader.c`](../pika/datalogger/src/shm_reader.c).

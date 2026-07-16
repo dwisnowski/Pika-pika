@@ -344,11 +344,6 @@ int main(int argc, char **argv) {
       shm_reader.header->sample_period_cycles = 0;
     }
 
-    /* Publish DDR geometry before PRU start (PRU will overwrite with same constants) */
-    shm_reader.header->ddr_phys_addr = PIKA_DDR_RING_PHYS;
-    shm_reader.header->ddr_size_bytes = PIKA_DDR_RING_SIZE;
-    shm_reader.header->block_desc_size = BLOCK_DESCRIPTOR_SIZE;
-
     printf("[Main] Set PRU channel enables: ");
     for (int i = 0; i < 8; i++) {
       printf("%d ", global_config.sensor.ch_enable[i]);
@@ -361,8 +356,6 @@ int main(int argc, char **argv) {
     } else {
       printf("[Main] Free-run / max-rate mode (sample_rate=0)\n");
     }
-    printf("[Main] DDR sample ring phys=0x%08X size=%u\n", PIKA_DDR_RING_PHYS,
-           PIKA_DDR_RING_SIZE);
   }
 
   size_t element_size =
@@ -392,13 +385,25 @@ int main(int argc, char **argv) {
   printf("Starting PRU firmware...\n");
   shm_pru_set_state("start");
 
-  /* PRU wipes the Shared RAM header on boot — re-apply host config once alive */
+  /* PRU wipes the Shared RAM header on boot — wait for magic, map DDR carveout,
+   * then re-apply host config */
   for (int wait = 0; wait < 50; wait++) {
     if (shm_reader.header && shm_reader.header->magic == SHM_MAGIC)
       break;
     usleep(100000);
   }
   if (shm_reader.header && shm_reader.header->magic == SHM_MAGIC) {
+    if (shm_reader.header->error_flags == 0xDEAD00DD) {
+      fprintf(stderr,
+              "[Main] PRU DDR carveout failed (error 0xDEAD00DD). "
+              "Check remoteproc / CMA allocation.\n");
+      return 1;
+    }
+    if (shm_reader_map_ddr(&shm_reader) != 0) {
+      fprintf(stderr, "[Main] Failed to mmap DDR sample ring at 0x%08X\n",
+              (uint32_t)shm_reader.header->ddr_phys_addr);
+      return 1;
+    }
     for (int i = 0; i < 8; i++) {
       shm_reader.header->ch_enable[i] = global_config.sensor.ch_enable[i];
     }
@@ -409,8 +414,10 @@ int main(int argc, char **argv) {
     } else {
       shm_reader.header->sample_period_cycles = 0;
     }
-    printf("[Main] Re-applied config after PRU start (period_cycles=%u)\n",
-           (uint32_t)shm_reader.header->sample_period_cycles);
+    printf("[Main] Re-applied config after PRU start (period_cycles=%u, "
+           "ddr_phys=0x%08X)\n",
+           (uint32_t)shm_reader.header->sample_period_cycles,
+           (uint32_t)shm_reader.header->ddr_phys_addr);
   } else {
     fprintf(stderr, "[Main] Warning: PRU magic not seen after start\n");
   }

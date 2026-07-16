@@ -31,14 +31,13 @@
   (BLOCK_DESCRIPTOR_SIZE + BLOCK_PAYLOAD_BYTES(block_size))
 
 /**
- * DDR sample ring carve-out (physical).
- * Requires Linux not to use this region — e.g. boot cmdline mem=448M on a
- * 512 MiB BeagleBone Black (DDR starts at 0x80000000 → top at 0x9C000000).
+ * DDR sample ring size (remoteproc carveout request).
+ * Physical address is assigned by Linux at load time and published in
+ * pru_shared_memory_t.ddr_phys_addr — do not hardcode a fixed PA.
  */
-#define PIKA_DDR_RING_PHYS 0x9C000000u
 #define PIKA_DDR_RING_SIZE 0x00100000u /* 1 MiB */
 
-/** Defaults for DDR-backed ring (fits in PIKA_DDR_RING_SIZE) */
+/** Defaults for DDR-backed ring (must fit in PIKA_DDR_RING_SIZE) */
 #define PIKA_DEFAULT_BLOCK_SIZE 128u
 #define PIKA_DEFAULT_NUM_BLOCKS 256u
 

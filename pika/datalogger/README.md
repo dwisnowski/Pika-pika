@@ -50,7 +50,7 @@ The system follows a multi-threaded, zero-copy architecture designed to handle u
 ## Core Components
 
 ### 1. Reader Thread (`src/shm_reader.c`)
-- Maps `/dev/mem` for **PRU Shared RAM** (control header at `0x4A310000`) and the **DDR sample ring** (`0x9C000000`, 1 MiB carve-out; requires `mem=448M` or equivalent).
+- Maps `/dev/mem` for **PRU Shared RAM** (control header at `0x4A310000`) and the **DDR sample ring** (physical address from remoteproc carveout, published in the SHM header after PRU start).
 - Tracks progress via `sample_count`, validates `flags == 0xAA55AA55`.
 - Drains all completed blocks each cycle into a lock-free SPSC ring (100 µs idle poll).
 
