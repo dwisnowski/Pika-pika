@@ -2,19 +2,17 @@
 
 #include "adc_parallel.h"
 #include "pru_config.h"
-#include "resource_table.h"
 #include "shm_layout.h"
 #include <pru_cfg.h>
 #include <stdint.h>
 
-/* Control header in PRU Shared RAM (0x10000); sample blocks in DDR carveout */
+/* Control header in PRU Shared RAM; sample blocks in host-published DDR */
 #define SHM_BASE_ADDRESS 0x00010000
 
 #define PRU_CTRL_REG (*(volatile uint32_t *)(0x22000))
 #define PRU_CCNT_REG (*(volatile uint32_t *)(0x2200C))
 
 extern void delay_cycles_runtime(uint32_t iterations);
-extern struct my_resource_table pru_remoteproc_ResourceTable;
 
 static inline uint32_t ccnt_read(void) { return PRU_CCNT_REG; }
 
@@ -22,16 +20,6 @@ static inline void ccnt_accum(uint32_t *last_cycles, uint64_t *total_cycles) {
   uint32_t current = ccnt_read();
   *total_cycles += (uint32_t)(current - *last_cycles);
   *last_cycles = current;
-}
-
-static uint32_t resolve_ddr_phys(void) {
-  uint32_t pa = pru_remoteproc_ResourceTable.sample_ring.pa;
-  uint32_t da = pru_remoteproc_ResourceTable.sample_ring.da;
-  if (pa != 0 && pa != RPROC_FW_RSC_ADDR_ANY)
-    return pa;
-  if (da != 0 && da != RPROC_FW_RSC_ADDR_ANY)
-    return da;
-  return 0;
 }
 
 void main(void) {
@@ -51,10 +39,6 @@ void main(void) {
     ((volatile uint32_t *)shm)[i] = 0;
   }
 
-  uint32_t ddr_size = pru_remoteproc_ResourceTable.sample_ring.len;
-  if (ddr_size == 0)
-    ddr_size = PIKA_DDR_RING_SIZE;
-
   shm->version = SHM_VERSION;
   shm->num_blocks = PIKA_DEFAULT_NUM_BLOCKS;
   shm->block_size = PIKA_DEFAULT_BLOCK_SIZE;
@@ -63,32 +47,28 @@ void main(void) {
   shm->sample_count = 0;
   shm->pru_clock_hz = PRU_CLOCK_HZ;
   shm->sample_rate = 0;
-  shm->ddr_size_bytes = ddr_size;
+  shm->ddr_phys_addr = 0; /* host must publish */
+  shm->ddr_size_bytes = PIKA_DDR_RING_SIZE;
   shm->block_desc_size = BLOCK_DESCRIPTOR_SIZE;
-  shm->error_flags = 0;
-
+  shm->error_flags = 0xDEAD00DDu; /* waiting for host DDR PA */
   shm->ch_enable[0] = 1;
   for (i = 1; i < 8; i++)
     shm->ch_enable[i] = 0;
 
-  /*
-   * Prefer carveout PA patched into the resource table. If the kernel copy
-   * was not written back into PRU DMEM (common), wait for the host to publish
-   * ddr_phys_addr after reading the allocated carveout.
-   */
-  uint32_t ddr_phys = resolve_ddr_phys();
-  shm->ddr_phys_addr = ddr_phys;
   shm->magic = SHM_MAGIC;
 
-  if (ddr_phys == 0) {
-    shm->error_flags = 0xDEAD00DDu; /* waiting for host DDR PA */
-    while (shm->ddr_phys_addr == 0) {
-      shm->heartbeat++;
-      __delay_cycles(20000000);
-    }
-    ddr_phys = shm->ddr_phys_addr;
-    shm->error_flags = 0;
+  /* Host verifies R/W then writes ddr_phys_addr (typically 0x9C000000 + mem=448M) */
+  while (shm->ddr_phys_addr == 0) {
+    shm->heartbeat++;
+    __delay_cycles(20000000);
   }
+
+  uint32_t ddr_phys = shm->ddr_phys_addr;
+  uint32_t ddr_size = shm->ddr_size_bytes;
+  if (ddr_size == 0)
+    ddr_size = PIKA_DDR_RING_SIZE;
+
+  shm->error_flags = 0;
 
   uint32_t block_size = shm->block_size;
   uint32_t num_blocks = shm->num_blocks;
@@ -100,6 +80,12 @@ void main(void) {
     if (num_blocks == 0)
       num_blocks = 1;
     shm->num_blocks = num_blocks;
+  }
+
+  /* Probe: confirm PRU can store to the published PA before sampling */
+  {
+    volatile uint32_t *probe = (volatile uint32_t *)ddr_base;
+    probe[0] = 0xA5A55A5Au;
   }
 
   {
@@ -150,6 +136,8 @@ void main(void) {
     if (smp_in_blk == 0) {
       desc->timestamp_cycles = total_cycles;
       desc->flags = 0;
+      desc->num_samples = 0;
+      desc->period_cycles = 0;
       block_start_cycles = total_cycles;
     }
 
@@ -198,7 +186,6 @@ void main(void) {
     }
 
     smp_in_blk++;
-    shm->sample_count++;
 
     if (smp_in_blk >= block_size) {
       if (block_size > 1) {
@@ -208,10 +195,13 @@ void main(void) {
         desc->period_cycles = period_target;
       }
       desc->num_samples = smp_in_blk;
+      /* flags last — host must not see a partial descriptor as complete */
       desc->flags = BLOCK_FLAG_COMPLETE;
       current_blk = (current_blk + 1) % num_blocks;
       shm->write_block_idx = current_blk;
       smp_in_blk = 0;
+      /* bump sample_count only after the block is visible as complete */
+      shm->sample_count += block_size;
     }
   }
 }

@@ -48,11 +48,11 @@ Put **only** `pru_shared_memory_t` here (first 128 bytes reserved). It is too sm
 **Current reliable approach on this project:**
 
 1. Boot with `mem=448M` so Linux does not use the top of 512 MiB DRAM.
-2. Fixed ring PA: `PIKA_DDR_RING_PHYS = 0x9C000000`, size 1 MiB (`PIKA_DDR_RING_SIZE`).
-3. **Host** `mmap`s that PA, probe-writes, then writes `ddr_phys_addr` / `ddr_size_bytes` into the SHM header.
-4. **PRU** waits until `ddr_phys_addr != 0` (may set `error_flags = 0xDEAD00DD` while waiting), then uses that PA.
+2. Fixed ring PA: `PIKA_DDR_RING_PHYS = 0x9C000000`, size 1 MiB.
+3. **Host always publishes that PA** (verify R/W first). Do not trust carveout addresses the PRU might invent (`0x98A…`).
+4. **PRU always waits** for `ddr_phys_addr != 0` (`error_flags = 0xDEAD00DD` meanwhile), then probes/writes that PA only.
 
-Do **not** remove `mem=448M` while this fixed-PA path is in use.
+Do **not** remove `mem=448M` while this path is in use. Carveout resource-table entries are intentionally unused.
 
 ### Remoteproc carveout (optional / fragile on 4.19-ti)
 

@@ -393,17 +393,12 @@ int main(int argc, char **argv) {
     usleep(100000);
   }
   if (shm_reader.header && shm_reader.header->magic == SHM_MAGIC) {
-    /* PRU may be waiting for host to publish carveout PA (0xDEAD00DD) */
-    if (shm_reader.header->ddr_phys_addr == 0 ||
-        shm_reader.header->error_flags == 0xDEAD00DD) {
-      if (shm_reader_publish_carveout_pa(&shm_reader) != 0) {
-        fprintf(stderr,
-                "[Main] Failed to discover/publish DDR carveout PA\n");
-        return 1;
-      }
-      /* Give PRU a moment to leave the wait loop */
-      usleep(200000);
+    /* Always publish mem=448M PA — do not trust PRU-reported carveout addresses */
+    if (shm_reader_publish_carveout_pa(&shm_reader) != 0) {
+      fprintf(stderr, "[Main] Failed to publish DDR ring PA\n");
+      return 1;
     }
+    usleep(200000); /* let PRU leave the wait loop and probe DDR */
     if (shm_reader_map_ddr(&shm_reader) != 0) {
       fprintf(stderr, "[Main] Failed to mmap DDR sample ring at 0x%08X\n",
               (uint32_t)shm_reader.header->ddr_phys_addr);
