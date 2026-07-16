@@ -145,6 +145,112 @@ int shm_reader_map_ddr(shm_reader_t *reader) {
   return 0;
 }
 
+/* PRU0 Data RAM (holds .resource_table at link address 0) */
+#define PRU0_DRAM_PHYS 0x4a300000u
+#define PRU0_DRAM_SIZE 0x2000u
+
+int shm_reader_publish_carveout_pa(shm_reader_t *reader) {
+  if (!reader || reader->mem_fd < 0 || !reader->header)
+    return -1;
+
+  /* Already have a PA from the PRU */
+  if (reader->header->ddr_phys_addr != 0)
+    return 0;
+
+  void *dram = mmap(NULL, PRU0_DRAM_SIZE, PROT_READ, MAP_SHARED, reader->mem_fd,
+                    PRU0_DRAM_PHYS);
+  if (dram == MAP_FAILED) {
+    perror("mmap PRU0 DRAM for resource table");
+    return -1;
+  }
+
+  /*
+   * Layout must match pika/pru/include/resource_table.h
+   * base: ver, num, reserved[2]  (16 bytes)
+   * offset[1]                    (4 bytes)
+   * carveout at offset from table start
+   */
+  const uint32_t *words = (const uint32_t *)dram;
+  uint32_t ver = words[0];
+  uint32_t num = words[1];
+  uint32_t carveout_off = words[4]; /* offset[0] */
+
+  uint32_t pa = 0;
+  uint32_t da = 0;
+  uint32_t len = 0;
+  uint32_t type = 0;
+
+  if (ver == 1 && num >= 1 && carveout_off + 24 <= PRU0_DRAM_SIZE) {
+    const uint32_t *c = (const uint32_t *)((const uint8_t *)dram + carveout_off);
+    type = c[0];
+    da = c[1];
+    pa = c[2];
+    len = c[3];
+  }
+
+  munmap(dram, PRU0_DRAM_SIZE);
+
+  printf("[SHM Reader] Resource table in PRU DMEM: ver=%u num=%u "
+         "carveout_off=%u type=%u da=0x%08X pa=0x%08X len=%u\n",
+         ver, num, carveout_off, type, da, pa, len);
+
+  uint32_t phys = 0;
+  if (pa != 0 && pa != 0xFFFFFFFFu)
+    phys = pa;
+  else if (da != 0 && da != 0xFFFFFFFFu)
+    phys = da;
+
+  if (phys == 0) {
+    /* Fallback: parse debugfs resource_table if available */
+    for (int i = 0; i < 5 && phys == 0; i++) {
+      char path[128];
+      snprintf(path, sizeof(path),
+               "/sys/kernel/debug/remoteproc/remoteproc%d/resource_table", i);
+      FILE *f = fopen(path, "rb");
+      if (!f)
+        continue;
+      uint8_t buf[256];
+      size_t n = fread(buf, 1, sizeof(buf), f);
+      fclose(f);
+      if (n < 64)
+        continue;
+      uint32_t *w = (uint32_t *)buf;
+      uint32_t off = w[4];
+      if (off + 16 <= n) {
+        uint32_t *c = (uint32_t *)(buf + off);
+        uint32_t d = c[1], p = c[2], l = c[3];
+        if (p != 0 && p != 0xFFFFFFFFu)
+          phys = p;
+        else if (d != 0 && d != 0xFFFFFFFFu)
+          phys = d;
+        if (phys && l)
+          len = l;
+        printf("[SHM Reader] debugfs %s: da=0x%08X pa=0x%08X len=%u\n", path,
+               d, p, l);
+      }
+    }
+  }
+
+  if (phys == 0) {
+    fprintf(stderr,
+            "[SHM Reader] Could not find carveout PA in PRU resource table\n");
+    return -1;
+  }
+
+  if (len == 0)
+    len = PIKA_DDR_RING_SIZE;
+
+  reader->header->ddr_phys_addr = phys;
+  reader->header->ddr_size_bytes = len;
+  /* Clear waiting flag so PRU leaves the host-PA wait loop */
+  if (reader->header->error_flags == 0xDEAD00DD)
+    reader->header->error_flags = 0;
+
+  printf("[SHM Reader] Published carveout PA 0x%08X (%u bytes) to PRU SHM\n",
+         phys, len);
+  return 0;
+}
+
 void shm_reader_cleanup(shm_reader_t *reader) {
   if (reader->ddr_mmap_base && reader->ddr_mmap_base != MAP_FAILED) {
     munmap(reader->ddr_mmap_base, reader->ddr_size_bytes);
@@ -190,11 +296,14 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   }
 
   if (reader->header->error_flags == 0xDEAD00DD) {
-    if (poll_count % 1000 == 0) {
-      printf("[SHM Reader] PRU reports DDR carveout missing "
-             "(error_flags=0xDEAD00DD)\n");
+    /* PRU is waiting for host to publish carveout PA */
+    if (shm_reader_publish_carveout_pa(reader) != 0) {
+      if (poll_count % 1000 == 0) {
+        printf("[SHM Reader] PRU waiting for DDR PA (0xDEAD00DD); "
+               "carveout discover failed\n");
+      }
+      return NULL;
     }
-    return NULL;
   }
 
   if (reader->ddr_mmap_base == NULL || reader->ddr_mmap_base == MAP_FAILED) {

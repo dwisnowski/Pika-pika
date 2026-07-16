@@ -35,6 +35,13 @@ int shm_reader_init(shm_reader_t *reader);
 int shm_reader_map_ddr(shm_reader_t *reader);
 
 /**
+ * If the PRU could not read the carveout PA from its resource table, discover
+ * it from PRU0 DMEM (remoteproc-patched table) and publish it into the SHM
+ * header so the PRU can proceed. Returns 0 on success.
+ */
+int shm_reader_publish_carveout_pa(shm_reader_t *reader);
+
+/**
  * Cleans up SHM reader (unmaps memory).
  */
 void shm_reader_cleanup(shm_reader_t *reader);

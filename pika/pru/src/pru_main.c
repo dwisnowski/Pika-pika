@@ -10,14 +10,10 @@
 /* Control header in PRU Shared RAM (0x10000); sample blocks in DDR carveout */
 #define SHM_BASE_ADDRESS 0x00010000
 
-/* CTRL cycle counter (local PRU view) */
 #define PRU_CTRL_REG (*(volatile uint32_t *)(0x22000))
 #define PRU_CCNT_REG (*(volatile uint32_t *)(0x2200C))
 
-/* Runtime delay: each iteration ≈ 2 PRU cycles (see delay_cycles.asm) */
 extern void delay_cycles_runtime(uint32_t iterations);
-
-/* Filled by remoteproc before PRU start (same object as .resource_table) */
 extern struct my_resource_table pru_remoteproc_ResourceTable;
 
 static inline uint32_t ccnt_read(void) { return PRU_CCNT_REG; }
@@ -31,21 +27,17 @@ static inline void ccnt_accum(uint32_t *last_cycles, uint64_t *total_cycles) {
 static uint32_t resolve_ddr_phys(void) {
   uint32_t pa = pru_remoteproc_ResourceTable.sample_ring.pa;
   uint32_t da = pru_remoteproc_ResourceTable.sample_ring.da;
-  if (pa != 0 && pa != FW_RSC_ADDR_ANY)
+  if (pa != 0 && pa != RPROC_FW_RSC_ADDR_ANY)
     return pa;
-  if (da != 0 && da != FW_RSC_ADDR_ANY)
+  if (da != 0 && da != RPROC_FW_RSC_ADDR_ANY)
     return da;
   return 0;
 }
 
 void main(void) {
-  /* 1. Clear SYSCFG[STANDBY_INIT] to enable OCP master port (DDR access) */
   CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
-
-  /* 2. Enable Cycle Counter (CCNT) for accurate hardware timecoding */
   PRU_CTRL_REG |= (1 << 3);
 
-  /* Startup pulse for logic analyzer */
   __R30 |= PIN_CONVST;
   __delay_cycles(20000000);
   __R30 &= ~PIN_CONVST;
@@ -59,7 +51,6 @@ void main(void) {
     ((volatile uint32_t *)shm)[i] = 0;
   }
 
-  uint32_t ddr_phys = resolve_ddr_phys();
   uint32_t ddr_size = pru_remoteproc_ResourceTable.sample_ring.len;
   if (ddr_size == 0)
     ddr_size = PIKA_DDR_RING_SIZE;
@@ -72,27 +63,31 @@ void main(void) {
   shm->sample_count = 0;
   shm->pru_clock_hz = PRU_CLOCK_HZ;
   shm->sample_rate = 0;
-  shm->ddr_phys_addr = ddr_phys;
   shm->ddr_size_bytes = ddr_size;
   shm->block_desc_size = BLOCK_DESCRIPTOR_SIZE;
+  shm->error_flags = 0;
 
   shm->ch_enable[0] = 1;
-  shm->ch_enable[1] = 0;
-  shm->ch_enable[2] = 0;
-  shm->ch_enable[3] = 0;
-  shm->ch_enable[4] = 0;
-  shm->ch_enable[5] = 0;
-  shm->ch_enable[6] = 0;
-  shm->ch_enable[7] = 0;
+  for (i = 1; i < 8; i++)
+    shm->ch_enable[i] = 0;
+
+  /*
+   * Prefer carveout PA patched into the resource table. If the kernel copy
+   * was not written back into PRU DMEM (common), wait for the host to publish
+   * ddr_phys_addr after reading the allocated carveout.
+   */
+  uint32_t ddr_phys = resolve_ddr_phys();
+  shm->ddr_phys_addr = ddr_phys;
+  shm->magic = SHM_MAGIC;
 
   if (ddr_phys == 0) {
-    /* Carveout missing — publish header so host can see the error, then halt */
-    shm->error_flags = 0xDEAD00DDu;
-    shm->magic = SHM_MAGIC;
-    for (;;) {
+    shm->error_flags = 0xDEAD00DDu; /* waiting for host DDR PA */
+    while (shm->ddr_phys_addr == 0) {
       shm->heartbeat++;
       __delay_cycles(20000000);
     }
+    ddr_phys = shm->ddr_phys_addr;
+    shm->error_flags = 0;
   }
 
   uint32_t block_size = shm->block_size;
@@ -107,14 +102,11 @@ void main(void) {
     shm->num_blocks = num_blocks;
   }
 
-  /* Clear first block descriptor so host never sees stale flags */
   {
     volatile uint32_t *p = (volatile uint32_t *)ddr_base;
     for (i = 0; i < (int)(block_total_size / 4); i++)
       p[i] = 0;
   }
-
-  shm->magic = SHM_MAGIC;
 
   uint32_t current_blk = 0;
   uint32_t smp_in_blk = 0;

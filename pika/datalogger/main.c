@@ -393,11 +393,16 @@ int main(int argc, char **argv) {
     usleep(100000);
   }
   if (shm_reader.header && shm_reader.header->magic == SHM_MAGIC) {
-    if (shm_reader.header->error_flags == 0xDEAD00DD) {
-      fprintf(stderr,
-              "[Main] PRU DDR carveout failed (error 0xDEAD00DD). "
-              "Check remoteproc / CMA allocation.\n");
-      return 1;
+    /* PRU may be waiting for host to publish carveout PA (0xDEAD00DD) */
+    if (shm_reader.header->ddr_phys_addr == 0 ||
+        shm_reader.header->error_flags == 0xDEAD00DD) {
+      if (shm_reader_publish_carveout_pa(&shm_reader) != 0) {
+        fprintf(stderr,
+                "[Main] Failed to discover/publish DDR carveout PA\n");
+        return 1;
+      }
+      /* Give PRU a moment to leave the wait loop */
+      usleep(200000);
     }
     if (shm_reader_map_ddr(&shm_reader) != 0) {
       fprintf(stderr, "[Main] Failed to mmap DDR sample ring at 0x%08X\n",
@@ -415,9 +420,10 @@ int main(int argc, char **argv) {
       shm_reader.header->sample_period_cycles = 0;
     }
     printf("[Main] Re-applied config after PRU start (period_cycles=%u, "
-           "ddr_phys=0x%08X)\n",
+           "ddr_phys=0x%08X, err=0x%08X)\n",
            (uint32_t)shm_reader.header->sample_period_cycles,
-           (uint32_t)shm_reader.header->ddr_phys_addr);
+           (uint32_t)shm_reader.header->ddr_phys_addr,
+           (uint32_t)shm_reader.header->error_flags);
   } else {
     fprintf(stderr, "[Main] Warning: PRU magic not seen after start\n");
   }
