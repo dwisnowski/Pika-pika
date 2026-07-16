@@ -50,19 +50,18 @@ The system follows a multi-threaded, zero-copy architecture designed to handle u
 ## Core Components
 
 ### 1. Reader Thread (`src/shm_reader.c`)
-- Maps `/dev/mem` to access the PRU shared memory region.
-- Monitors `write_block_idx` in the `shm_header` to detect new data blocks.
-- Transfers raw samples to an internal lock-free ring buffer for processing.
+- Maps `/dev/mem` for **PRU Shared RAM** (control header at `0x4A310000`) and the **DDR sample ring** (`0x9C000000`, 1 MiB carve-out; requires `mem=448M` or equivalent).
+- Tracks progress via `sample_count`, validates `flags == 0xAA55AA55`.
+- Drains all completed blocks each cycle into a lock-free SPSC ring (100 µs idle poll).
 
 ### 2. Processing Thread
-- **Decimator (`src/decimator.c`)**: Downsamples the high-speed stream (e.g., 180kHz -> 1kHz) for continuous monitoring without filling up the disk.
-- **Anomaly Detector (`src/anomaly_detector.c`)**: Runs thresholding logic to detect power quality events (Sag, Swell, Spike, Dip).
-- **Event Manager (`src/event_window.c`)**: Maintains a circular buffer to capture pre-event samples and continues capturing post-event samples for a full-resolution "snapshot" of the anomaly.
+- Reconstructs per-sample times from each block’s `timestamp_cycles` + measured `period_cycles` (PRU CCNT is authoritative; YAML rate is pacing intent / fallback).
+- **Decimator (`src/decimator.c`)**: Downsamples for continuous overview on disk.
+- **Anomaly Detector (`src/anomaly_detector.c`)**: Detects power-quality events (Sag, Swell, Spike, Dip).
+- **Event Manager (`src/event_window.c`)**: Pre/post hi-fidelity capture around anomalies only (no full-rate continuous archive).
 
-### 3. Writer Thread (`src/writer.c`)
-- Manages the transfer of data from RAM to the filesystem.
-- Uses efficient binary formats to minimize overhead.
-- Periodically flushes to prevent data loss.
+### 3. Writer (`src/writer.c`)
+- Writes decimated chunks and anomaly event windows / index to the filesystem.
 
 ## Configuration
 

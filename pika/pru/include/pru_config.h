@@ -136,10 +136,10 @@ volatile register uint32_t __R31;
 #define MAX_BLOCK_SIZE 1024
 
 /** Default block size for typical applications */
-#define DEFAULT_BLOCK_SIZE 256
+#define DEFAULT_BLOCK_SIZE 128
 
-/** Default number of ring buffer blocks */
-#define DEFAULT_NUM_BLOCKS 4
+/** Default number of ring buffer blocks (DDR-backed; see shm_layout.h) */
+#define DEFAULT_NUM_BLOCKS 256
 
 /* ============================================================================
  * IEP Timer Registers (Requirement 2.6)

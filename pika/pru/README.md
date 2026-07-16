@@ -5,11 +5,13 @@ This directory contains deterministic PRU firmware for the BeagleBone Black that
 ## Overview
 
 The PRU (Programmable Real-time Unit) firmware implements:
-- **Cycle-accurate timing**: Sample intervals precise to ±1 cycle (5 ns @ 200 MHz)
-- **Shared memory interface**: Zero-copy data transfer with Linux userspace
-- **Ring buffer streaming**: Continuous data acquisition without loss
-- **Parallel ADC interface**: Direct control of AD7606 via PRU GPIO
-- **Error detection**: Comprehensive error handling with userspace reporting
+- **Block timestamps**: `uint64` PRU CCNT + measured `period_cycles` per block (host reconstructs sample times)
+- **Paced or free-run**: honor `sample_period_cycles`, or `0` for max-rate free-run
+- **Split memory**: control header in Shared RAM; deep sample ring in DDR carve-out
+- **Parallel ADC interface**: Direct control of AD7606 via PRU GPIO + GPIO DATAIN
+- **Error detection**: BUSY timeouts reported via `error_flags` / heartbeat
+
+Authoritative layout: [`include/shm_layout.h`](include/shm_layout.h) and [`docs/memory-map.md`](../../docs/memory-map.md).
 
 ## Directory Structure
 

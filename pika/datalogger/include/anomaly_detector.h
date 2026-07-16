@@ -10,6 +10,8 @@ typedef struct {
   sensor_config_t sensor;
   detection_config_t detection;
   uint32_t nominal_rate_hz;
+  /* Nanoseconds per sample for event timestamps (updated from measured PRU period) */
+  uint64_t ns_per_sample;
 
   /* RMS sliding window — circular buffer of squared AC voltages */
   float sq_sum;                /* Running sum of squared AC voltage samples */

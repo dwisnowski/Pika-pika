@@ -22,6 +22,8 @@ int anomaly_detector_init(anomaly_detector_t *ad, anomaly_config_t config,
   ad->sensor = sensor;
   ad->detection = detection;
   ad->nominal_rate_hz = nominal_rate_hz;
+  ad->ns_per_sample =
+      (nominal_rate_hz > 0) ? (1000000000ULL / nominal_rate_hz) : 100000ULL;
 
   /* --- Compute derived window sizes (sample-rate-aware) --- */
   uint32_t samples_per_cycle = nominal_rate_hz / detection.ac_freq_hz;
@@ -120,8 +122,9 @@ anomaly_event_t *anomaly_detector_process(anomaly_detector_t *ad,
                                           int16_t *samples, uint32_t count,
                                           uint32_t channels,
                                           uint64_t base_time_ns) {
-  /* Nanoseconds per sample at nominal rate */
-  uint64_t ns_per_sample = 1000000000ULL / ad->nominal_rate_hz;
+  uint64_t ns_per_sample = ad->ns_per_sample;
+  if (ns_per_sample == 0)
+    ns_per_sample = 100000ULL;
 
   for (uint32_t i = 0; i < count; i++) {
     /* --- Channel 0 only for detection --- */

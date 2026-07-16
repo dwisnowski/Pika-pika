@@ -14,12 +14,10 @@ static char discovered_remoteproc_path[256] = "";
 
 static const char *discover_pru0_info(uint32_t *out_shm_phys) {
   if (discovered_remoteproc_path[0] != '\0') {
-    // We already have it, but we need to re-parse the address for the caller if
-    // desired
     return discovered_remoteproc_path;
   }
 
-  uint32_t shm_phys = 0x4a310000; // Default fallback
+  uint32_t shm_phys = PRU_SHM_PHYS_BASE;
 
   for (int i = 0; i < 5; i++) {
     char name_path[256];
@@ -29,23 +27,16 @@ static const char *discover_pru0_info(uint32_t *out_shm_phys) {
     FILE *f = fopen(name_path, "r");
     if (f) {
       if (fgets(name_buf, sizeof(name_buf), f)) {
-        // Typical strings: "4a334000.pru" (PRU0) or "4a338000.pru" (PRU1)
         if (strstr(name_buf, "4a334000") || strstr(name_buf, "pru0")) {
-          // Parse out the hex address to calculate Shared RAM location
           unsigned int ctrl_addr = 0;
           if (sscanf(name_buf, "%x", &ctrl_addr) == 1) {
-            // Standard AM335x offsets from PRUSS Base (0x4a300000):
-            // Shared RAM = Base + 0x10000
-            // PRU0 CTRL  = Base + 0x22000
-            // PRU0 IRAM  = Base + 0x34000 (This is often what's in 'name')
-
             uint32_t pruss_base = 0;
             if ((ctrl_addr & 0xFFFFF000) == 0x4a334000)
               pruss_base = ctrl_addr - 0x34000;
             else if ((ctrl_addr & 0xFFFFF000) == 0x4a322000)
               pruss_base = ctrl_addr - 0x22000;
             else
-              pruss_base = ctrl_addr & 0xFFF80000; // Guess alignment
+              pruss_base = ctrl_addr & 0xFFF80000;
 
             shm_phys = pruss_base + 0x10000;
           }
@@ -74,9 +65,15 @@ static const char *discover_pru0_info(uint32_t *out_shm_phys) {
 }
 
 int shm_reader_init(shm_reader_t *reader) {
+  memset(reader, 0, sizeof(*reader));
+  reader->mem_fd = -1;
+  reader->ddr_mmap_base = MAP_FAILED;
+
   uint32_t shm_phys = 0;
   discover_pru0_info(&shm_phys);
   reader->pru_shm_phys_addr = shm_phys;
+  reader->ddr_phys_addr = PIKA_DDR_RING_PHYS;
+  reader->ddr_size_bytes = PIKA_DDR_RING_SIZE;
 
   reader->mem_fd = open("/dev/mem", O_RDWR | O_SYNC);
   if (reader->mem_fd < 0) {
@@ -88,15 +85,31 @@ int shm_reader_init(shm_reader_t *reader) {
       mmap(NULL, PRU_SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED,
            reader->mem_fd, reader->pru_shm_phys_addr);
   if (reader->mmap_base == MAP_FAILED) {
-    perror("mmap");
+    perror("mmap Shared RAM");
     close(reader->mem_fd);
+    reader->mem_fd = -1;
+    return -1;
+  }
+
+  reader->ddr_mmap_base =
+      mmap(NULL, reader->ddr_size_bytes, PROT_READ | PROT_WRITE, MAP_SHARED,
+           reader->mem_fd, reader->ddr_phys_addr);
+  if (reader->ddr_mmap_base == MAP_FAILED) {
+    perror("mmap DDR sample ring");
+    munmap(reader->mmap_base, PRU_SHM_SIZE);
+    reader->mmap_base = NULL;
+    close(reader->mem_fd);
+    reader->mem_fd = -1;
     return -1;
   }
 
   reader->header = (volatile pru_shared_memory_t *)reader->mmap_base;
 
-  // Safety: If header looks uninitialized, we can zero it, but DON'T wipe a
-  // valid magic This allows the datalogger to reconnect to a running PRU.
+  printf("[SHM Reader] Mapped Shared RAM @ phys 0x%08X, DDR ring @ phys "
+         "0x%08X (%u bytes)\n",
+         reader->pru_shm_phys_addr, reader->ddr_phys_addr,
+         reader->ddr_size_bytes);
+
   if (reader->header->magic != SHM_MAGIC) {
     printf("[SHM Reader] Header uninitialized (magic=0x%08X), preparing clean "
            "state...\n",
@@ -106,8 +119,6 @@ int shm_reader_init(shm_reader_t *reader) {
     reader->header->write_block_idx = 0;
   }
 
-  // Use UINT32_MAX as "unsynced" sentinel. First poll will latch current
-  // write_block_idx to avoid consuming potentially stale pre-start data.
   reader->last_read_block_idx = UINT32_MAX;
   reader->last_completed_blocks = UINT32_MAX;
 
@@ -115,11 +126,17 @@ int shm_reader_init(shm_reader_t *reader) {
 }
 
 void shm_reader_cleanup(shm_reader_t *reader) {
-  if (reader->mmap_base) {
+  if (reader->ddr_mmap_base && reader->ddr_mmap_base != MAP_FAILED) {
+    munmap(reader->ddr_mmap_base, reader->ddr_size_bytes);
+    reader->ddr_mmap_base = NULL;
+  }
+  if (reader->mmap_base && reader->mmap_base != MAP_FAILED) {
     munmap(reader->mmap_base, PRU_SHM_SIZE);
+    reader->mmap_base = NULL;
   }
   if (reader->mem_fd >= 0) {
     close(reader->mem_fd);
+    reader->mem_fd = -1;
   }
 }
 
@@ -143,7 +160,6 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   static uint32_t rejected_desc_count = 0;
   poll_count++;
 
-  // Safety: Don't trust the header until PRU has written the magic number
   if (reader->header->magic != SHM_MAGIC) {
     if (poll_count % 1000 == 0) {
       printf("[SHM Reader] Waiting for magic (found 0x%08X)... heartbeat=%u\n",
@@ -153,8 +169,19 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
     return NULL;
   }
 
+  /* Prefer geometry published by PRU once alive */
+  if (reader->header->ddr_phys_addr != 0 &&
+      reader->header->ddr_phys_addr != reader->ddr_phys_addr) {
+    /* Address changed after init — not remapped here; log once */
+    if (poll_count == 1 || poll_count % 5000 == 0) {
+      printf("[SHM Reader] Warning: PRU ddr_phys_addr=0x%08X differs from "
+             "mapped 0x%08X\n",
+             (uint32_t)reader->header->ddr_phys_addr, reader->ddr_phys_addr);
+    }
+  }
+
   uint32_t num_blocks = reader->header->num_blocks;
-  if (num_blocks == 0 || num_blocks > 64) {
+  if (num_blocks == 0 || num_blocks > 1024) {
     if (poll_count % 5000 == 0) {
       printf("[SHM Reader] Waiting for valid num_blocks (got %u)\n",
              num_blocks);
@@ -171,9 +198,6 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
     return NULL;
   }
 
-  // Read write_block_idx twice for diagnostics only. We do not use it as
-  // source-of-truth for progression because some systems intermittently read
-  // it as 0xFFFFFFFF.
   uint32_t current_blk_a = reader->header->write_block_idx;
   uint32_t current_blk_b = reader->header->write_block_idx;
   if (current_blk_a != current_blk_b) {
@@ -193,8 +217,6 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
     }
   }
 
-  // Read sample_count twice and require stability before deriving completed
-  // blocks. This is our source-of-truth for producer progress.
   uint32_t sample_count_a = reader->header->sample_count;
   uint32_t sample_count_b = reader->header->sample_count;
   uint32_t sample_count = sample_count_b;
@@ -206,94 +228,81 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   uint32_t derived_write_idx = completed_blocks % num_blocks;
 
   if (poll_count % 5000 == 0) {
-    // Periodic debug log
     printf("[SHM Reader] Tick: write_idx(raw=%u, derived=%u), "
            "last_idx=%u, num_blocks=%u, block_size=%u, sample_count=%u, "
            "completed_blocks=%u, heartbeat=%u, err=0x%08X\n",
-           raw_write_idx, derived_write_idx,
-           reader->last_read_block_idx,
-           num_blocks,
-           block_size,
-           sample_count,
-           completed_blocks,
+           raw_write_idx, derived_write_idx, reader->last_read_block_idx,
+           num_blocks, block_size, sample_count, completed_blocks,
            (uint32_t)reader->header->heartbeat,
            (uint32_t)reader->header->error_flags);
   }
 
-  // Initial synchronization: latch the current completed-block counter and
-  // wait for the next completed block before returning data.
   if (reader->last_completed_blocks == UINT32_MAX) {
     reader->last_completed_blocks = completed_blocks;
     reader->last_read_block_idx =
-        (completed_blocks == 0) ? UINT32_MAX : ((completed_blocks - 1) % num_blocks);
+        (completed_blocks == 0) ? UINT32_MAX
+                                : ((completed_blocks - 1) % num_blocks);
     return NULL;
   }
 
-  // No new full block completed yet.
   if (completed_blocks == reader->last_completed_blocks) {
     return NULL;
   }
 
-  // If counter moved backwards, resync.
   if (completed_blocks < reader->last_completed_blocks) {
     reader->last_completed_blocks = completed_blocks;
     reader->last_read_block_idx =
-        (completed_blocks == 0) ? UINT32_MAX : ((completed_blocks - 1) % num_blocks);
+        (completed_blocks == 0) ? UINT32_MAX
+                                : ((completed_blocks - 1) % num_blocks);
     return NULL;
   }
-
-  // In a ring buffer, the PRU writes to block N then increments index.
-  // The most recently COMPLETED block is (current_blk - 1) % num_blocks.
-  // HOWEVER, the current PRU implementation (pru_main.c) does:
-  //   current_blk = (current_blk + 1) % num_blocks;
-  //   shm->write_block_idx = current_blk;
-  // This means write_block_idx is where the PRU IS CURRENTLY WRITING or WILL
-  // WRITE. So the data we want to read is at the PREVIOUS index.
 
   uint32_t next_completed_blocks = reader->last_completed_blocks + 1;
   if (completed_blocks < next_completed_blocks) {
     return NULL;
   }
 
-  // Consume one completed block per poll to preserve ordering.
+  /* If we fell far behind, skip to newest-num_blocks+1 to avoid stale wrap */
+  uint32_t pending = completed_blocks - reader->last_completed_blocks;
+  if (pending > num_blocks) {
+    printf("[SHM Reader] Overrun: pending=%u blocks (ring=%u) — skipping to "
+           "latest\n",
+           pending, num_blocks);
+    reader->last_completed_blocks = completed_blocks - num_blocks;
+    next_completed_blocks = reader->last_completed_blocks + 1;
+  }
+
   uint32_t ready_idx = (next_completed_blocks - 1) % num_blocks;
 
-  // If we've already read this "ready" block, nothing new.
-  // This logic needs to handle the very first block correctly.
-  // Let's keep it simple: if current_blk changed, update last_read and return
-  // the PREVIOUS block.
+  uint32_t desc_size = reader->header->block_desc_size;
+  if (desc_size == 0 || desc_size > 64)
+    desc_size = BLOCK_DESCRIPTOR_SIZE;
 
-  // Calculate memory offset for the ready block
-  // Header is 128 bytes (SHM_HEADER_OFFSET).
-  // block_total_size = 16 (desc) + (samples * channels * 2)
-  uint32_t block_total_size =
-      16 + (block_size * 8 * 2); // 8 channels hardcoded for now
+  uint32_t block_total_size = desc_size + BLOCK_PAYLOAD_BYTES(block_size);
 
-  uint8_t *b_base = ((uint8_t *)reader->mmap_base) + SHM_HEADER_OFFSET +
-                    (ready_idx * block_total_size);
+  uint8_t *b_base =
+      ((uint8_t *)reader->ddr_mmap_base) + (ready_idx * block_total_size);
 
   if (data_ptr) {
-    *data_ptr = b_base + 16;
+    *data_ptr = b_base + desc_size;
   }
 
   volatile block_descriptor_t *desc = (volatile block_descriptor_t *)b_base;
 
   if (poll_count % 5000 == 0) {
     printf("[SHM Reader] Candidate desc: ready_idx=%u flags=0x%08X "
-           "num_samples=%u timestamp_cycles=%llu\n",
+           "num_samples=%u timestamp_cycles=%llu period_cycles=%u\n",
            ready_idx, (uint32_t)desc->flags, (uint32_t)desc->num_samples,
-           (unsigned long long)desc->timestamp_cycles);
+           (unsigned long long)desc->timestamp_cycles,
+           (uint32_t)desc->period_cycles);
   }
 
-  // Final safety: only consume finalized descriptors with plausible sample
-  // count.
-  if (desc->flags != 0xAA55AA55) {
+  if (desc->flags != BLOCK_FLAG_COMPLETE) {
     rejected_desc_count++;
     if (rejected_desc_count % 1000 == 0) {
       printf("[SHM Reader] Reject desc: ready_idx=%u bad flags=0x%08X "
-             "num_samples=%u timestamp_cycles=%llu (count=%u)\n",
+             "num_samples=%u (count=%u)\n",
              ready_idx, (uint32_t)desc->flags, (uint32_t)desc->num_samples,
-             (unsigned long long)desc->timestamp_cycles,
              rejected_desc_count);
     }
     return NULL;
@@ -302,15 +311,13 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
     rejected_desc_count++;
     if (rejected_desc_count % 1000 == 0) {
       printf("[SHM Reader] Reject desc: ready_idx=%u invalid num_samples=%u "
-             "flags=0x%08X timestamp_cycles=%llu (count=%u)\n",
+             "flags=0x%08X (count=%u)\n",
              ready_idx, (uint32_t)desc->num_samples, (uint32_t)desc->flags,
-             (unsigned long long)desc->timestamp_cycles,
              rejected_desc_count);
     }
     return NULL;
   }
 
-  // Mark progress only after validating descriptor.
   reader->last_completed_blocks = next_completed_blocks;
   reader->last_read_block_idx = ready_idx;
 

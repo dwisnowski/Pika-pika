@@ -3,7 +3,7 @@
 
 # Sampling Configuration
 sampling:
-  nominal_rate_hz: 10000     # ADC sampling rate in Hz
+  nominal_rate_hz: 10000     # ADC sampling rate in Hz (0 = free-run / max-rate)
 
 # Storage Configuration
 storage:

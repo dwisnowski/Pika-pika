@@ -1,4 +1,4 @@
-// src/pru_main.c - Minimal PRU Hello World / Sanity Check
+// src/pru_main.c - AD7606 acquisition with block timestamps + DDR ring
 
 #include "adc_parallel.h"
 #include "pru_config.h"
@@ -6,45 +6,60 @@
 #include <pru_cfg.h>
 #include <stdint.h>
 
-/* Put SHM in PRU Shared RAM (0x10000) which is 12KB - enough for our blocks */
+/* Control header in PRU Shared RAM (0x10000); sample blocks in DDR */
 #define SHM_BASE_ADDRESS 0x00010000
 
+/* CTRL cycle counter (local PRU view) */
+#define PRU_CTRL_REG (*(volatile uint32_t *)(0x22000))
+#define PRU_CCNT_REG (*(volatile uint32_t *)(0x2200C))
+
+/* Runtime delay: each iteration ≈ 2 PRU cycles (see delay_cycles.asm) */
+extern void delay_cycles_runtime(uint32_t iterations);
+
+static inline uint32_t ccnt_read(void) { return PRU_CCNT_REG; }
+
+static inline void ccnt_accum(uint32_t *last_cycles, uint64_t *total_cycles) {
+  uint32_t current = ccnt_read();
+  *total_cycles += (uint32_t)(current - *last_cycles);
+  *last_cycles = current;
+}
+
 void main(void) {
-  /* 1. Clear SYSCFG[STANDBY_INIT] to enable OCP master port */
+  /* 1. Clear SYSCFG[STANDBY_INIT] to enable OCP master port (DDR access) */
   CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
 
   /* 2. Enable Cycle Counter (CCNT) for accurate hardware timecoding */
-  // CCNT is more universally reliable than IEP on some kernels
-  // CTRL register is at 0x22000 locally. Bit 3 is CTR_EN.
-  *(volatile uint32_t *)(0x22000) |= (1 << 3);
+  PRU_CTRL_REG |= (1 << 3);
 
   /* 2. PANIC PULSE: The logic analyzer MUST see this first! */
-  /* Pulse PIN_CONVST (P9.27) high for 100ms as a start indicator */
   __R30 |= PIN_CONVST;
   __delay_cycles(20000000);
   __R30 &= ~PIN_CONVST;
   __delay_cycles(20000000);
 
-  /* 3. Initialize Shared Memory pointer and WIPE it */
+  /* 3. Initialize Shared Memory header and WIPE it */
   volatile pru_shared_memory_t *shm =
       (volatile pru_shared_memory_t *)SHM_BASE_ADDRESS;
 
-  /* Force a hardware zero-out of the header space to clear stale heartbeats */
   int i;
   for (i = 0; i < 64; i++) {
     ((volatile uint32_t *)shm)[i] = 0;
   }
 
-  /* Initialize Header */
+  /* Initialize Header — sample ring is in DDR */
   shm->magic = SHM_MAGIC;
   shm->version = SHM_VERSION;
-  shm->num_blocks = 4;
-  shm->block_size = 128;
-  shm->sample_period_cycles = 20000;
+  shm->num_blocks = PIKA_DEFAULT_NUM_BLOCKS;
+  shm->block_size = PIKA_DEFAULT_BLOCK_SIZE;
+  /* period/rate default to free-run; host re-applies after magic is visible */
+  shm->sample_period_cycles = 0;
   shm->write_block_idx = 0;
   shm->sample_count = 0;
-  shm->pru_clock_hz = 200000000; /* 200 MHz on BeagleBone Black */
-  shm->sample_rate = 0; /* Will be set by datalogger (default: 10000 Hz) */
+  shm->pru_clock_hz = PRU_CLOCK_HZ;
+  shm->sample_rate = 0; /* 0 = free-run / max-rate */
+  shm->ddr_phys_addr = PIKA_DDR_RING_PHYS;
+  shm->ddr_size_bytes = PIKA_DDR_RING_SIZE;
+  shm->block_desc_size = BLOCK_DESCRIPTOR_SIZE;
 
   /* Default: CH0 only enabled */
   shm->ch_enable[0] = 1;
@@ -56,55 +71,70 @@ void main(void) {
   shm->ch_enable[6] = 0;
   shm->ch_enable[7] = 0;
 
-  /* Hardcoded defaults for local logic */
   uint32_t block_size = shm->block_size;
   uint32_t num_blocks = shm->num_blocks;
-  uint32_t block_total_size = 16 + (block_size * 8 * 2);
+  uint32_t block_total_size = BLOCK_TOTAL_SIZE(block_size);
+  uint8_t *ddr_base = (uint8_t *)(uint32_t)shm->ddr_phys_addr;
+
+  /* Guard: ring must fit in carve-out */
+  if ((uint32_t)num_blocks * block_total_size > shm->ddr_size_bytes) {
+    num_blocks = shm->ddr_size_bytes / block_total_size;
+    if (num_blocks == 0)
+      num_blocks = 1;
+    shm->num_blocks = num_blocks;
+  }
 
   uint32_t current_blk = 0;
   uint32_t smp_in_blk = 0;
+  uint64_t block_start_cycles = 0;
 
   /* 4. Idle Pins for AD7606 */
-  __R30 |= PIN_RD;     // Set high
-  __R30 |= PIN_CONVST; // Set high
-  __R30 &= ~PIN_CS;    // Set low (active)
+  __R30 |= PIN_RD;
+  __R30 |= PIN_CONVST;
+  __R30 &= ~PIN_CS;
 
-  /* 5. Reset the AD7606 (Pulse RST High for at least 50ns) */
+  /* 5. Reset the AD7606 */
   __R30 |= PIN_RESET;
-  __delay_cycles(2000); // 10us reset pulse
+  __delay_cycles(2000);
   __R30 &= ~PIN_RESET;
-  __delay_cycles(200000); // Wait 1ms for ADC to stabilize after reset
+  __delay_cycles(200000);
 
   /* 6. Main Acquisition Loop */
-  uint32_t last_cycles = 0;
+  uint32_t last_cycles = ccnt_read();
   uint64_t total_cycles = 0;
 
   while (1) {
+    /* Host may update period/rate; 0 period => free-run */
+    uint32_t period_target = shm->sample_period_cycles;
+
     if (smp_in_blk % 10 == 0) {
       shm->heartbeat++;
     }
 
+    uint32_t sample_start_ccnt = ccnt_read();
+
     if (adc_trigger_and_wait() != 0) {
       shm->error_flags = 0xDEAD0002;
-      shm->heartbeat++; // Incremement even on error so we see the loop is alive
-      __delay_cycles(1000000); // Wait 5ms before retrying
+      shm->heartbeat++;
+      __delay_cycles(1000000);
       continue;
     }
 
-    uint8_t *b_base =
-        ((uint8_t *)shm) + SHM_HEADER_OFFSET + (current_blk * block_total_size);
-    block_descriptor_t *desc = (block_descriptor_t *)b_base;
-    uint16_t *b_data = (uint16_t *)(b_base + 16);
+    /* Sample time = post-BUSY / start of channel readout */
+    ccnt_accum(&last_cycles, &total_cycles);
 
-    // Track total cycles using hardware CCNT (Cycle Counter)
-    // Register is at byte-offset 0x0C in the PRU CTRL space (0x22000)
-    uint32_t current_cycles = *(volatile uint32_t *)(0x2200C);
-    total_cycles += (uint32_t)(current_cycles - last_cycles);
-    last_cycles = current_cycles;
+    uint8_t *b_base = ddr_base + (current_blk * block_total_size);
+    block_descriptor_t *desc = (block_descriptor_t *)b_base;
+    uint16_t *b_data = (uint16_t *)(b_base + BLOCK_DESCRIPTOR_SIZE);
+
+    if (smp_in_blk == 0) {
+      desc->timestamp_cycles = total_cycles;
+      desc->flags = 0;
+      block_start_cycles = total_cycles;
+    }
 
     uint32_t ch_ptr = smp_in_blk * 8;
 
-    /* Conditionally read each channel based on enable flags */
     if (shm->ch_enable[0])
       b_data[ch_ptr + 0] = adc_read_next();
     else
@@ -138,16 +168,29 @@ void main(void) {
     else
       b_data[ch_ptr + 7] = 0;
 
-    if (smp_in_blk == 0) {
-      desc->timestamp_cycles = total_cycles;
+    /* Pace to configured period when sample_rate / period is non-zero */
+    if (period_target > 0) {
+      uint32_t elapsed = ccnt_read() - sample_start_ccnt;
+      if (elapsed < period_target) {
+        uint32_t remaining = period_target - elapsed;
+        delay_cycles_runtime(remaining >> 1);
+      }
+      /* Keep CCNT accumulator coherent across the wait */
+      ccnt_accum(&last_cycles, &total_cycles);
     }
 
     smp_in_blk++;
     shm->sample_count++;
 
     if (smp_in_blk >= block_size) {
+      if (block_size > 1) {
+        desc->period_cycles =
+            (uint32_t)((total_cycles - block_start_cycles) / (block_size - 1));
+      } else {
+        desc->period_cycles = period_target;
+      }
       desc->num_samples = smp_in_blk;
-      desc->flags = 0xAA55AA55;
+      desc->flags = BLOCK_FLAG_COMPLETE;
       current_blk = (current_blk + 1) % num_blocks;
       shm->write_block_idx = current_blk;
       smp_in_blk = 0;
