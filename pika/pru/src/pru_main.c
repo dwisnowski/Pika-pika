@@ -13,14 +13,13 @@
 #define PRU_CCNT_REG (*(volatile uint32_t *)(0x2200C))
 
 /*
- * DDR is outside the PRU near address space. clpru requires far *pointer*
- * types (far after '*'). Locals cannot use `far` as a storage-class prefix.
- * Build with --mem_model:data=far.
+ * DDR is outside the PRU near address space. Build with --mem_model:data=far
+ * so absolute pointers (0x8xxxxxxx+) use full 32-bit addressing.
+ *
+ * clpru's far/__far qualifies DATA SYMBOLS, not MS-DOS-style far pointers.
+ * Do not write `typedef T * far` or `volatile far T *` on locals — those are
+ * error #41 / #81 with this toolchain.
  */
-typedef volatile uint8_t * far ddr8_t;
-typedef volatile uint16_t * far ddr16_t;
-typedef volatile uint32_t * far ddr32_t;
-
 extern void delay_cycles_runtime(uint32_t iterations);
 
 static inline uint32_t ccnt_read(void) { return PRU_CCNT_REG; }
@@ -82,7 +81,7 @@ void main(void) {
   uint32_t block_size = shm->block_size;
   uint32_t num_blocks = shm->num_blocks;
   uint32_t block_total_size = BLOCK_TOTAL_SIZE(block_size);
-  ddr8_t ddr_base = (ddr8_t)ddr_phys;
+  volatile uint8_t *ddr_base = (volatile uint8_t *)ddr_phys;
 
   if ((uint32_t)num_blocks * block_total_size > ddr_size) {
     num_blocks = ddr_size / block_total_size;
@@ -91,15 +90,15 @@ void main(void) {
     shm->num_blocks = num_blocks;
   }
 
-  /* Probe DDR; hang here means far addressing is still wrong */
+  /* Probe DDR; hang here means addressing/OCP is still wrong */
   {
-    ddr32_t probe = (ddr32_t)ddr_phys;
+    volatile uint32_t *probe = (volatile uint32_t *)ddr_phys;
     probe[0] = 0xA5A55A5Au;
     shm->heartbeat++;
   }
 
   {
-    ddr32_t p = (ddr32_t)ddr_phys;
+    volatile uint32_t *p = (volatile uint32_t *)ddr_phys;
     for (i = 0; i < (int)(block_total_size / 4); i++)
       p[i] = 0;
   }
@@ -139,9 +138,10 @@ void main(void) {
 
     ccnt_accum(&last_cycles, &total_cycles);
 
-    ddr8_t b_base = ddr_base + (current_blk * block_total_size);
-    ddr32_t desc_words = (ddr32_t)(uint32_t)b_base;
-    ddr16_t b_data = (ddr16_t)(uint32_t)(b_base + BLOCK_DESCRIPTOR_SIZE);
+    volatile uint8_t *b_base = ddr_base + (current_blk * block_total_size);
+    volatile uint32_t *desc_words = (volatile uint32_t *)(uint32_t)b_base;
+    volatile uint16_t *b_data =
+        (volatile uint16_t *)(uint32_t)(b_base + BLOCK_DESCRIPTOR_SIZE);
 
     /*
      * Descriptor layout (little-endian, packed 24 B):

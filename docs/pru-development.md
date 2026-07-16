@@ -52,16 +52,28 @@ Put **only** `pru_shared_memory_t` here (first 128 bytes reserved). It is too sm
 
 ### Accessing DDR from PRU C (critical)
 
-DDR addresses (`0x80000000+`) are outside the PRU **near** data model. Using ordinary pointers truncates the address and the OCP transaction **hangs**.
+DDR addresses (`0x80000000+`) are outside the PRU **near** data model. With the default near model, absolute pointers truncate and the OCP transaction **hangs**.
 
 Required:
 
 - Compile with `--mem_model:data=far` (see `pika/pru/Makefile`)
-- Use `far` **pointer** typedefs (`typedef volatile uint32_t * far ddr32_t`), not `far` as a local storage-class prefix (clpru error #81)
+- Use ordinary `volatile` pointers; do **not** invent MS-DOS-style `far` pointer typedefs (`typedef T * far` → clpru error #41; `volatile far T *` on locals → error #81). clpru’s `far`/`__far` qualifies data symbols, not pointer width.
 - Clear `STANDBY_INIT` before touching DDR
 - Host publishes PA; PRU waits — do not invent carveout addresses in the PRU
 
-Symptom of missing `far`: host maps DDR fine, `error_flags` clears, `sample_count` stays 0, heartbeat freezes right after the wait loop.
+Symptom of a near/truncated DDR address: host maps DDR fine, `error_flags` clears, `sample_count` stays 0, heartbeat freezes right after the wait loop.
+
+### Host-side compile check (macOS)
+
+Install TI’s macOS `clpru` once and build firmware on the Mac before syncing to the BBB:
+
+```bash
+./scripts/install-pru-toolchain-macos.sh
+make -C pika/pru check-toolchain
+make -C pika/pru build
+```
+
+This catches clpru syntax/errors (#41, #81, missing headers) without a round-trip to the board. `load` / `run-pru-datalogger` still run on the BBB.
 
 ### Remoteproc carveout (optional / fragile on 4.19-ti)
 

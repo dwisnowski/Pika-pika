@@ -34,6 +34,18 @@ sudo apt-get install am335x-pru-package
 sudo apt-get install device-tree-compiler
 ```
 
+### Installation on macOS (host compile check)
+
+Build firmware on the Mac with the same `clpru` 2.3.3 used on the BBB so syntax errors are caught before sync:
+
+```bash
+./scripts/install-pru-toolchain-macos.sh
+make -C pika/pru check-toolchain
+make -C pika/pru build
+```
+
+The Makefile auto-detects `~/ti/cgt-pru-2.3.3/ti-cgt-pru_2.3.3` and `~/ti/pru-software-support-package`. Loading firmware (`make load`) still requires the BBB.
+
 ## Build Targets
 
 ### Main Targets

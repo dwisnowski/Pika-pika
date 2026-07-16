@@ -9,10 +9,29 @@
 PRU_CC := clpru
 PRU_LD := clpru
 
-# PRU Software Support Package paths (adjust as needed)
-# These paths may need to be configured based on installation
+# Host paths (BBB Debian defaults). Override with env or make PRU_CGT=...
+# On macOS after scripts/install-pru-toolchain-macos.sh:
+#   ~/ti/cgt-pru-2.3.3/ti-cgt-pru_2.3.3 and ~/ti/pru-software-support-package
 PRU_SSP ?= /usr/lib/ti/pru-software-support-package
-PRU_CGT := /usr/share/ti/cgt-pru
+PRU_CGT ?= /usr/share/ti/cgt-pru
+
+# Auto-detect local TI installs (Mac / Linux host cross-build)
+ifeq ($(wildcard $(PRU_CGT)/bin/clpru),)
+  ifneq ($(wildcard $(HOME)/ti/cgt-pru-2.3.3/ti-cgt-pru_2.3.3/bin/clpru),)
+    PRU_CGT := $(HOME)/ti/cgt-pru-2.3.3/ti-cgt-pru_2.3.3
+  else ifneq ($(wildcard $(HOME)/ti/ti-cgt-pru_2.3.3/bin/clpru),)
+    PRU_CGT := $(HOME)/ti/ti-cgt-pru_2.3.3
+  endif
+endif
+ifeq ($(wildcard $(PRU_SSP)/include/pru_cfg.h)$(wildcard $(PRU_SSP)/include/am335x/pru_cfg.h),)
+  ifneq ($(wildcard $(HOME)/ti/pru-software-support-package/include),)
+    PRU_SSP := $(HOME)/ti/pru-software-support-package
+  endif
+endif
+
+# Prefer toolchain bin on PATH for this make invocation
+export PATH := $(PRU_CGT)/bin:$(PATH)
+
 PRU_LIBS := --library=$(PRU_CGT)/lib/libc.a
 
 # =============================================================================
@@ -27,11 +46,11 @@ FIRMWARE_DIR := firmware
 # Compiler and Linker Flags
 # =============================================================================
 
-# Include Paths
-INCLUDE := -I$(INC_DIR) \
-           -I$(PRU_CGT)/include \
-           -I$(PRU_SSP)/include \
-           -I$(PRU_SSP)/include/am335x
+# Include Paths (--include_path is the portable clpru form; -I alone misses CGT headers on macOS)
+INCLUDE := --include_path=$(INC_DIR) \
+           --include_path=$(PRU_CGT)/include \
+           --include_path=$(PRU_SSP)/include \
+           --include_path=$(PRU_SSP)/include/am335x
 
 # Common Flags (Shared between C and Assembly)
 COMMON_FLAGS := -v3 \
@@ -108,7 +127,7 @@ PRU0_FIRMWARE := /sys/class/remoteproc/remoteproc1/firmware
 # =============================================================================
 # Phony Targets
 # =============================================================================
-.PHONY: all build bringup load load-bringup clean clean-tests overlay install-overlay help build_dir firmware_dir run
+.PHONY: all build bringup load load-bringup clean clean-tests overlay install-overlay help build_dir firmware_dir run check-toolchain
 
 # =============================================================================
 # Default Target
@@ -148,10 +167,31 @@ $(FIRMWARE_DIR)/ad7606_sampler.out: $(MAIN_OBJECTS) $(BUILD_DIR)/delay_cycles.ob
 # =============================================================================
 # Build Targets
 # =============================================================================
-info: 
+info:
 	$(info PRU_CGT=$(PRU_CGT))
-build: $(FIRMWARE_DIR)/ad7606_sampler.out
-bringup: $(FIRMWARE_DIR)/bringup_test.out
+	$(info PRU_SSP=$(PRU_SSP))
+	$(info PRU_CC=$(shell which $(PRU_CC) 2>/dev/null || echo missing))
+
+# Fail fast on host if clpru / headers are missing (run before syncing to BBB)
+check-toolchain:
+	@command -v $(PRU_CC) >/dev/null || { \
+	  echo "error: clpru not found on PATH (PRU_CGT=$(PRU_CGT))"; \
+	  echo "  macOS: ./scripts/install-pru-toolchain-macos.sh"; \
+	  echo "  BBB:   sudo apt install ti-pru-cgt-v2.3"; \
+	  exit 1; \
+	}
+	@test -f $(PRU_CGT)/include/stdint.h || { \
+	  echo "error: missing $(PRU_CGT)/include/stdint.h"; exit 1; \
+	}
+	@test -f $(PRU_SSP)/include/am335x/pru_cfg.h -o -f $(PRU_SSP)/include/pru_cfg.h || { \
+	  echo "error: missing PRU SSP headers under $(PRU_SSP)"; exit 1; \
+	}
+	@$(PRU_CC) -version | head -2
+	@echo "Toolchain OK: PRU_CGT=$(PRU_CGT)"
+	@echo "              PRU_SSP=$(PRU_SSP)"
+
+build: check-toolchain $(FIRMWARE_DIR)/ad7606_sampler.out
+bringup: check-toolchain $(FIRMWARE_DIR)/bringup_test.out
 
 # =============================================================================
 # Load Firmware to PRU
@@ -338,9 +378,9 @@ install-overlay: $(DTBO_FILE)
 # Clean
 # =============================================================================
 clean:
-	@sudo rm -rf $(BUILD_DIR)
-	@sudo rm -rf $(FIRMWARE_DIR)/*.out
-	@sudo rm -f $(DTBO_FILE)
+	@rm -rf $(BUILD_DIR)
+	@rm -f $(FIRMWARE_DIR)/*.out
+	@rm -f $(DTBO_FILE)
 	@echo "Clean complete"
 
 # =============================================================================
@@ -352,6 +392,7 @@ help:
 	@echo ""
 	@echo "Targets:"
 	@echo "  build          - Build main sampling firmware (ad7606_sampler.out)"
+	@echo "  check-toolchain- Verify clpru + CGT/SSP paths (host or BBB)"
 	@echo "  bringup        - Build bringup test firmware (bringup_test.out)"
 	@echo "  load           - Load main firmware to PRU0 via remoteproc"
 	@echo "  load-bringup   - Load bringup firmware to PRU0 via remoteproc"
