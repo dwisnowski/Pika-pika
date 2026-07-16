@@ -13,6 +13,8 @@ The PRU (Programmable Real-time Unit) firmware implements:
 
 Authoritative layout: [`include/shm_layout.h`](include/shm_layout.h) and [`docs/memory-map.md`](../../docs/memory-map.md).
 
+**AI / bring-up notes:** read [`docs/pru-development.md`](../../docs/pru-development.md) before changing PRU or Shared-RAM/DDR code (memory pitfalls, boot handshake, symptoms).
+
 ## Directory Structure
 
 ```

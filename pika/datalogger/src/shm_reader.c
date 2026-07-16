@@ -145,109 +145,110 @@ int shm_reader_map_ddr(shm_reader_t *reader) {
   return 0;
 }
 
-/* PRU0 Data RAM (holds .resource_table at link address 0) */
-#define PRU0_DRAM_PHYS 0x4a300000u
-#define PRU0_DRAM_SIZE 0x2000u
+static int cmdline_has_mem_448m(void) {
+  FILE *f = fopen("/proc/cmdline", "r");
+  if (!f)
+    return 0;
+  char buf[512];
+  size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+  fclose(f);
+  if (n == 0)
+    return 0;
+  buf[n] = '\0';
+  return strstr(buf, "mem=448M") != NULL || strstr(buf, "mem=448m") != NULL;
+}
 
 int shm_reader_publish_carveout_pa(shm_reader_t *reader) {
   if (!reader || reader->mem_fd < 0 || !reader->header)
     return -1;
 
-  /* Already have a PA from the PRU */
+  /* Already have a PA from the PRU or a prior publish */
   if (reader->header->ddr_phys_addr != 0)
     return 0;
 
-  void *dram = mmap(NULL, PRU0_DRAM_SIZE, PROT_READ, MAP_SHARED, reader->mem_fd,
-                    PRU0_DRAM_PHYS);
-  if (dram == MAP_FAILED) {
-    perror("mmap PRU0 DRAM for resource table");
-    return -1;
-  }
-
-  /*
-   * Layout must match pika/pru/include/resource_table.h
-   * base: ver, num, reserved[2]  (16 bytes)
-   * offset[1]                    (4 bytes)
-   * carveout at offset from table start
-   */
-  const uint32_t *words = (const uint32_t *)dram;
-  uint32_t ver = words[0];
-  uint32_t num = words[1];
-  uint32_t carveout_off = words[4]; /* offset[0] */
-
-  uint32_t pa = 0;
-  uint32_t da = 0;
-  uint32_t len = 0;
-  uint32_t type = 0;
-
-  if (ver == 1 && num >= 1 && carveout_off + 24 <= PRU0_DRAM_SIZE) {
-    const uint32_t *c = (const uint32_t *)((const uint8_t *)dram + carveout_off);
-    type = c[0];
-    da = c[1];
-    pa = c[2];
-    len = c[3];
-  }
-
-  munmap(dram, PRU0_DRAM_SIZE);
-
-  printf("[SHM Reader] Resource table in PRU DMEM: ver=%u num=%u "
-         "carveout_off=%u type=%u da=0x%08X pa=0x%08X len=%u\n",
-         ver, num, carveout_off, type, da, pa, len);
-
   uint32_t phys = 0;
-  if (pa != 0 && pa != 0xFFFFFFFFu)
-    phys = pa;
-  else if (da != 0 && da != 0xFFFFFFFFu)
-    phys = da;
+  uint32_t len = reader->header->ddr_size_bytes;
+  if (len == 0)
+    len = PIKA_DDR_RING_SIZE;
 
-  if (phys == 0) {
-    /* Fallback: parse debugfs resource_table if available */
-    for (int i = 0; i < 5 && phys == 0; i++) {
-      char path[128];
-      snprintf(path, sizeof(path),
-               "/sys/kernel/debug/remoteproc/remoteproc%d/resource_table", i);
-      FILE *f = fopen(path, "rb");
-      if (!f)
-        continue;
-      uint8_t buf[256];
-      size_t n = fread(buf, 1, sizeof(buf), f);
-      fclose(f);
-      if (n < 64)
-        continue;
-      uint32_t *w = (uint32_t *)buf;
-      uint32_t off = w[4];
-      if (off + 16 <= n) {
-        uint32_t *c = (uint32_t *)(buf + off);
-        uint32_t d = c[1], p = c[2], l = c[3];
-        if (p != 0 && p != 0xFFFFFFFFu)
-          phys = p;
-        else if (d != 0 && d != 0xFFFFFFFFu)
-          phys = d;
-        if (phys && l)
-          len = l;
-        printf("[SHM Reader] debugfs %s: da=0x%08X pa=0x%08X len=%u\n", path,
-               d, p, l);
-      }
-    }
+  /* 1) debugfs resource table (patched by remoteproc) */
+  for (int i = 0; i < 5 && phys == 0; i++) {
+    char path[128];
+    snprintf(path, sizeof(path),
+             "/sys/kernel/debug/remoteproc/remoteproc%d/resource_table", i);
+    FILE *f = fopen(path, "rb");
+    if (!f)
+      continue;
+    uint8_t buf[256];
+    size_t n = fread(buf, 1, sizeof(buf), f);
+    fclose(f);
+    if (n < 64)
+      continue;
+    uint32_t *w = (uint32_t *)buf;
+    if (w[0] != 1 || w[1] < 1)
+      continue;
+    uint32_t off = w[4];
+    if (off + 16 > n)
+      continue;
+    uint32_t *c = (uint32_t *)(buf + off);
+    uint32_t d = c[1], p = c[2], l = c[3];
+    if (p != 0 && p != 0xFFFFFFFFu)
+      phys = p;
+    else if (d != 0 && d != 0xFFFFFFFFu)
+      phys = d;
+    if (phys && l)
+      len = l;
+    printf("[SHM Reader] debugfs %s: da=0x%08X pa=0x%08X len=%u\n", path, d, p,
+           l);
+  }
+
+  /* 2) Fallback: fixed top-of-DRAM PA when mem=448M reserved it */
+  if (phys == 0 && cmdline_has_mem_448m()) {
+    phys = PIKA_DDR_RING_PHYS;
+    len = PIKA_DDR_RING_SIZE;
+    printf("[SHM Reader] Using mem=448M fallback DDR ring @ phys 0x%08X\n",
+           phys);
   }
 
   if (phys == 0) {
     fprintf(stderr,
-            "[SHM Reader] Could not find carveout PA in PRU resource table\n");
+            "[SHM Reader] No DDR ring PA found.\n"
+            "  Mount debugfs, or add mem=448M to cmdline and reboot.\n");
     return -1;
   }
 
-  if (len == 0)
-    len = PIKA_DDR_RING_SIZE;
+  /* Verify ARM can map and R/W the region before handing it to the PRU */
+  {
+    void *p =
+        mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_SHARED, reader->mem_fd, phys);
+    if (p == MAP_FAILED) {
+      perror("mmap DDR ring for verify");
+      return -1;
+    }
+    volatile uint32_t *w = (volatile uint32_t *)p;
+    const uint32_t probe = 0xA5A55A5Au;
+    w[0] = probe;
+    uint32_t got = w[0];
+    w[0] = 0;
+    munmap(p, len);
+    if (got != probe) {
+      fprintf(stderr,
+              "[SHM Reader] DDR ring @ 0x%08X did not retain probe write "
+              "(got 0x%08X)\n",
+              phys, got);
+      return -1;
+    }
+    printf("[SHM Reader] Verified DDR ring R/W @ phys 0x%08X (%u bytes)\n",
+           phys, len);
+  }
 
   reader->header->ddr_phys_addr = phys;
   reader->header->ddr_size_bytes = len;
-  /* Clear waiting flag so PRU leaves the host-PA wait loop */
   if (reader->header->error_flags == 0xDEAD00DD)
     reader->header->error_flags = 0;
 
-  printf("[SHM Reader] Published carveout PA 0x%08X (%u bytes) to PRU SHM\n",
-         phys, len);
+  printf("[SHM Reader] Published DDR PA 0x%08X (%u bytes) to PRU SHM\n", phys,
+         len);
   return 0;
 }
 

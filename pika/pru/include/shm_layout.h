@@ -31,10 +31,11 @@
   (BLOCK_DESCRIPTOR_SIZE + BLOCK_PAYLOAD_BYTES(block_size))
 
 /**
- * DDR sample ring size (remoteproc carveout request).
- * Physical address is assigned by Linux at load time and published in
- * pru_shared_memory_t.ddr_phys_addr — do not hardcode a fixed PA.
+ * DDR sample ring.
+ * Preferred: host publishes a verified physical address in ddr_phys_addr.
+ * Fallback PA when cmdline has mem=448M (top of 512 MiB BBB DRAM unused by Linux).
  */
+#define PIKA_DDR_RING_PHYS 0x9C000000u
 #define PIKA_DDR_RING_SIZE 0x00100000u /* 1 MiB */
 
 /** Defaults for DDR-backed ring (must fit in PIKA_DDR_RING_SIZE) */

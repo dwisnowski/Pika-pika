@@ -1,0 +1,34 @@
+---
+description: BeagleBone PRU + Shared-RAM/DDR pitfalls for AD7606 acquisition
+globs: pika/pru/**/*,pika/datalogger/**/*,docs/memory-map.md,docs/pru-development.md
+alwaysApply: false
+---
+
+# PRU / BBB acquisition rules
+
+Before changing PRU or SHM code, read [docs/pru-development.md](docs/pru-development.md).
+
+## Non-negotiables
+
+- **Trust headers over docs.** Canonical contract is [`pika/pru/include/shm_layout.h`](pika/pru/include/shm_layout.h). `docs/memory-map.md` can lag.
+- **Shared RAM (12 KB @ `0x4A310000`) is control-only.** Deep sample rings belong in DDR; never grow the sample ring back into Shared RAM.
+- **Host publishes DDR PA; PRU waits.** Do not assume the PRU can read a remoteproc-patched carveout PA from its own DMEM resource table. Flow: host verifies R/W on the region → writes `ddr_phys_addr` into SHM → PRU leaves `0xDEAD00DD` wait.
+- **Keep `mem=448M` while using fixed PA `0x9C000000`.** That cmdline reserve is what makes the current DDR fallback safe. Do not remove it without switching to a working carveout discovery path.
+- **PRU wipes the SHM header on boot.** Host must re-apply `ch_enable`, `sample_rate`, and `sample_period_cycles` **after** `magic == 0xDEADBEEF`.
+- **After PRU source changes: rebuild and reload firmware** (`make pru` / `make run-pru-datalogger`). Rebuilding only the datalogger is not enough.
+- **Progress = `sample_count / block_size`**, not `write_block_idx` alone (idx has been observed unstable/`0xFFFFFFFF`).
+- **Block complete flag is `0xAA55AA55`.** Reject anything else.
+- **Timestamps are per-block** (`timestamp_cycles` + `period_cycles`). Do not add per-sample timestamps at high SPS.
+- **`sample_period_cycles == 0` ⇒ free-run;** otherwise pace with `delay_cycles_runtime(remaining >> 1)` (asm loop is ~2 cycles/iter).
+- **Enable OCP before DDR:** `CT_CFG.SYSCFG_bit.STANDBY_INIT = 0`.
+- **Resource-table structs:** use the explicit layout in [`resource_table.h`](pika/pru/include/resource_table.h). Do not depend on SSP `rsc_types.h` field packing or `FW_RSC_ADDR_ANY` being defined.
+
+## Symptom → cause
+
+| Symptom | Likely cause |
+|---------|----------------|
+| Heartbeat frozen, `sample_count` stuck | PRU hung (often first DDR store/fault) |
+| `error_flags == 0xDEAD00DD`, slow heartbeat | PRU waiting for host `ddr_phys_addr` |
+| Garbage block `flags` / huge `num_samples` | ARM reading wrong PA or PRU never wrote that DDR |
+| Header config ignored | Host wrote config before PRU wiped header |
+| `FW_RSC_ADDR_ANY` compile error | Define locally; older SSP headers omit it |
