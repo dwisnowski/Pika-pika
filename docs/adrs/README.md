@@ -13,4 +13,4 @@ Each ADR is a numbered Markdown file: `NNNN-short-title.md`.
 
 | ADR | Title | Status |
 |-----|-------|--------|
-| [0001](0001-pru-timing-accuracy.md) | PRU-to-Linux timing accuracy for sag/swell review | Proposed |
+| [0001](0001-pru-timing-accuracy.md) | PRU-to-Linux timing accuracy for sag/swell review | Accepted |

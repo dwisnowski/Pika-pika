@@ -1,8 +1,8 @@
 # ADR-0001: PRU-to-Linux Timing Accuracy for Sag/Swell Review
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Date:** 2026-08-19  
-**Branch:** `beagleboneblack`
+**Branch:** `beagleboneblack` / `cursor/pru-timing-8186`
 
 ## Context
 

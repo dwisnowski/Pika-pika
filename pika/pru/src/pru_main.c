@@ -107,6 +107,7 @@ void main(void) {
   uint32_t current_blk = 0;
   uint32_t smp_in_blk = 0;
   uint64_t block_start_cycles = 0;
+  uint64_t block_end_cycles = 0;
 
   __R30 |= PIN_RD;
   __R30 |= PIN_CONVST;
@@ -137,6 +138,10 @@ void main(void) {
     }
 
     ccnt_accum(&last_cycles, &total_cycles);
+
+    /* Stamp end-of-block period before trailing pace delay on last sample. */
+    if (smp_in_blk == block_size - 1)
+      block_end_cycles = total_cycles;
 
     volatile uint8_t *b_base = ddr_base + (current_blk * block_total_size);
     volatile uint32_t *desc_words = (volatile uint32_t *)(uint32_t)b_base;
@@ -210,8 +215,10 @@ void main(void) {
     if (smp_in_blk >= block_size) {
       uint32_t period = period_target;
       if (block_size > 1) {
-        period =
-            (uint32_t)((total_cycles - block_start_cycles) / (block_size - 1));
+        uint64_t end_cycles =
+            (block_end_cycles > block_start_cycles) ? block_end_cycles
+                                                    : total_cycles;
+        period = (uint32_t)((end_cycles - block_start_cycles) / (block_size - 1));
       }
       desc_words[4] = period;
       desc_words[2] = smp_in_blk;
