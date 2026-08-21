@@ -4,12 +4,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Static result buffer — avoids heap allocation per event */
-static anomaly_event_t g_event_result;
-
-/* Helper: cooldown in ns from ms */
 static inline uint64_t ms_to_ns(uint32_t ms) {
   return (uint64_t)ms * 1000000ULL;
+}
+
+static inline uint32_t ms_to_samples(uint32_t ms, uint32_t rate_hz) {
+  if (rate_hz == 0)
+    return 1;
+  uint32_t s = (ms * rate_hz) / 1000U;
+  return (s == 0) ? 1U : s;
 }
 
 int anomaly_detector_init(anomaly_detector_t *ad, anomaly_config_t config,
@@ -25,10 +28,9 @@ int anomaly_detector_init(anomaly_detector_t *ad, anomaly_config_t config,
   ad->ns_per_sample =
       (nominal_rate_hz > 0) ? (1000000000ULL / nominal_rate_hz) : 100000ULL;
 
-  /* --- Compute derived window sizes (sample-rate-aware) --- */
   uint32_t samples_per_cycle = nominal_rate_hz / detection.ac_freq_hz;
   if (samples_per_cycle == 0)
-    samples_per_cycle = 1; /* safety */
+    samples_per_cycle = 1;
 
   ad->rms_window_samples = samples_per_cycle * detection.rms_window_cycles;
   if (ad->rms_window_samples == 0)
@@ -36,13 +38,8 @@ int anomaly_detector_init(anomaly_detector_t *ad, anomaly_config_t config,
 
   ad->learn_samples_total = samples_per_cycle * detection.learn_cycles;
   ad->learn_samples_left = ad->learn_samples_total;
-
-  /* EMA alpha: a smaller alpha means more smoothing (slower response).
-   * Using half the RMS window gives a DC removal time constant equal to
-   * ~0.5 * rms_window_samples — responsive but stable. */
   ad->ema_alpha = 1.0f / (float)ad->rms_window_samples;
 
-  /* Allocate the sq_ring circular buffer */
   ad->sq_ring = (float *)calloc(ad->rms_window_samples, sizeof(float));
   if (!ad->sq_ring) {
     fprintf(stderr,
@@ -51,21 +48,20 @@ int anomaly_detector_init(anomaly_detector_t *ad, anomaly_config_t config,
     return -1;
   }
 
-  /* Debounce cooldowns */
   ad->sag_cooldown_ns = ms_to_ns(debounce.sag_cooldown_ms);
   ad->swell_cooldown_ns = ms_to_ns(debounce.swell_cooldown_ms);
   ad->spike_cooldown_ns = ms_to_ns(debounce.spike_cooldown_ms);
 
-  /* nominal_vrms starts at 0 → learning phase */
-  ad->nominal_vrms = 0.0f;
-  ad->learn_sq_sum = 0.0f;
-  ad->learn_count = 0;
+  ad->sag_min_duration_samples =
+      ms_to_samples(config.sag_min_duration_ms, nominal_rate_hz);
+  ad->swell_min_duration_samples =
+      ms_to_samples(config.swell_min_duration_ms, nominal_rate_hz);
 
   printf("[Detector] Init: rate=%u Hz, rms_window=%u samples (%u cycles), "
-         "learn=%u samples (%u cycles), adc_vref=%.1f, initial_ratio=%.1f (will auto-calibrate)\n",
+         "learn=%u samples (%u cycles), sag_min=%u swell_min=%u samples\n",
          nominal_rate_hz, ad->rms_window_samples, detection.rms_window_cycles,
-         ad->learn_samples_total, detection.learn_cycles, sensor.adc_vref,
-         sensor.transformer_ratio);
+         ad->learn_samples_total, detection.learn_cycles,
+         ad->sag_min_duration_samples, ad->swell_min_duration_samples);
 
   return 0;
 }
@@ -75,19 +71,13 @@ void anomaly_detector_free(anomaly_detector_t *ad) {
   ad->sq_ring = NULL;
 }
 
-/* ------------------------------------------------------------------ */
-/*  Internal helpers                                                   */
-/* ------------------------------------------------------------------ */
-
 static inline float adc_to_volts(int16_t raw, float adc_vref,
                                  uint32_t adc_bits) {
-  /* Signed two's-complement: max positive = 2^(bits-1) - 1 ≈ 2^(bits-1) */
   float full_scale = (float)(1u << (adc_bits - 1));
   return (float)raw * (adc_vref / full_scale);
 }
 
 static float push_rms_ring(anomaly_detector_t *ad, float sq_val) {
-  /* Evict the oldest sample if ring is full */
   if (ad->sq_count >= ad->rms_window_samples) {
     ad->sq_sum -= ad->sq_ring[ad->sq_head];
   } else {
@@ -98,7 +88,7 @@ static float push_rms_ring(anomaly_detector_t *ad, float sq_val) {
   ad->sq_head = (ad->sq_head + 1) % ad->rms_window_samples;
   return (ad->sq_count >= ad->rms_window_samples)
              ? sqrtf(ad->sq_sum / (float)ad->rms_window_samples)
-             : -1.0f; /* sentinel: window not yet full */
+             : -1.0f;
 }
 
 static uint64_t cooldown_for_type(anomaly_detector_t *ad, event_type_t t) {
@@ -114,153 +104,151 @@ static uint64_t cooldown_for_type(anomaly_detector_t *ad, event_type_t t) {
   }
 }
 
-/* ------------------------------------------------------------------ */
-/*  Main processing function                                           */
-/* ------------------------------------------------------------------ */
+static uint32_t min_duration_for_type(anomaly_detector_t *ad, event_type_t t) {
+  switch (t) {
+  case EVENT_TYPE_SAG:
+    return ad->sag_min_duration_samples;
+  case EVENT_TYPE_SWELL:
+    return ad->swell_min_duration_samples;
+  default:
+    return 1;
+  }
+}
 
-anomaly_event_t *anomaly_detector_process(anomaly_detector_t *ad,
-                                          int16_t *samples, uint32_t count,
-                                          uint32_t channels,
-                                          uint64_t base_time_ns) {
-  uint64_t ns_per_sample = ad->ns_per_sample;
-  if (ns_per_sample == 0)
-    ns_per_sample = 100000ULL;
+static int finish_event_sample(anomaly_detector_t *ad, event_type_t ended_type,
+                               uint64_t sample_time_ns, float vrms_mains,
+                               ad_notification_t *out) {
+  uint32_t min_dur = min_duration_for_type(ad, ended_type);
 
-  for (uint32_t i = 0; i < count; i++) {
-    /* --- Channel 0 only for detection --- */
-    int16_t raw = samples[i * channels]; /* ch0 */
+  if (ad->current_duration >= min_dur) {
+    out->kind = AD_NOTIFY_COMPLETED;
+    out->event = (anomaly_event_t){
+        .timestamp_ns = ad->start_time_ns,
+        .type = ended_type,
+        .rms_vrms = vrms_mains,
+        .peak_value = ad->peak_raw,
+        .duration_samples = ad->current_duration,
+    };
 
-    /* 1. Convert raw ADC count → volts */
-    float v = adc_to_volts(raw, ad->sensor.adc_vref, ad->sensor.adc_bits);
-
-    /* 2. Remove DC bias with an EMA */
-    ad->dc_ema = ad->ema_alpha * v + (1.0f - ad->ema_alpha) * ad->dc_ema;
-    float v_ac = v - ad->dc_ema;
-
-    /* 3. Push v_ac^2 into the RMS ring, get current RMS (ADC-side) */
-    float rms_adc = push_rms_ring(ad, v_ac * v_ac);
-
-    /* If RMS window not yet full, skip detection entirely */
-    if (rms_adc < 0.0f)
-      continue;
-
-    /* 4. Auto-learn transformer ratio from measured ADC RMS */
-    if (ad->learn_samples_left > 0) {
-      /* Accumulate squared AC voltage samples (DC already removed by EMA) */
-      ad->learn_sq_sum += v_ac * v_ac;
-      ad->learn_count++;
-      ad->learn_samples_left--;
-
-      if (ad->learn_samples_left == 0) {
-        /* Learning complete: compute RMS from accumulated squared samples */
-        float measured_adc_rms = sqrtf(ad->learn_sq_sum / (float)ad->learn_count);
-        
-        /* Learn transformer ratio: ratio = target_mains_vrms / measured_adc_rms */
-        if (measured_adc_rms > 0.001f) {  /* avoid divide-by-zero */
-          /* Calculate learned transformer ratio */
-          float target_vrms = ad->sensor.target_mains_vrms;
-          ad->sensor.transformer_ratio = target_vrms / measured_adc_rms;
-          ad->nominal_vrms = target_vrms;
-          
-          printf("[Detector] Auto-calibration complete:\n");
-          printf("  Measured ADC RMS (DC-removed): %.4f V\n", measured_adc_rms);
-          printf("  Target Mains VRMS: %.1f V\n", target_vrms);
-          printf("  Learned transformer_ratio: %.2f\n", ad->sensor.transformer_ratio);
-          printf("  Nominal VRMS set to: %.1f V\n", ad->nominal_vrms);
-          // [Detector] Auto-calibration complete:
-          //   Measured ADC RMS (DC-removed): 0.7170 V
-          //   Target Mains VRMS: 120.0 V
-          //   Learned transformer_ratio: 167.36
-          //   Nominal VRMS set to: 120.0 V
-          
-          /* Write learned voltage and transformer ratio to status file for webapp to read */
-          FILE *status_file = fopen("data/calibration_status.txt", "w");
-          if (status_file) {
-            fprintf(status_file, "%.2f\n%.2f\n", ad->nominal_vrms, ad->sensor.transformer_ratio);
-            fclose(status_file);
-          }
-        } else {
-          /* Fallback: use config values if measurement failed */
-          ad->nominal_vrms = ad->sensor.target_mains_vrms;
-          printf("[Detector] WARNING: ADC RMS too low (%.4f V), using default nominal_vrms=%.1f V and transformer_ratio=%.2f\n",
-                 measured_adc_rms, ad->nominal_vrms, ad->sensor.transformer_ratio);
-          
-          /* Write fallback voltage and transformer ratio to status file */
-          FILE *status_file = fopen("data/calibration_status.txt", "w");
-          if (status_file) {
-            fprintf(status_file, "%.2f\n%.2f\n", ad->nominal_vrms, ad->sensor.transformer_ratio);
-            fclose(status_file);
-          }
-        }
-      }
-      /* Still learning — suppress event detection */
-      continue;
-    }
-
-    /* 5. Apply learned transformer ratio to get estimated mains VRMS */
-    float vrms_mains = rms_adc * ad->sensor.transformer_ratio;
-
-    /* 6. Compute thresholds from learned nominal */
-    float sag_threshold_vrms =
-        ad->nominal_vrms * (1.0f + ad->config.sag_threshold_pct / 100.0f);
-    float swell_threshold_vrms =
-        ad->nominal_vrms * (1.0f + ad->config.swell_threshold_pct / 100.0f);
-
-    /* Determine which event type is active right now */
-    event_type_t cur_type = EVENT_TYPE_NONE;
-    if (vrms_mains < sag_threshold_vrms) {
-      cur_type = EVENT_TYPE_SAG;
-    } else if (vrms_mains > swell_threshold_vrms) {
-      cur_type = EVENT_TYPE_SWELL;
-    }
-
-    uint64_t sample_time_ns = base_time_ns + (uint64_t)i * ns_per_sample;
-
-    /* 7. Event state machine */
-    if (cur_type != EVENT_TYPE_NONE) {
-      if (!ad->in_event) {
-        /* Check debounce before starting a new event */
-        uint64_t cooldown = cooldown_for_type(ad, cur_type);
-        if ((sample_time_ns - ad->last_event_end_ns[cur_type]) < cooldown) {
-          /* Still within cooldown — suppress */
-          continue;
-        }
-        /* Start event */
-        ad->in_event = 1;
-        ad->current_type = cur_type;
-        ad->start_time_ns = sample_time_ns;
-        ad->current_duration = 1;
-        printf("[Detector] Event STARTED: Type %d, VRMS=%.2f V (nominal=%.2f "
-               "V) at %llu ns\n",
-               cur_type, vrms_mains, ad->nominal_vrms,
-               (unsigned long long)sample_time_ns);
-      } else if (cur_type == ad->current_type) {
-        ad->current_duration++;
-      } else {
-        /* Type changed mid-event — end current, will re-evaluate next iter */
-        goto end_event;
-      }
-    } else if (ad->in_event) {
-    end_event:;
-      /* Event just ended */
-      g_event_result.type = ad->current_type;
-      g_event_result.timestamp_ns = ad->start_time_ns;
-      g_event_result.duration_samples = ad->current_duration;
-      g_event_result.peak_value = raw;
-      g_event_result.rms_vrms = vrms_mains;
-
-      printf(
-          "[Detector] Event ENDED: Type %d, Duration %u samples, VRMS=%.2f V\n",
-          ad->current_type, ad->current_duration, vrms_mains);
-
-      /* 8. Record end time for debounce */
-      ad->last_event_end_ns[ad->current_type] = sample_time_ns;
-
-      ad->in_event = 0;
-      ad->current_type = EVENT_TYPE_NONE;
-      return &g_event_result;
-    }
+    printf("[Detector] Event ENDED: Type %d, Duration %u samples, VRMS=%.2f V\n",
+           ended_type, ad->current_duration, vrms_mains);
+  } else {
+    printf("[Detector] Event discarded (duration %u < min %u samples)\n",
+           ad->current_duration, min_dur);
+    ad->last_event_end_ns[ended_type] = sample_time_ns;
+    ad->in_event = 0;
+    ad->current_type = EVENT_TYPE_NONE;
+    ad->current_duration = 0;
+    return 0;
   }
 
-  return NULL;
+  ad->last_event_end_ns[ended_type] = sample_time_ns;
+  ad->in_event = 0;
+  ad->current_type = EVENT_TYPE_NONE;
+  ad->current_duration = 0;
+  return 1;
+}
+
+int anomaly_detector_process_sample(anomaly_detector_t *ad, int16_t raw,
+                                    uint64_t sample_time_ns,
+                                    ad_notification_t *out) {
+  if (!out)
+    return 0;
+
+  float v = adc_to_volts(raw, ad->sensor.adc_vref, ad->sensor.adc_bits);
+  ad->dc_ema = ad->ema_alpha * v + (1.0f - ad->ema_alpha) * ad->dc_ema;
+  float v_ac = v - ad->dc_ema;
+  float rms_adc = push_rms_ring(ad, v_ac * v_ac);
+
+  if (rms_adc < 0.0f)
+    return 0;
+
+  if (ad->learn_samples_left > 0) {
+    ad->learn_sq_sum += v_ac * v_ac;
+    ad->learn_count++;
+    ad->learn_samples_left--;
+
+    if (ad->learn_samples_left == 0) {
+      float measured_adc_rms =
+          sqrtf(ad->learn_sq_sum / (float)ad->learn_count);
+
+      if (measured_adc_rms > 0.001f) {
+        float target_vrms = ad->sensor.target_mains_vrms;
+        ad->sensor.transformer_ratio = target_vrms / measured_adc_rms;
+        ad->nominal_vrms = target_vrms;
+
+        printf("[Detector] Auto-calibration complete: ADC RMS=%.4f V, "
+               "ratio=%.2f, nominal=%.1f V\n",
+               measured_adc_rms, ad->sensor.transformer_ratio, ad->nominal_vrms);
+
+        FILE *status_file = fopen("data/calibration_status.txt", "w");
+        if (status_file) {
+          fprintf(status_file, "%.2f\n%.2f\n", ad->nominal_vrms,
+                  ad->sensor.transformer_ratio);
+          fclose(status_file);
+        }
+      } else {
+        ad->nominal_vrms = ad->sensor.target_mains_vrms;
+        fprintf(stderr,
+                "[Detector] WARNING: ADC RMS too low, using defaults\n");
+      }
+    }
+    return 0;
+  }
+
+  float vrms_mains = rms_adc * ad->sensor.transformer_ratio;
+  float sag_threshold_vrms =
+      ad->nominal_vrms * (1.0f + ad->config.sag_threshold_pct / 100.0f);
+  float swell_threshold_vrms =
+      ad->nominal_vrms * (1.0f + ad->config.swell_threshold_pct / 100.0f);
+
+  event_type_t cur_type = EVENT_TYPE_NONE;
+  if (vrms_mains < sag_threshold_vrms)
+    cur_type = EVENT_TYPE_SAG;
+  else if (vrms_mains > swell_threshold_vrms)
+    cur_type = EVENT_TYPE_SWELL;
+
+  if (cur_type != EVENT_TYPE_NONE) {
+    if (!ad->in_event) {
+      uint64_t cooldown = cooldown_for_type(ad, cur_type);
+      if ((sample_time_ns - ad->last_event_end_ns[cur_type]) < cooldown)
+        return 0;
+
+      ad->in_event = 1;
+      ad->current_type = cur_type;
+      ad->start_time_ns = sample_time_ns;
+      ad->current_duration = 1;
+      ad->peak_raw = raw;
+
+      out->kind = AD_NOTIFY_STARTED;
+      out->event = (anomaly_event_t){
+          .timestamp_ns = sample_time_ns,
+          .type = cur_type,
+          .rms_vrms = vrms_mains,
+          .peak_value = raw,
+          .duration_samples = 0,
+      };
+
+      printf("[Detector] Event STARTED: Type %d, VRMS=%.2f V at %llu ns\n",
+             cur_type, vrms_mains, (unsigned long long)sample_time_ns);
+      return 1;
+    }
+
+    if (cur_type == ad->current_type) {
+      ad->current_duration++;
+      if ((raw > 0 ? raw : -raw) >
+          (ad->peak_raw > 0 ? ad->peak_raw : -ad->peak_raw))
+        ad->peak_raw = raw;
+      return 0;
+    }
+
+    finish_event_sample(ad, ad->current_type, sample_time_ns, vrms_mains, out);
+    return 0;
+  }
+
+  if (ad->in_event)
+    return finish_event_sample(ad, ad->current_type, sample_time_ns, vrms_mains,
+                               out);
+
+  return 0;
 }

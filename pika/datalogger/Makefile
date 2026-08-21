@@ -40,10 +40,14 @@ run: all
 validate:
 	python3 validate_data.py
 
+test-time-utils:
+	gcc -Wall -O2 -I./include test_time_utils.c src/time_utils.c -o test_time_utils -lrt
+	./test_time_utils
+
 validate-verbose:
 	python3 validate_data.py --verbose
 
 validate-diagnose:
 	sudo python3 validate_data.py --verbose --diagnose
 
-.PHONY: all clean clean-data clean-all run validate validate-verbose validate-diagnose
+.PHONY: all clean clean-data clean-all run validate validate-verbose validate-diagnose test-time-utils

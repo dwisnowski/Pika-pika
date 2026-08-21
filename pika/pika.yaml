@@ -56,7 +56,7 @@ sensor:
 # Detection Configuration
 detection:
   ac_freq_hz: 60              # mains frequency (60 for NA, 50 for EU)
-  rms_window_cycles: 30       # RMS window = N full 60Hz AC cycles
+  rms_window_cycles: 1        # 1-cycle RMS for fast sag/swell onset tagging
   learn_cycles: 5000          # auto-learn nominal VRMS from first N cycles (~16s at 60Hz)
 
 # Anomaly Thresholds

@@ -31,8 +31,12 @@ import argparse
 DECIMATED_HDR_FMT  = "<QIIII"   # start_time_ns(u64) sample_rate(u32) sample_count(u32) channels(u32) values_per_sample(u32)
 DECIMATED_HDR_SIZE = struct.calcsize(DECIMATED_HDR_FMT)
 
-EVENT_IDX_FMT  = "<QQBhIQ"      # event_id(u64) timestamp_ns(u64) event_type(u8) peak_value(i16) duration_samples(u32) file_offset(u64)
+EVENT_IDX_FMT  = "<QQQQBhIQ"   # v2 index record (47 bytes packed)
 EVENT_IDX_SIZE = struct.calcsize(EVENT_IDX_FMT)
+
+# Unix epoch plausibility: 2020-01-01 .. 2100-01-01
+EPOCH_MIN_NS = 1577836800 * 1_000_000_000
+EPOCH_MAX_NS = 4102444800 * 1_000_000_000
 
 # Timestamp delta tolerance: allow ±50% of expected inter‑chunk gap
 DELTA_TOLERANCE = 0.50
@@ -88,6 +92,10 @@ def validate_decimated(path: str, verbose: bool = False) -> bool:
             # Header sanity
             if rate == 0 or rate > 10_000_000:
                 failures.append(f"Chunk {chunk_idx}: implausible sample_rate {rate}")
+            elif rate > 500 and verbose:
+                print(f"  [{WARN}] Chunk {chunk_idx}: sample_rate {rate} Hz (expected decimated ~50 Hz)")
+            if ts < EPOCH_MIN_NS or ts > EPOCH_MAX_NS:
+                failures.append(f"Chunk {chunk_idx}: start_time_ns {ts} outside plausible Unix epoch range")
             if count == 0 or count > 100_000:
                 failures.append(f"Chunk {chunk_idx}: implausible sample_count {count}")
             if channels == 0 or channels > 32:
@@ -227,9 +235,19 @@ def validate_event_index(index_path: str, events_path: str, verbose: bool = Fals
             if len(raw) < EVENT_IDX_SIZE:
                 failures.append(f"Record {rec_idx}: truncated ({len(raw)} of {EVENT_IDX_SIZE} bytes)")
                 break
-            eid, ts, etype, peak, dur, foff = struct.unpack(EVENT_IDX_FMT, raw)
-            records.append({"id": eid, "ts": ts, "type": etype, "peak": peak,
-                             "dur": dur, "foff": foff})
+            eid, ts, wf_start, ns_per_sample, etype, peak, dur, foff = struct.unpack(
+                EVENT_IDX_FMT, raw
+            )
+            records.append({
+                "id": eid,
+                "ts": ts,
+                "wf_start": wf_start,
+                "ns_per_sample": ns_per_sample,
+                "type": etype,
+                "peak": peak,
+                "dur": dur,
+                "foff": foff,
+            })
             rec_idx += 1
 
     if not records:
@@ -272,12 +290,52 @@ def validate_event_index(index_path: str, events_path: str, verbose: bool = Fals
     else:
         print(f"  [{WARN}] events.bin not found, skipping offset bounds check")
 
-    # Dump first few events
+    # Waveform alignment + Unix epoch plausibility (v2 index)
+    align_ok = True
+    for i, r in enumerate(records):
+        if r["ts"] < EPOCH_MIN_NS or r["ts"] > EPOCH_MAX_NS:
+            failures.append(f"Record {i}: timestamp_ns outside plausible Unix epoch")
+            align_ok = False
+        if r["wf_start"] > r["ts"]:
+            failures.append(
+                f"Record {i}: waveform_start_ns ({r['wf_start']}) > event timestamp ({r['ts']})"
+            )
+            align_ok = False
+        if r["ns_per_sample"] == 0:
+            failures.append(f"Record {i}: ns_per_sample is zero")
+            align_ok = False
+        elif r["dur"] > 0:
+            event_end_ns = r["ts"] + r["dur"] * r["ns_per_sample"]
+            if r["foff"] >= 0 and os.path.exists(events_path):
+                # Infer waveform end from next offset or file size
+                if i + 1 < len(records):
+                    num_samples = (records[i + 1]["foff"] - r["foff"]) // 2
+                else:
+                    num_samples = (os.path.getsize(events_path) - r["foff"]) // 2
+                wf_end_ns = r["wf_start"] + num_samples * r["ns_per_sample"]
+                if r["ts"] > wf_end_ns:
+                    failures.append(
+                        f"Record {i}: event start after waveform end "
+                        f"(ts={r['ts']} wf_end={wf_end_ns})"
+                    )
+                    align_ok = False
+                if event_end_ns > wf_end_ns + r["ns_per_sample"] * 2:
+                    failures.append(
+                        f"Record {i}: event end ({event_end_ns}) beyond waveform "
+                        f"({wf_end_ns}) by >2 samples"
+                    )
+                    align_ok = False
+    if align_ok:
+        print(f"  [{PASS}] Event waveform alignment + Unix epoch plausibility")
+    else:
+        print(f"  [{FAIL}] Event waveform alignment / epoch checks failed")
+
     event_type_names = {0: "NONE", 1: "SAG", 2: "SWELL", 3: "SPIKE", 4: "DIP"}
     for r in records[:5]:
         tname = event_type_names.get(r["type"], f"UNKNOWN({r['type']})")
-        print(f"  Event id={r['id']} ts={_fmt_ns(r['ts'])} type={tname} "
-              f"peak={r['peak']} dur={r['dur']} samples offset={r['foff']}")
+        print(f"  Event id={r['id']} ts={_fmt_ns(r['ts'])} wf_start={_fmt_ns(r['wf_start'])} "
+              f"type={tname} peak={r['peak']} dur={r['dur']} samples "
+              f"ns/sample={r['ns_per_sample']} offset={r['foff']}")
     if len(records) > 5:
         print(f"  ... ({len(records) - 5} more)")
 

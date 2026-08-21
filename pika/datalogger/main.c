@@ -34,7 +34,7 @@ static uint64_t ns_from_period_cycles(uint32_t period_cycles,
                                       uint32_t pru_clock_hz) {
   if (period_cycles == 0 || pru_clock_hz == 0)
     return 0;
-  return ((uint64_t)period_cycles * 1000000000ULL) / (uint64_t)pru_clock_hz;
+  return pru_elapsed_cycles_to_ns(period_cycles, pru_clock_hz);
 }
 
 /* Reader Thread: drain all ready PRU blocks into the SPSC ring */
@@ -108,11 +108,43 @@ void *reader_thread_func(void *arg) {
   return NULL;
 }
 
-static void extract_ch0(const int16_t *interleaved, uint32_t total_frames,
-                        uint32_t channels, int16_t *out_ch0) {
-  for (uint32_t i = 0; i < total_frames; i++) {
-    out_ch0[i] = interleaved[i * channels];
+
+static void save_ready_event(event_window_t *ew, writer_t *writer) {
+  anomaly_event_t captured_event;
+  int16_t *event_samples = NULL;
+  uint32_t ch0_sample_count = 0;
+  uint64_t waveform_start_ns = 0;
+  uint64_t event_ns_per_sample = 0;
+
+  if (!event_window_poll_ready(ew, &captured_event, &event_samples,
+                               &ch0_sample_count, &waveform_start_ns,
+                               &event_ns_per_sample))
+    return;
+
+  if (ch0_sample_count == 0 || !event_samples)
+    return;
+
+  if (ch0_sample_count > 500000) {
+    fprintf(stderr, "[Processor] Event too large (%u samples), skipping\n",
+            ch0_sample_count);
+    return;
   }
+
+  printf("[Processor] Saving ch0 event data: %u samples (~%zu KB), "
+         "waveform_start_ns=%llu\n",
+         ch0_sample_count, (ch0_sample_count * sizeof(int16_t)) / 1024,
+         (unsigned long long)waveform_start_ns);
+
+  event_index_record_t index = {
+      .timestamp_ns = captured_event.timestamp_ns,
+      .waveform_start_ns = waveform_start_ns,
+      .ns_per_sample = event_ns_per_sample,
+      .event_type = (uint8_t)captured_event.type,
+      .peak_value = captured_event.peak_value,
+      .duration_samples = captured_event.duration_samples,
+  };
+
+  writer_write_event(writer, &index, event_samples, ch0_sample_count);
 }
 
 void *processor_thread_func(void *arg) {
@@ -135,9 +167,18 @@ void *processor_thread_func(void *arg) {
   time_sync_init(&t_sync, 0, 200000000U);
 
   event_window_t ew;
-  event_window_init(&ew, global_config.storage.events.pre_sec,
-                    global_config.storage.events.post_sec,
-                    global_config.nominal_rate_hz, CHANNELS);
+  if (event_window_init(&ew, global_config.storage.events.pre_sec,
+                        global_config.storage.events.post_sec,
+                        global_config.nominal_rate_hz, 30.0) != 0) {
+    fprintf(stderr, "[Processor] Failed to init event window\n");
+    anomaly_detector_free(&ad);
+    return NULL;
+  }
+
+  uint32_t decimated_output_rate_hz =
+      global_config.storage.decimation.target_output_rate_hz;
+  if (decimated_output_rate_hz == 0)
+    decimated_output_rate_hz = 50;
 
   uint8_t temp_buf[MAX_BLOCK_COPY_SIZE];
   int16_t decimated_samples[128 * 8];
@@ -157,13 +198,7 @@ void *processor_thread_func(void *arg) {
   uint64_t prev_block_cycles = 0;
   bool have_prev_block = false;
 
-  int16_t *ch0_scratch = (int16_t *)malloc(50000 * sizeof(int16_t));
-  if (!ch0_scratch) {
-    fprintf(stderr, "[Processor] Failed to allocate ch0 scratch buffer\n");
-    anomaly_detector_free(&ad);
-    event_window_free(&ew);
-    return NULL;
-  }
+  int16_t *ch0_scratch = NULL;
 
   bool time_synced = false;
   while (keep_running) {
@@ -189,14 +224,14 @@ void *processor_thread_func(void *arg) {
       }
 
       if (!time_synced) {
-        uint64_t now_ns = get_now_ns();
+        uint64_t now_ns = get_realtime_ns();
         uint64_t block_duration_ns =
             (uint64_t)desc->num_samples * ns_per_sample;
         uint64_t first_sample_est_ns =
             (now_ns > block_duration_ns) ? (now_ns - block_duration_ns)
                                          : now_ns;
 
-        printf("[Processor] First block received. Syncing time to %llu cycles "
+        printf("[Processor] First block received. Syncing REALTIME to %llu cycles "
                "(PRU %u Hz, period_cycles=%u → %llu ns/sample)\n",
                (unsigned long long)desc->timestamp_cycles, pru_clock_hz,
                period_cycles, (unsigned long long)ns_per_sample);
@@ -205,62 +240,33 @@ void *processor_thread_func(void *arg) {
         time_synced = true;
       }
 
+      event_window_set_timing(&ew, ns_per_sample);
+
       scope_buffer_push(&live_scope_buffer, samples, desc->num_samples);
 
-      uint64_t block_time = cycles_to_ns(&t_sync, desc->timestamp_cycles);
-
-      event_window_push_block(&ew, samples);
-
-      anomaly_event_t *event = anomaly_detector_process(
-          &ad, samples, desc->num_samples, CHANNELS, block_time);
-      if (event) {
-        printf("[Processor] EVENT DETECTED: Type %d, VRMS=%.2f V at %llu ns\n",
-               event->type, event->rms_vrms,
-               (unsigned long long)event->timestamp_ns);
-        event_window_trigger(&ew, *event);
-      }
-
-      size_t event_data_size;
-      anomaly_event_t captured_event;
-      uint8_t *event_data =
-          event_window_get_ready(&ew, &event_data_size, &captured_event);
-      if (event_data) {
-        uint32_t total_frames = (uint32_t)(event_data_size / (CHANNELS * 2));
-        uint32_t ch0_sample_count = total_frames;
-
-        if (ch0_sample_count <= 50000) {
-          extract_ch0((const int16_t *)event_data, total_frames, CHANNELS,
-                      ch0_scratch);
-
-          printf("[Processor] Saving ch0 event data: %u samples (~%zu KB)\n",
-                 ch0_sample_count, (ch0_sample_count * sizeof(int16_t)) / 1024);
-
-          event_index_record_t index = {
-              .timestamp_ns = captured_event.timestamp_ns,
-              .event_type = (uint8_t)captured_event.type,
-              .peak_value = captured_event.peak_value,
-              .duration_samples = captured_event.duration_samples};
-
-          writer_write_event(&disk_writer, &index, ch0_scratch,
-                             ch0_sample_count);
-        } else {
-          fprintf(stderr,
-                  "[Processor] Event too large (%u samples), skipping\n",
-                  ch0_sample_count);
-        }
-      }
-
       for (uint32_t i = 0; i < desc->num_samples; i++) {
-        uint64_t sample_time_ns = block_time + ((uint64_t)i * ns_per_sample);
-        if (dec.samples_in_bucket == 0) {
-          current_bucket_start_ns = sample_time_ns;
+        uint64_t sample_time_ns = sample_time_from_block(
+            &t_sync, desc->timestamp_cycles, period_cycles, i);
+        int16_t ch0_sample = samples[i * CHANNELS];
+
+        ad_notification_t note;
+        if (anomaly_detector_process_sample(&ad, ch0_sample, sample_time_ns,
+                                            &note)) {
+          if (note.kind == AD_NOTIFY_STARTED) {
+            event_window_on_start(&ew, &note.event);
+          } else if (note.kind == AD_NOTIFY_COMPLETED) {
+            event_window_on_end(&ew, &note.event);
+          }
         }
 
-        int16_t ch0_sample = samples[i * CHANNELS];
+        event_window_push_sample(&ew, ch0_sample);
+
+        if (dec.samples_in_bucket == 0)
+          current_bucket_start_ns = sample_time_ns;
+
         if (decimator_process(&dec, ch0_sample)) {
-          if (decimated_count == 0) {
+          if (decimated_count == 0)
             decimated_chunk_start_ns = current_bucket_start_ns;
-          }
 
           decimated_samples[decimated_count * 2] = dec.min_val;
           decimated_samples[decimated_count * 2 + 1] = dec.max_val;
@@ -272,20 +278,18 @@ void *processor_thread_func(void *arg) {
           if (decimated_count >= 10) {
             decimated_chunk_header_t header = {
                 .start_time_ns = decimated_chunk_start_ns,
-                .sample_rate = global_config.nominal_rate_hz,
+                .sample_rate = decimated_output_rate_hz,
                 .sample_count = decimated_count,
                 .channels = 1,
                 .values_per_sample = 2};
 
-            printf("[Processor] Decimated chunk ready: start_time_ns=%llu "
-                   "sample_count=%u (will call writer_write_decimated)\n",
-                   (unsigned long long)header.start_time_ns,
-                   header.sample_count);
             writer_write_decimated(&disk_writer, &header, decimated_samples);
             decimated_count = 0;
           }
         }
       }
+
+      save_ready_event(&ew, &disk_writer);
 
       prev_block_cycles = desc->timestamp_cycles;
       have_prev_block = true;
@@ -297,16 +301,12 @@ void *processor_thread_func(void *arg) {
   if (decimated_count > 0) {
     decimated_chunk_header_t header = {
         .start_time_ns = decimated_chunk_start_ns,
-        .sample_rate = global_config.nominal_rate_hz,
+        .sample_rate = decimated_output_rate_hz,
         .sample_count = decimated_count,
         .channels = 1,
         .values_per_sample = 2};
 
-    printf("[Processor] Final decimated flush: start_time_ns=%llu "
-           "sample_count=%u\n",
-           (unsigned long long)header.start_time_ns, header.sample_count);
     writer_write_decimated(&disk_writer, &header, decimated_samples);
-    printf("[Processor] Flushed final %u decimated samples\n", decimated_count);
   }
 
   printf("[Processor] Stopped\n");

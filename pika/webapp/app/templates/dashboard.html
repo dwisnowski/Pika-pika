@@ -626,10 +626,10 @@
                 raw_samples_count: trendData.samples_raw ? trendData.samples_raw.length : 0,
                 first_5_samples: trendData.samples ? trendData.samples.slice(0, 5) : []
             });
-            const stats = updateLiveStats(trendData.samples, trendData.rate, trendData.samples_raw);
+            const stats = updateLiveStats(trendData.samples, trendData.rate, trendData.samples_raw, trendData.timestamps);
             if (stats) {
                 console.log('[Dashboard] Stats calculated, rendering trend chart');
-                renderTrend(trendData.samples, stats);
+                renderTrend(trendData.samples, stats, trendData.timestamps);
             } else {
                 console.warn('[Dashboard] No stats returned, skipping chart render');
             }
@@ -661,7 +661,7 @@
         }
     }
 
-    function updateLiveStats(samples, rate, samples_raw) {
+    function updateLiveStats(samples, rate, samples_raw, timestamps) {
         console.log('[updateLiveStats] Called with:', {
             samples_length: samples ? samples.length : 0,
             rate: rate,
@@ -711,6 +711,9 @@
         document.getElementById('stat-max-bar').title = 'Max: ' + max_raw + ' / ' + adc_max_raw + ' (' + max_pct.toFixed(1) + '%)';
 
         let windowStr = windowSec.toFixed(0) + 's';
+        if (timestamps && timestamps.length >= 2) {
+            windowSec = (timestamps[timestamps.length - 1] - timestamps[0]) / 1e9;
+        }
         if (windowSec > 60) windowStr = (windowSec / 60).toFixed(1) + 'm';
         document.getElementById('stat-window').innerText = windowStr;
         document.getElementById('stat-p2p').innerText = p2p.toFixed(1) + ' VAC';
@@ -719,7 +722,7 @@
     }
 
     let trendChart = null;
-    function renderTrend(samples, stats) {
+    function renderTrend(samples, stats, timestamps) {
         console.log('[renderTrend] Called with:', {
             samples_length: samples ? samples.length : 0,
             stats: stats,
@@ -749,14 +752,17 @@
 
         console.log('[renderTrend] Creating new chart with', samples.length, 'samples');
 
+        const points = (timestamps && timestamps.length === samples.length)
+            ? samples.map((y, i) => ({ x: timestamps[i] / 1e6, y }))
+            : samples.map((y, i) => ({ x: i, y }));
+
         trendChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: samples.map((_, i) => i),
                 datasets: [
                     {
                         label: 'Line Voltage (VAC)',
-                        data: samples,
+                        data: points,
                         borderColor: '#FFD600',
                         borderWidth: 1.5,
                         pointRadius: 0,
@@ -822,9 +828,12 @@
                     }
                 },
                 scales: {
-                    x: { 
-                        display: false,
-                        grid: { display: false }
+                    x: {
+                        type: (timestamps && timestamps.length === samples.length) ? 'time' : 'linear',
+                        display: !!(timestamps && timestamps.length === samples.length),
+                        time: { tooltipFormat: 'HH:mm:ss', displayFormats: { second: 'HH:mm:ss' } },
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#888', font: { size: 10 }, maxTicksLimit: 8 }
                     },
                     y: {
                         grid: { color: 'rgba(255,255,255,0.05)' },
@@ -974,7 +983,9 @@
             
             // Format timestamp
             const eventTime = new Date(data.timestamp / 1000000);
-            const duration = (data.samples.length / data.sample_rate * 1000).toFixed(1);
+            const wfStartNs = data.waveform_start_ns || data.timestamp;
+            const nsPerSample = data.ns_per_sample || Math.floor(1e9 / (data.sample_rate || 10000));
+            const duration = ((data.duration_samples || data.samples.length) * nsPerSample / 1e6).toFixed(1);
             const rms = Math.sqrt(data.samples.reduce((sum, v) => sum + v*v, 0) / data.samples.length).toFixed(2);
             const min = Math.min(...data.samples).toFixed(2);
             const max = Math.max(...data.samples).toFixed(2);
@@ -998,10 +1009,14 @@
             eventDetailChart = new Chart(ctxWave, {
                 type: 'line',
                 data: {
-                    labels: data.samples.map((_, i) => (i / data.sample_rate * 1000).toFixed(1) + 'ms'),
+                    labels: data.samples.map((_, i) =>
+                        ((i * nsPerSample) / 1e6).toFixed(2) + 'ms'),
                     datasets: [{
                         label: 'Waveform (VAC)',
-                        data: data.samples,
+                        data: data.samples.map((v, i) => ({
+                            x: (wfStartNs + i * nsPerSample) / 1e6,
+                            y: v
+                        })),
                         borderColor: '#FFD600',
                         borderWidth: 1.5,
                         pointRadius: 0,
@@ -1021,7 +1036,13 @@
                         }
                     },
                     scales: {
-                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', font: { size: 10 }, maxTicksLimit: 20 } },
+                        x: {
+                            type: 'time',
+                            time: { tooltipFormat: 'HH:mm:ss.SSS', displayFormats: { millisecond: 'SSS ms' } },
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#888', font: { size: 10 }, maxTicksLimit: 20 },
+                            title: { display: true, text: 'Time (aligned to waveform_start_ns)', color: '#888' }
+                        },
                         y: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#888' }, title: { display: true, text: 'Instantaneous Volts', color: '#888' } }
                     }
                 }
