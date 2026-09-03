@@ -16,7 +16,7 @@
 #   to maintain its own build logic while providing a unified interface
 #   at the top level.
 
-.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all stop help setup run-pru-datalogger daemon-install daemon-status daemon-stop daemon-uninstall daemon-enable daemon-disable startscreen
+.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all stop help setup run-pru-datalogger daemon-install daemon-status daemon-stop daemon-uninstall daemon-enable daemon-disable startscreen shutdown
 
 # Build all components
 all: pru datalogger web
@@ -217,6 +217,11 @@ startscreen:
 	printf " ~/pika:\t\t%s\t\tLogged data:\t%s\n" "$$PIKA_SIZE" "$$DATA_SIZE"; \
 	echo ""
 
+# Power off the BeagleBone (requires passwordless sudo for shutdown — see help)
+shutdown:
+	@echo "Shutting down..."
+	@sudo shutdown -h now
+
 # Help
 help:
 	@echo "Pika - BeagleBone Black Data Acquisition System"
@@ -233,6 +238,7 @@ help:
 	@echo "  run-datalogger   - Build and run datalogger (run make pru-load once first)"
 	@echo "  run-all          - Build pru + datalogger, then run datalogger"
 	@echo "  stop             - Force stop all background components"
+	@echo "  shutdown         - Power off the board (sudo shutdown -h now)"
 	@echo ""
 	@echo "Daemon/Systemd Targets (run on BBB):"
 	@echo "  daemon-install   - Install pika-run-all service and enable at boot"
