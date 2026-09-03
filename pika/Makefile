@@ -16,7 +16,7 @@
 #   to maintain its own build logic while providing a unified interface
 #   at the top level.
 
-.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all stop help setup run-pru-datalogger daemon-install daemon-status daemon-stop daemon-uninstall daemon-enable daemon-disable
+.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all stop help setup run-pru-datalogger daemon-install daemon-status daemon-stop daemon-uninstall daemon-enable daemon-disable startscreen
 
 # Build all components
 all: pru datalogger web
@@ -156,6 +156,54 @@ clean:
 	$(MAKE) -C datalogger clean
 # 	$(MAKE) -C webapp clean  #  Not needed most of the time. <-----
 
+# Armbian-style start screen / MOTD (run on BBB)
+startscreen:
+	@echo ""
+	@echo "  ____  _ _            "
+	@echo " |  _ \(_) | ____ _   "
+	@echo " | |_) | | |/ / _\` |  "
+	@echo " |  __/| |   < (_| |  "
+	@echo " |_|   |_|_|\_\__,_|  "
+	@echo ""
+	@HOSTNAME=$$(hostname 2>/dev/null || echo unknown); \
+	KERNEL=$$(uname -r 2>/dev/null || echo unknown); \
+	UPTIME=$$(uptime -p 2>/dev/null | sed 's/^up //'); \
+	[ -z "$$UPTIME" ] && UPTIME=$$(awk '{printf "%d min", $$1/60}' /proc/uptime 2>/dev/null || echo unknown); \
+	LOAD=$$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null || echo "n/a"); \
+	CPU_USAGE="n/a"; \
+	if [ -r /proc/stat ]; then \
+		CPU_IDLE1=$$(awk '/^cpu /{print $$5; exit}' /proc/stat); \
+		CPU_TOTAL1=$$(awk '/^cpu /{print $$2+$$3+$$4+$$5+$$6+$$7+$$8; exit}' /proc/stat); \
+		sleep 0.5; \
+		CPU_IDLE2=$$(awk '/^cpu /{print $$5; exit}' /proc/stat); \
+		CPU_TOTAL2=$$(awk '/^cpu /{print $$2+$$3+$$4+$$5+$$6+$$7+$$8; exit}' /proc/stat); \
+		CPU_USAGE=$$(awk -v i1="$$CPU_IDLE1" -v t1="$$CPU_TOTAL1" -v i2="$$CPU_IDLE2" -v t2="$$CPU_TOTAL2" \
+			'BEGIN { dt=t2-t1; di=i2-i1; if (dt>0) printf "%.1f%%", (1-di/dt)*100; else print "n/a" }'); \
+	fi; \
+	MEM=$$(free -m 2>/dev/null | awk '/^Mem:/{printf "%d%% of %dMB (%dMB used)", ($$3/$$2)*100, $$2, $$3}'); \
+	DISK=$$(df -h / 2>/dev/null | awk 'NR==2{printf "%s of %s (%s used)", $$5, $$2, $$3}'); \
+	IPS=$$(hostname -I 2>/dev/null | tr -s ' ' | sed 's/ *$$//'); \
+	if [ -z "$$IPS" ]; then \
+		IPS=$$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $$4}' | cut -d/ -f1 | tr '\n' ' ' | sed 's/ *$$//'); \
+	fi; \
+	[ -z "$$IPS" ] && IPS="none"; \
+	PRU0="n/a"; PRU1="n/a"; \
+	if [ -f /sys/class/remoteproc/remoteproc1/state ]; then \
+		PRU0=$$(cat /sys/class/remoteproc/remoteproc1/state 2>/dev/null); \
+	fi; \
+	if [ -f /sys/class/remoteproc/remoteproc2/state ]; then \
+		PRU1=$$(cat /sys/class/remoteproc/remoteproc2/state 2>/dev/null); \
+	fi; \
+	printf " Welcome to \033[1mPika\033[0m on %s\n" "$$HOSTNAME"; \
+	printf " Kernel: %s\n" "$$KERNEL"; \
+	echo ""; \
+	printf " System load:\t%s\tUp time:\t%s\n" "$$LOAD" "$$UPTIME"; \
+	printf " CPU usage:\t%s\t\tMemory usage:\t%s\n" "$$CPU_USAGE" "$${MEM:-n/a}"; \
+	printf " Usage of /:\t%s\n" "$${DISK:-n/a}"; \
+	printf " IP address:\t%s\n" "$$IPS"; \
+	printf " PRU0:\t\t%s\t\tPRU1:\t\t%s\n" "$$PRU0" "$$PRU1"; \
+	echo ""
+
 # Help
 help:
 	@echo "Pika - BeagleBone Black Data Acquisition System"
@@ -192,6 +240,7 @@ help:
 	@echo "  pru-overlay      - Build and install device tree overlay"
 	@echo ""
 	@echo "Other:"
+	@echo "  startscreen      - Print Armbian-style start screen (IP, CPU, mem, disk, PRUs)"
 	@echo "  setup            - Install system dependencies (libyaml-dev)"
 	@echo "  clean            - Clean all build artifacts"
 	@echo "  help             - Show this help message"
