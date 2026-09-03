@@ -194,6 +194,18 @@ startscreen:
 	if [ -f /sys/class/remoteproc/remoteproc2/state ]; then \
 		PRU1=$$(cat /sys/class/remoteproc/remoteproc2/state 2>/dev/null); \
 	fi; \
+	PIKA_DIR="$$HOME/pika"; \
+	if [ -d "$$PIKA_DIR" ]; then \
+		PIKA_SIZE=$$(du -sh "$$PIKA_DIR" 2>/dev/null | cut -f1); \
+	else \
+		PIKA_SIZE="n/a (missing)"; \
+	fi; \
+	DATA_DIR="$(CURDIR)/datalogger/data"; \
+	if [ -d "$$DATA_DIR" ]; then \
+		DATA_SIZE=$$(du -sh "$$DATA_DIR" 2>/dev/null | cut -f1); \
+	else \
+		DATA_SIZE="n/a (no data yet)"; \
+	fi; \
 	printf " Welcome to \033[1mPika\033[0m on %s\n" "$$HOSTNAME"; \
 	printf " Kernel: %s\n" "$$KERNEL"; \
 	echo ""; \
@@ -202,6 +214,7 @@ startscreen:
 	printf " Usage of /:\t%s\n" "$${DISK:-n/a}"; \
 	printf " IP address:\t%s\n" "$$IPS"; \
 	printf " PRU0:\t\t%s\t\tPRU1:\t\t%s\n" "$$PRU0" "$$PRU1"; \
+	printf " ~/pika:\t\t%s\t\tLogged data:\t%s\n" "$$PIKA_SIZE" "$$DATA_SIZE"; \
 	echo ""
 
 # Help
@@ -240,7 +253,7 @@ help:
 	@echo "  pru-overlay      - Build and install device tree overlay"
 	@echo ""
 	@echo "Other:"
-	@echo "  startscreen      - Print Armbian-style start screen (IP, CPU, mem, disk, PRUs)"
+	@echo "  startscreen      - Print Armbian-style start screen (IP, CPU, mem, disk, PRUs, data size)"
 	@echo "  setup            - Install system dependencies (libyaml-dev)"
 	@echo "  clean            - Clean all build artifacts"
 	@echo "  help             - Show this help message"
