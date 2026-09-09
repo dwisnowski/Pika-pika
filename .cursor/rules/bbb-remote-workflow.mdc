@@ -1,0 +1,37 @@
+---
+description: SSH, sudo, deployment, and verification workflow for the BeagleBone Black
+alwaysApply: true
+---
+
+# BBB remote workflow
+
+## Access
+
+- Connect through the existing local SSH alias: `ssh bbb`.
+- The remote source checkout is `/home/debian/pika`; runtime component commands run from `/home/debian/pika/pika`.
+- Never place passwords, private keys, or other credentials in this repository.
+- For BBB diagnosis, inspect the live board directly when SSH is available instead of asking the user to relay routine command output.
+
+## Sudo
+
+- Before privileged work, test noninteractive access with `ssh bbb 'sudo -n true'`.
+- If it fails, stop privileged automation and ask the user to run:
+  `echo 'debian ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/pika-dev >/dev/null`
+  followed by `sudo chmod 0440 /etc/sudoers.d/pika-dev` and
+  `sudo visudo -cf /etc/sudoers.d/pika-dev`.
+- Do not repeatedly retry after a definitive sudo denial.
+
+## Change and deploy
+
+When the user requests a BBB code change:
+
+1. Make and test source changes locally.
+2. Commit them and push `beagleboneblack` to `origin`.
+3. Check the remote working tree and preserve unrelated user changes.
+4. Deploy with `cd /home/debian/pika && git pull --ff-only origin beagleboneblack`.
+5. Restart runtime changes with `make daemon-restart`.
+6. Allow for the BBB's slow startup, then verify `pika-run-all.service`, its restart count, relevant logs/endpoints, and the actual requested behavior.
+
+Expected generated remote files such as `pika/datalogger/bin/datalogger` and
+`pika/webapp/webapp.log` may be dirty; do not discard them or use destructive
+Git commands.
