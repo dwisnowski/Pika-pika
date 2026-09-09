@@ -107,7 +107,6 @@ void main(void) {
 
   shm->magic = SHM_MAGIC;
 
-  uint32_t ddr_phys = shm->ddr_phys_addr;
   uint32_t ddr_size = shm->ddr_size_bytes;
   if (ddr_size == 0)
     ddr_size = PIKA_DDR_RING_SIZE;
@@ -118,7 +117,7 @@ void main(void) {
   uint32_t num_blocks = shm->num_blocks;
   uint32_t block_total_size = BLOCK_TOTAL_SIZE(block_size);
   volatile uint8_t *ddr_base =
-      (volatile uint8_t *)PIKA_SHARED_RING_PRU_ADDR;
+      ((volatile uint8_t *)shm) + SHM_HEADER_OFFSET;
 
   if ((uint32_t)num_blocks * block_total_size > ddr_size) {
     num_blocks = ddr_size / block_total_size;
@@ -129,13 +128,13 @@ void main(void) {
 
   /* Probe DDR; hang here means addressing/OCP is still wrong */
   {
-    volatile uint32_t *probe = (volatile uint32_t *)ddr_phys;
+    volatile uint32_t *probe = (volatile uint32_t *)ddr_base;
     probe[0] = 0xA5A55A5Au;
     shm->heartbeat++;
   }
 
   {
-    volatile uint32_t *p = (volatile uint32_t *)ddr_phys;
+    volatile uint32_t *p = (volatile uint32_t *)ddr_base;
     for (i = 0; i < (int)(block_total_size / 4); i++)
       p[i] = 0;
   }
@@ -159,7 +158,7 @@ void main(void) {
 
   while (1) {
     volatile uint32_t *ddr_mailbox =
-        (volatile uint32_t *)(ddr_phys + ddr_size - sizeof(uint32_t));
+        (volatile uint32_t *)(ddr_base + ddr_size - sizeof(uint32_t));
     if (*ddr_mailbox == DDR_MAILBOX_HOST_SENTINEL) {
       *ddr_mailbox = DDR_MAILBOX_PRU_RESPONSE;
       shm->error_flags = DDR_MAILBOX_SEEN_FLAG;
@@ -277,7 +276,7 @@ void main(void) {
       uint32_t final_block_offset =
           multiply_u32(current_blk, block_total_size);
       volatile uint32_t *final_desc_words =
-          (volatile uint32_t *)(ddr_phys + final_block_offset);
+          (volatile uint32_t *)(ddr_base + final_block_offset);
       final_desc_words[4] = period;
       final_desc_words[2] = smp_in_blk;
       final_desc_words[3] = BLOCK_FLAG_COMPLETE;
