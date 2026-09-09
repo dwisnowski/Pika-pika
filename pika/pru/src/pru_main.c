@@ -312,7 +312,14 @@ void main(void) {
         uint64_t end_cycles =
             (block_end_cycles > block_start_cycles) ? block_end_cycles
                                                     : total_cycles;
-        period = (uint32_t)((end_cycles - block_start_cycles) / (block_size - 1));
+        /*
+         * The default 128-sample block spans less than UINT32_MAX cycles even
+         * at the supported 10 Hz minimum. Keep this division 32-bit: clpru's
+         * 64-bit division helper corrupts execution state on this target.
+         */
+        uint32_t elapsed_cycles =
+            (uint32_t)(end_cycles - block_start_cycles);
+        period = elapsed_cycles / (block_size - 1);
       }
       shm->error_flags = STAGE_BLOCK_PERIOD_DONE;
       shm->error_flags = STAGE_BLOCK_DESC_START;
@@ -321,7 +328,9 @@ void main(void) {
       desc_words[3] = BLOCK_FLAG_COMPLETE;
       shm->error_flags = STAGE_BLOCK_DESC_DONE;
       shm->error_flags = STAGE_BLOCK_INDEX_START;
-      current_blk = (current_blk + 1) % num_blocks;
+      current_blk++;
+      if (current_blk >= num_blocks)
+        current_blk = 0;
       shm->write_block_idx = current_blk;
       shm->error_flags = STAGE_BLOCK_INDEX_DONE;
       smp_in_blk = 0;
