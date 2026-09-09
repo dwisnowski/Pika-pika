@@ -156,6 +156,14 @@ int anomaly_detector_process_sample(anomaly_detector_t *ad, int16_t raw,
     return 0;
 
   float v = adc_to_volts(raw, ad->sensor.adc_vref, ad->sensor.adc_bits);
+  if (!ad->dc_initialized) {
+    /*
+     * The ZMPT101B output has a DC bias. Seed the filter from the first ADC
+     * sample so startup settling is not mistaken for AC during calibration.
+     */
+    ad->dc_ema = v;
+    ad->dc_initialized = 1;
+  }
   ad->dc_ema = ad->ema_alpha * v + (1.0f - ad->ema_alpha) * ad->dc_ema;
   float v_ac = v - ad->dc_ema;
   float rms_adc = push_rms_ring(ad, v_ac * v_ac);

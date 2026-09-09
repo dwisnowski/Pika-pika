@@ -32,6 +32,7 @@ typedef struct {
   uint32_t sq_count;
 
   float dc_ema;
+  int dc_initialized;
   float ema_alpha;
 
   float nominal_vrms;
