@@ -13,6 +13,19 @@
 #define PRU_CCNT_REG (*(volatile uint32_t *)(0x2200C))
 
 /*
+ * Temporary bring-up markers reported through error_flags. If the PRU hangs,
+ * the last visible marker identifies the operation that did not complete.
+ */
+#define STAGE_DDR_PROBE 0xD1000000u
+#define STAGE_DDR_CLEAR_BASE 0xD1100000u
+#define STAGE_DDR_CLEAR_DONE 0xD11FFFFFu
+#define STAGE_ADC_TRIGGER 0xD2000001u
+#define STAGE_ADC_READY 0xD2000002u
+#define STAGE_FIRST_DESC 0xD2000003u
+#define STAGE_FIRST_READ 0xD2000004u
+#define STAGE_FIRST_BLOCK_DONE 0xD2000005u
+
+/*
  * DDR is outside the PRU near address space. Build with --mem_model:data=far
  * so absolute pointers (0x8xxxxxxx+) use full 32-bit addressing.
  *
@@ -93,14 +106,18 @@ void main(void) {
   /* Probe DDR; hang here means addressing/OCP is still wrong */
   {
     volatile uint32_t *probe = (volatile uint32_t *)ddr_phys;
+    shm->error_flags = STAGE_DDR_PROBE;
     probe[0] = 0xA5A55A5Au;
     shm->heartbeat++;
   }
 
   {
     volatile uint32_t *p = (volatile uint32_t *)ddr_phys;
-    for (i = 0; i < (int)(block_total_size / 4); i++)
+    for (i = 0; i < (int)(block_total_size / 4); i++) {
+      shm->error_flags = STAGE_DDR_CLEAR_BASE | (uint32_t)i;
       p[i] = 0;
+    }
+    shm->error_flags = STAGE_DDR_CLEAR_DONE;
   }
   shm->heartbeat++;
 
@@ -130,12 +147,16 @@ void main(void) {
 
     uint32_t sample_start_ccnt = ccnt_read();
 
+    if (shm->sample_count == 0 && smp_in_blk == 0)
+      shm->error_flags = STAGE_ADC_TRIGGER;
     if (adc_trigger_and_wait() != 0) {
       shm->error_flags = 0xDEAD0002;
       shm->heartbeat++;
       __delay_cycles(1000000);
       continue;
     }
+    if (shm->sample_count == 0 && smp_in_blk == 0)
+      shm->error_flags = STAGE_ADC_READY;
 
     ccnt_accum(&last_cycles, &total_cycles);
 
@@ -157,6 +178,8 @@ void main(void) {
      *   [5]    reserved
      */
     if (smp_in_blk == 0) {
+      if (shm->sample_count == 0)
+        shm->error_flags = STAGE_FIRST_DESC;
       desc_words[0] = (uint32_t)(total_cycles & 0xFFFFFFFFu);
       desc_words[1] = (uint32_t)(total_cycles >> 32);
       desc_words[2] = 0;
@@ -168,6 +191,8 @@ void main(void) {
 
     uint32_t ch_ptr = smp_in_blk * 8;
 
+    if (shm->sample_count == 0 && smp_in_blk == 0)
+      shm->error_flags = STAGE_FIRST_READ;
     if (shm->ch_enable[0])
       b_data[ch_ptr + 0] = adc_read_next();
     else
@@ -227,6 +252,10 @@ void main(void) {
       shm->write_block_idx = current_blk;
       smp_in_blk = 0;
       shm->sample_count += block_size;
+      if (shm->sample_count == block_size) {
+        shm->error_flags = STAGE_FIRST_BLOCK_DONE;
+        shm->error_flags = 0;
+      }
     }
   }
 }
