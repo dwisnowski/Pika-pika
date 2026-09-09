@@ -27,7 +27,8 @@
 
 /* Temporary isolation tests; enable only one hold point at a time. */
 #define DIAG_HOLD_AFTER_DDR_CLEAR 0
-#define DIAG_HOLD_AFTER_ADC_READY 1
+#define DIAG_HOLD_AFTER_ADC_READY 0
+#define DIAG_HOLD_BEFORE_FIRST_READ 1
 
 /*
  * DDR is outside the PRU near address space. Build with --mem_model:data=far
@@ -213,8 +214,16 @@ void main(void) {
 
     uint32_t ch_ptr = smp_in_blk * 8;
 
-    if (shm->sample_count == 0 && smp_in_blk == 0)
+    if (shm->sample_count == 0 && smp_in_blk == 0) {
       shm->error_flags = STAGE_FIRST_READ;
+#if DIAG_HOLD_BEFORE_FIRST_READ
+      while (1) {
+        shm->error_flags = STAGE_FIRST_READ;
+        shm->heartbeat++;
+        __delay_cycles(20000000);
+      }
+#endif
+    }
     if (shm->ch_enable[0])
       b_data[ch_ptr + 0] = adc_read_next();
     else
