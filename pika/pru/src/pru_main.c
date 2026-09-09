@@ -27,6 +27,13 @@
 #define STAGE_FIRST_SAMPLE_DONE 0xD2000006u
 #define STAGE_FIRST_BLOCK_DONE 0xD2000007u
 #define STAGE_SAMPLE_PROGRESS_BASE 0xD2100000u
+#define STAGE_BLOCK_PERIOD_START 0xD2200001u
+#define STAGE_BLOCK_PERIOD_DONE 0xD2200002u
+#define STAGE_BLOCK_DESC_START 0xD2200003u
+#define STAGE_BLOCK_DESC_DONE 0xD2200004u
+#define STAGE_BLOCK_INDEX_START 0xD2200005u
+#define STAGE_BLOCK_INDEX_DONE 0xD2200006u
+#define STAGE_BLOCK_COUNT_DONE 0xD2200007u
 
 /* Temporary isolation tests; enable only one hold point at a time. */
 #define DIAG_HOLD_AFTER_DDR_CLEAR 0
@@ -299,6 +306,7 @@ void main(void) {
     smp_in_blk++;
 
     if (smp_in_blk >= block_size) {
+      shm->error_flags = STAGE_BLOCK_PERIOD_START;
       uint32_t period = period_target;
       if (block_size > 1) {
         uint64_t end_cycles =
@@ -306,13 +314,19 @@ void main(void) {
                                                     : total_cycles;
         period = (uint32_t)((end_cycles - block_start_cycles) / (block_size - 1));
       }
+      shm->error_flags = STAGE_BLOCK_PERIOD_DONE;
+      shm->error_flags = STAGE_BLOCK_DESC_START;
       desc_words[4] = period;
       desc_words[2] = smp_in_blk;
       desc_words[3] = BLOCK_FLAG_COMPLETE;
+      shm->error_flags = STAGE_BLOCK_DESC_DONE;
+      shm->error_flags = STAGE_BLOCK_INDEX_START;
       current_blk = (current_blk + 1) % num_blocks;
       shm->write_block_idx = current_blk;
+      shm->error_flags = STAGE_BLOCK_INDEX_DONE;
       smp_in_blk = 0;
       shm->sample_count += block_size;
+      shm->error_flags = STAGE_BLOCK_COUNT_DONE;
       if (shm->sample_count == block_size) {
         shm->error_flags = STAGE_FIRST_BLOCK_DONE;
 #if DIAG_HOLD_AFTER_FIRST_BLOCK
