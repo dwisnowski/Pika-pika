@@ -70,6 +70,55 @@ def _persist_nominal_rate_hz(config_path: Path, sample_rate: int) -> None:
     config_path.write_text(new_text)
 
 
+def _pika_yaml_path() -> Path:
+    config_path = Path(__file__).resolve().parents[2] / "pika.yaml"
+    if not config_path.exists():
+        config_path = Path("../pika.yaml")
+    return config_path
+
+
+def _persist_anomalies_config(config_path: Path, values: dict) -> None:
+    """Update log-threshold fields in pika.yaml without rewriting the whole file."""
+    text = config_path.read_text()
+    replacements = [
+        (
+            r'(?m)^(  sag:\n(?:    .*\n)*?    threshold_pct:\s*)-?\d+(\b.*)$',
+            rf'\g<1>{int(values["sag_threshold_pct"])}\2',
+        ),
+        (
+            r'(?m)^(  sag:\n(?:    .*\n)*?    min_duration_ms:\s*)\d+(\b.*)$',
+            rf'\g<1>{int(values["sag_min_duration_ms"])}\2',
+        ),
+        (
+            r'(?m)^(  swell:\n(?:    .*\n)*?    threshold_pct:\s*)-?\d+(\b.*)$',
+            rf'\g<1>{int(values["swell_threshold_pct"])}\2',
+        ),
+        (
+            r'(?m)^(  swell:\n(?:    .*\n)*?    min_duration_ms:\s*)\d+(\b.*)$',
+            rf'\g<1>{int(values["swell_min_duration_ms"])}\2',
+        ),
+        (
+            r'(?m)^(  target_mains_vrms:\s*)[0-9.]+(\b.*)$',
+            rf'\g<1>{float(values["target_mains_vrms"]):.1f}\2',
+        ),
+        (
+            r'(?m)^(  sag_cooldown_ms:\s*)\d+(\b.*)$',
+            rf'\g<1>{int(values["sag_cooldown_ms"])}\2',
+        ),
+        (
+            r'(?m)^(  swell_cooldown_ms:\s*)\d+(\b.*)$',
+            rf'\g<1>{int(values["swell_cooldown_ms"])}\2',
+        ),
+    ]
+    for pattern, repl in replacements:
+        text, n = re.subn(pattern, repl, text, count=1)
+        if n != 1:
+            raise FileNotFoundError(
+                f"Could not update anomalies config in {config_path}"
+            )
+    config_path.write_text(text)
+
+
 async def _restart_acquisition_service():
     """Restart PRU+datalogger+webapp after the HTTP response has flushed."""
     await asyncio.sleep(1.5)
@@ -296,10 +345,7 @@ async def update_sample_rate(request: Request):
                 "allowed_rates": list(ALLOWED_SAMPLE_RATES_HZ),
             }
 
-        config_path = Path(__file__).resolve().parents[2] / "pika.yaml"
-        if not config_path.exists():
-            # Fallback relative to webapp CWD (BBB: /home/debian/pika/pika/webapp)
-            config_path = Path("../pika.yaml")
+        config_path = _pika_yaml_path()
         if not config_path.exists():
             return {"success": False, "error": "Config file not found"}
 
@@ -320,6 +366,68 @@ async def update_sample_rate(request: Request):
     except Exception as e:
         logger.exception("Failed to update sample rate")
         return {"success": False, "error": str(e)}
+
+
+@app.get("/api/v1/config/anomalies")
+async def get_anomalies_config():
+    """Return user-editable log thresholds plus read-only review policy."""
+    from app.services.review_policy import review_policy_public
+
+    return {
+        "log": config_service.get_anomalies_config(),
+        "review": review_policy_public(config_service.config),
+    }
+
+
+@app.post("/api/v1/config/anomalies")
+async def update_anomalies_config(request: Request):
+    """Persist log thresholds to pika.yaml and restart acquisition."""
+    try:
+        body = await request.json()
+        values = {
+            "sag_threshold_pct": int(body.get("sag_threshold_pct", -10)),
+            "swell_threshold_pct": int(body.get("swell_threshold_pct", 10)),
+            "sag_min_duration_ms": int(body.get("sag_min_duration_ms", 9)),
+            "swell_min_duration_ms": int(body.get("swell_min_duration_ms", 9)),
+            "target_mains_vrms": float(body.get("target_mains_vrms", 120.0)),
+            "sag_cooldown_ms": int(body.get("sag_cooldown_ms", 1000)),
+            "swell_cooldown_ms": int(body.get("swell_cooldown_ms", 1000)),
+        }
+
+        if not (-50 <= values["sag_threshold_pct"] <= -1):
+            return {"success": False, "error": "sag_threshold_pct must be between -50 and -1"}
+        if not (1 <= values["swell_threshold_pct"] <= 50):
+            return {"success": False, "error": "swell_threshold_pct must be between 1 and 50"}
+        if not (1 <= values["sag_min_duration_ms"] <= 60000):
+            return {"success": False, "error": "sag_min_duration_ms must be 1–60000"}
+        if not (1 <= values["swell_min_duration_ms"] <= 60000):
+            return {"success": False, "error": "swell_min_duration_ms must be 1–60000"}
+        if not (90.0 <= values["target_mains_vrms"] <= 140.0):
+            return {"success": False, "error": "target_mains_vrms must be 90–140 V"}
+        if not (0 <= values["sag_cooldown_ms"] <= 60000):
+            return {"success": False, "error": "sag_cooldown_ms must be 0–60000"}
+        if not (0 <= values["swell_cooldown_ms"] <= 60000):
+            return {"success": False, "error": "swell_cooldown_ms must be 0–60000"}
+
+        config_path = _pika_yaml_path()
+        if not config_path.exists():
+            return {"success": False, "error": "Config file not found"}
+
+        _persist_anomalies_config(config_path, values)
+        config_service.load_config()
+        asyncio.create_task(_restart_acquisition_service())
+
+        return {
+            "success": True,
+            "message": "Anomaly log thresholds updated",
+            "log": config_service.get_anomalies_config(),
+            "restarting": True,
+            "note": "Acquisition is restarting to apply new log thresholds",
+        }
+    except Exception as e:
+        logger.exception("Failed to update anomalies config")
+        return {"success": False, "error": str(e)}
+
 
 @app.post("/api/v1/events/delete")
 async def delete_events_api():

@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-/** Index record layout version (v2 adds waveform_start_ns + ns_per_sample). */
-#define EVENT_INDEX_FORMAT_VERSION 2
+/** Index record layout version (v3 adds extreme_rms_v). */
+#define EVENT_INDEX_FORMAT_VERSION 3
 
 /**
  * Decimated Data Chunk Header
@@ -18,11 +18,12 @@ typedef struct {
 } __attribute__((packed)) decimated_chunk_header_t;
 
 /**
- * Event Index Record (v2)
+ * Event Index Record (v3)
  *
  * timestamp_ns       — event onset (Unix epoch ns)
  * waveform_start_ns  — first sample in events.bin (Unix epoch ns)
  * ns_per_sample      — measured spacing between waveform samples
+ * extreme_rms_v      — min (sag) / max (swell) 1-cycle RMS during event
  */
 typedef struct {
   uint64_t event_id;
@@ -32,6 +33,7 @@ typedef struct {
   uint8_t event_type;
   int16_t peak_value;
   uint32_t duration_samples;
+  float extreme_rms_v;
   uint64_t file_offset;
 } __attribute__((packed)) event_index_record_t;
 

@@ -49,6 +49,7 @@ typedef struct {
   uint32_t current_duration;
   uint64_t start_time_ns;
   int16_t peak_raw;
+  float extreme_rms_v; /* min sag / max swell RMS while in_event */
 
   uint64_t last_event_end_ns[5];
 
@@ -69,5 +70,10 @@ void anomaly_detector_free(anomaly_detector_t *ad);
 int anomaly_detector_process_sample(anomaly_detector_t *ad, int16_t raw,
                                   uint64_t sample_time_ns,
                                   ad_notification_t *out);
+
+/** Force-complete the active event (e.g. capture window max duration). */
+int anomaly_detector_force_complete(anomaly_detector_t *ad,
+                                    uint64_t sample_time_ns,
+                                    ad_notification_t *out);
 
 #endif /* ANOMALY_DETECTOR_H */

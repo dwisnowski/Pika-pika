@@ -15,3 +15,4 @@ Each ADR is a numbered Markdown file: `NNNN-short-title.md`.
 |-----|-------|--------|
 | [0001](0001-pru-timing-accuracy.md) | PRU-to-Linux timing accuracy for sag/swell review | Accepted |
 | [0002](0002-oscilloscope-sample-rate-control.md) | Oscilloscope sample-rate control (physical ADC rate) | Accepted |
+| [0003](0003-ieee-1159-sag-swell-detection.md) | IEEE 1159 sag/swell detection and professional review flags | Accepted |

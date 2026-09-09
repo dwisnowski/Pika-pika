@@ -34,7 +34,8 @@ sensor:
   # ZMPT101B Sensor Configuration
   transformer_ratio: 45200    # Fallback ratio for the currently installed ZMPT101B
                               # This value is used as fallback only; system learns actual ratio
-  target_mains_vrms: 110.0    # Known steady-state voltage used for startup calibration
+  target_mains_vrms: 120.0    # Known steady-state voltage used for startup calibration
+                              # (North American residential L-N nominal)
   
   # Channel Configuration (per-channel enable flags)
   active_channels: 1          # Number of active channels for event detection
@@ -62,14 +63,24 @@ detection:
 # Anomaly Thresholds
 anomalies:
   sag:
-    threshold_pct: -10        # SAG threshold: 10% below nominal
-    min_duration_ms: 8
+    threshold_pct: -10        # SAG threshold: 10% below nominal (IEEE 1159)
+    min_duration_ms: 9        # ~0.5 cycle @ 60 Hz
   swell:
-    threshold_pct: 10         # SWELL threshold: 10% above nominal
-    min_duration_ms: 8
+    threshold_pct: 10         # SWELL threshold: 10% above nominal (IEEE 1159)
+    min_duration_ms: 9        # ~0.5 cycle @ 60 Hz
   spike:
     threshold_pct: 20
     max_duration_ms: 100
+
+# Fixed professional-review policy (not user-editable via settings gear).
+# Evaluated at read time from extreme RMS + duration; independent of log thresholds.
+review:
+  interruption_pct: 10        # extreme RMS <= 10% of nominal
+  deep_sag_pct: 70            # extreme RMS <= 70% of nominal
+  damaging_swell_pct: 120     # extreme RMS >= 120% of nominal
+  sustained_duration_ms: 60000
+  range_b_low_pct: -13.3      # ANSI C84.1 utilization Range B @ 120 V
+  range_b_high_pct: 5.8
 
 # Logging Configuration
 logging:

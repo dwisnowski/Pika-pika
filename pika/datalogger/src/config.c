@@ -195,9 +195,9 @@ int config_load(const char *path, logger_config_t *config) {
 
   /* anomalies */
   config->anomalies.sag_threshold_pct = -10;
-  config->anomalies.sag_min_duration_ms = 8;
+  config->anomalies.sag_min_duration_ms = 9;
   config->anomalies.swell_threshold_pct = 10;
-  config->anomalies.swell_min_duration_ms = 8;
+  config->anomalies.swell_min_duration_ms = 9;
   config->anomalies.spike_threshold_pct = 20;
   config->anomalies.spike_max_duration_ms = 100;
 

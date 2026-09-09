@@ -14,7 +14,7 @@ typedef enum {
 typedef struct {
   uint64_t timestamp_ns;
   event_type_t type;
-  float rms_vrms;     /* Calibrated RMS mains voltage at trigger */
+  float rms_vrms; /* Extreme 1-cycle RMS during event (min sag / max swell) */
   int16_t peak_value; /* Raw ADC peak (wire-level debug only) */
   uint32_t duration_samples;
 } anomaly_event_t;

@@ -24,7 +24,13 @@
             return;
         }
 
-        gallery.innerHTML = events.map(e => `
+        gallery.innerHTML = events.map(e => {
+            const rms = (e.peak_rms_v !== undefined ? e.peak_rms_v : e.peak_volts);
+            const rmsStr = (typeof rms === 'number') ? rms.toFixed(1) + ' V RMS' : '—';
+            const review = e.needs_review
+                ? `<div style="margin-top:8px; font-size:11px; color:#FF7043;">Professional review recommended</div>`
+                : '';
+            return `
             <div class="card" style="margin-bottom: 0; border: 1px solid rgba(255,214,0,0.1);">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                     <span style="background: rgba(255,214,0,0.1); color: var(--primary); padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px;">
@@ -32,8 +38,9 @@
                     </span>
                     <span style="font-size: 12px; opacity: 0.6;">#${e.id}</span>
                 </div>
-                <h3 style="margin: 0; font-size: 16px;">Peak: ${e.peak} LSB</h3>
+                <h3 style="margin: 0; font-size: 16px;">Peak RMS: ${rmsStr}</h3>
                 <p style="font-size: 14px; opacity: 0.8; margin: 8px 0;">Duration: ${e.duration_ms.toFixed(1)}ms</p>
+                ${review}
                 <div style="font-size: 12px; opacity: 0.5;">
                     ${new Date(e.timestamp / 1000000).toLocaleString()}
                 </div>
@@ -41,7 +48,8 @@
                     VIEW DETAILS
                 </button>
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
 
     loadEvents();

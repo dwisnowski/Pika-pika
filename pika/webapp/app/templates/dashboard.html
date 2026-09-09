@@ -125,24 +125,75 @@
         <div class="card-header">
             <span class="material-icons-outlined">warning_amber</span>
             <h2 class="card-title">Recent Events</h2>
+            <button type="button" onclick="showEventsHelp(event)" title="How sag/swell detection works"
+                style="margin-left: auto; background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 4px 6px; display: inline-flex; align-items: center;">
+                <span class="material-icons-outlined" style="font-size: 18px;">help_outline</span>
+            </button>
+            <button type="button" onclick="showEventsSettings(event)" title="Log threshold settings"
+                style="margin-left: 6px; background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 4px 6px; display: inline-flex; align-items: center;">
+                <span class="material-icons-outlined" style="font-size: 18px;">settings</span>
+            </button>
             <button onclick="showDeleteConfirm(event)"
-                style="margin-left: auto; background: rgba(244, 67, 54, 0.1); color: #F44336; border: 1px solid #F44336; border-radius: 4px; padding: 4px 12px; cursor: pointer; font-size: 12px; font-weight: 500; text-transform: uppercase;">Delete Event Data</button>
+                style="margin-left: 8px; background: rgba(244, 67, 54, 0.1); color: #F44336; border: 1px solid #F44336; border-radius: 4px; padding: 4px 12px; cursor: pointer; font-size: 12px; font-weight: 500; text-transform: uppercase;">Delete Event Data</button>
         </div>
         <table style="width: 100%; border-collapse: collapse; text-align: left;">
             <thead>
                 <tr style="opacity: 0.6; font-size: 12px;">
+                    <th style="padding: 8px; width: 36px;" title="Professional review"> </th>
                     <th style="padding: 8px;">TYPE</th>
                     <th>TIME</th>
-                    <th>PEAK (VAC)</th>
+                    <th>PEAK RMS (V)</th>
                     <th>DURATION</th>
                 </tr>
             </thead>
             <tbody id="event-list">
                 <tr>
-                    <td colspan="4" style="text-align: center; padding: 20px;">Loading events...</td>
+                    <td colspan="5" style="text-align: center; padding: 20px;">Loading events...</td>
                 </tr>
             </tbody>
         </table>
+    </div>
+    <!-- Events help popover -->
+    <div id="events-help-popover"
+        style="display: none; position: fixed; z-index: 1000; width: 360px; max-height: 80vh; overflow-y: auto; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,214,0,0.25); padding: 16px; pointer-events: auto;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div style="font-size: 14px; font-weight: 500; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Sag / Swell Guide</div>
+            <button type="button" onclick="hideEventsHelp()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
+                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
+            </button>
+        </div>
+        <div id="events-help-body" style="font-size: 12px; opacity: 0.9; line-height: 1.55;">
+            Loading…
+        </div>
+    </div>
+    <!-- Events settings popover (log thresholds only) -->
+    <div id="events-settings-popover"
+        style="display: none; position: fixed; z-index: 1000; width: 340px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); padding: 16px; pointer-events: auto;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div style="font-size: 14px; font-weight: 500; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px;">Log Thresholds</div>
+            <button type="button" onclick="hideEventsSettings()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
+                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
+            </button>
+        </div>
+        <p style="font-size: 11px; opacity: 0.7; margin: 0 0 12px; line-height: 1.4;">
+            These control what gets <b>logged</b>. Professional-review flags use a fixed policy and are not changed here.
+        </p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+            <label>Sag %<input id="cfg-sag-pct" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+            <label>Swell %<input id="cfg-swell-pct" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+            <label>Sag min ms<input id="cfg-sag-ms" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+            <label>Swell min ms<input id="cfg-swell-ms" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+            <label>Nominal V<input id="cfg-nominal-v" type="number" step="0.1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+            <label>Sag cooldown ms<input id="cfg-sag-cd" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+            <label style="grid-column: 1 / -1;">Swell cooldown ms<input id="cfg-swell-cd" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+        </div>
+        <div id="events-settings-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
+            <button type="button" onclick="hideEventsSettings()"
+                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px;">Cancel</button>
+            <button type="button" onclick="saveEventsSettings()"
+                style="background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 12px; font-weight: 600;">Save &amp; Restart</button>
+        </div>
     </div>
     <!-- Delete Confirmation Popover -->
     <div id="delete-confirm-popover"
@@ -596,21 +647,28 @@
                 const events = await eventsRes.json();
                 events.sort((a, b) => b.timestamp - a.timestamp);
                 const list = document.getElementById('event-list');
-                list.innerHTML = events.map(e => `
+                list.innerHTML = events.map(e => {
+                    const rms = (e.peak_rms_v !== undefined ? e.peak_rms_v : e.peak_volts);
+                    const rmsStr = (typeof rms === 'number') ? rms.toFixed(1) + ' V' : '—';
+                    const reviewIcon = e.needs_review
+                        ? `<span class="material-icons-outlined" style="font-size: 18px; color: #FF7043;" title="${(e.review_reason || 'Professional review recommended').replace(/"/g, '&quot;')}">priority_high</span>`
+                        : `<span style="display:inline-block; width: 18px;"></span>`;
+                    return `
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: background 0.2s;"
                         onclick="showEventModal(${e.id})"
                         onmouseover="this.style.background='rgba(255,214,0,0.05)'"
                         onmouseout="this.style.background='transparent'">
+                        <td style="padding: 12px 4px; vertical-align: middle;">${reviewIcon}</td>
                         <td style="padding: 12px 8px; font-weight: 500; color: #FFD600; cursor: help;"
                             onmouseenter="showEventPreview(event, '${e.type}'); event.stopPropagation();"
                             onmouseleave="hideEventPreview()">
                             ${e.type}
                         </td>
                         <td style="font-size: 12px; opacity: 0.8;">${new Date(e.timestamp / 1000000).toLocaleTimeString()}</td>
-                        <td>${e.peak_volts !== undefined ? e.peak_volts.toFixed(1) + ' V' : (e.peak_volts || '0.0 V')}</td>
+                        <td>${rmsStr}</td>
                         <td>${e.duration_ms.toFixed(1)}ms</td>
-                    </tr>
-                `).join('') || '<tr><td colspan="4" style="text-align: center;">No events detected yet</td></tr>';
+                    </tr>`;
+                }).join('') || '<tr><td colspan="5" style="text-align: center;">No events detected yet</td></tr>';
             } catch (error) {
                 console.error('Failed to update events:', error);
             }
@@ -968,6 +1026,114 @@
         document.getElementById('delete-confirm-popover').style.display = 'none';
     }
 
+    function positionCardPopover(popover, event) {
+        const pad = 12;
+        popover.style.display = 'block';
+        const rect = popover.getBoundingClientRect();
+        let left = event.clientX - Math.min(160, rect.width / 2);
+        let top = event.clientY + 12;
+        left = Math.max(pad, Math.min(left, window.innerWidth - rect.width - pad));
+        top = Math.max(pad, Math.min(top, window.innerHeight - rect.height - pad));
+        popover.style.left = left + 'px';
+        popover.style.top = top + 'px';
+    }
+
+    async function showEventsHelp(event) {
+        hideEventsSettings();
+        hideDeleteConfirm();
+        const popover = document.getElementById('events-help-popover');
+        const body = document.getElementById('events-help-body');
+        body.innerHTML = 'Loading…';
+        positionCardPopover(popover, event);
+        try {
+            const res = await fetch('/api/v1/config/anomalies');
+            const cfg = await res.json();
+            const log = cfg.log || {};
+            const review = cfg.review || {};
+            body.innerHTML = `
+                <p><b>IEEE 1159 definitions</b> (60 Hz residential L–N): a <b>sag</b> is RMS between 10–90% of nominal for ≥0.5 cycle; a <b>swell</b> is RMS above 110% for the same duration band.</p>
+                <p style="margin-top:10px;"><b>What gets logged</b> (gear settings — adjustable):</p>
+                <ul style="margin:6px 0 0 16px; padding:0;">
+                    <li>Sag below ${100 + (log.sag_threshold_pct || -10)}% of ${log.target_mains_vrms || 120} V for ≥${log.sag_min_duration_ms || 9} ms</li>
+                    <li>Swell above ${100 + (log.swell_threshold_pct || 10)}% for ≥${log.swell_min_duration_ms || 9} ms</li>
+                </ul>
+                <p style="margin-top:10px;"><b>Peak RMS</b> is the extreme 1-cycle RMS during the event (lowest for sag, highest for swell) — not instantaneous crest voltage.</p>
+                <p style="margin-top:10px;"><b>Professional review</b> (fixed — not changed by gear):</p>
+                <p style="margin-top:4px;">${review.summary || ''}</p>
+                <p style="margin-top:10px;">Flagged rows show a priority icon. Use them as evidence for your utility or electrician. Pika is a home monitor, not a certified power-quality meter.</p>
+                <p style="margin-top:10px; opacity:0.75;">Not classified yet: dedicated interruption/sustained event types, or sub-cycle spikes.</p>
+            `;
+            positionCardPopover(popover, event);
+        } catch (err) {
+            body.innerText = 'Could not load configuration: ' + err.message;
+        }
+    }
+
+    function hideEventsHelp() {
+        document.getElementById('events-help-popover').style.display = 'none';
+    }
+
+    async function showEventsSettings(event) {
+        hideEventsHelp();
+        hideDeleteConfirm();
+        const popover = document.getElementById('events-settings-popover');
+        document.getElementById('events-settings-status').innerText = '';
+        positionCardPopover(popover, event);
+        try {
+            const res = await fetch('/api/v1/config/anomalies');
+            const cfg = await res.json();
+            const log = cfg.log || {};
+            document.getElementById('cfg-sag-pct').value = log.sag_threshold_pct;
+            document.getElementById('cfg-swell-pct').value = log.swell_threshold_pct;
+            document.getElementById('cfg-sag-ms').value = log.sag_min_duration_ms;
+            document.getElementById('cfg-swell-ms').value = log.swell_min_duration_ms;
+            document.getElementById('cfg-nominal-v').value = log.target_mains_vrms;
+            document.getElementById('cfg-sag-cd').value = log.sag_cooldown_ms;
+            document.getElementById('cfg-swell-cd').value = log.swell_cooldown_ms;
+            positionCardPopover(popover, event);
+        } catch (err) {
+            document.getElementById('events-settings-status').innerText = 'Load failed: ' + err.message;
+        }
+    }
+
+    function hideEventsSettings() {
+        document.getElementById('events-settings-popover').style.display = 'none';
+    }
+
+    async function saveEventsSettings() {
+        const status = document.getElementById('events-settings-status');
+        status.style.color = '#888';
+        status.innerText = 'Saving…';
+        const payload = {
+            sag_threshold_pct: parseInt(document.getElementById('cfg-sag-pct').value, 10),
+            swell_threshold_pct: parseInt(document.getElementById('cfg-swell-pct').value, 10),
+            sag_min_duration_ms: parseInt(document.getElementById('cfg-sag-ms').value, 10),
+            swell_min_duration_ms: parseInt(document.getElementById('cfg-swell-ms').value, 10),
+            target_mains_vrms: parseFloat(document.getElementById('cfg-nominal-v').value),
+            sag_cooldown_ms: parseInt(document.getElementById('cfg-sag-cd').value, 10),
+            swell_cooldown_ms: parseInt(document.getElementById('cfg-swell-cd').value, 10),
+        };
+        try {
+            const res = await fetch('/api/v1/config/anomalies', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const result = await res.json();
+            if (!result.success) {
+                status.style.color = '#F44336';
+                status.innerText = result.error || 'Save failed';
+                return;
+            }
+            status.style.color = '#66BB6A';
+            status.innerText = 'Saved — acquisition restarting…';
+            setTimeout(() => window.location.reload(), 2500);
+        } catch (err) {
+            status.style.color = '#F44336';
+            status.innerText = err.message;
+        }
+    }
+
     async function confirmDeleteEvents() {
         hideDeleteConfirm();
         
@@ -1007,19 +1173,35 @@
             const eventTime = new Date(data.timestamp / 1000000);
             const wfStartNs = data.waveform_start_ns || data.timestamp;
             const nsPerSample = data.ns_per_sample || Math.floor(1e9 / (data.sample_rate || 10000));
-            const duration = ((data.duration_samples || data.samples.length) * nsPerSample / 1e6).toFixed(1);
-            const rms = Math.sqrt(data.samples.reduce((sum, v) => sum + v*v, 0) / data.samples.length).toFixed(2);
+            const durationMs = (data.duration_ms !== undefined)
+                ? data.duration_ms.toFixed(1)
+                : ((data.duration_samples || data.samples.length) * nsPerSample / 1e6).toFixed(1);
+            const extremeRms = (data.peak_rms_v !== undefined ? data.peak_rms_v : data.peak_volts);
+            const extremeRmsStr = (typeof extremeRms === 'number') ? extremeRms.toFixed(1) : '—';
             const min = Math.min(...data.samples).toFixed(2);
             const max = Math.max(...data.samples).toFixed(2);
+            const reviewBanner = data.needs_review
+                ? `<div style="grid-column: 1 / -1; background: rgba(255,112,67,0.12); border: 1px solid rgba(255,112,67,0.45); border-radius: 6px; padding: 10px 12px; margin-bottom: 4px;">
+                        <div style="display:flex; align-items:center; gap:6px; color:#FF7043; font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:0.4px;">
+                            <span class="material-icons-outlined" style="font-size:18px;">priority_high</span>
+                            Professional review recommended
+                        </div>
+                        <div style="font-size:12px; margin-top:6px; line-height:1.45;">${data.review_reason || ''}</div>
+                        <div style="font-size:11px; opacity:0.85; margin-top:6px; line-height:1.45;">${data.review_guidance || ''}</div>
+                   </div>`
+                : `<div style="grid-column: 1 / -1; font-size:11px; opacity:0.65; line-height:1.4; margin-bottom:4px;">
+                        Logged for awareness — not flagged for professional review.
+                   </div>`;
             
             document.getElementById('modal-stats').innerHTML = `
+                ${reviewBanner}
                 <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">Time</span><br><b>${eventTime.toLocaleString()}</b></div>
                 <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">Type</span><br><b style="color: var(--primary);">${data.type}</b></div>
-                <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">Peak Voltage</span><br><b>${data.vrms.toFixed(1)} VAC</b></div>
-                <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">RMS Voltage</span><br><b>${rms} VAC</b></div>
-                <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">Min Voltage</span><br><b>${min} VAC</b></div>
-                <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">Max Voltage</span><br><b>${max} VAC</b></div>
-                <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">Duration</span><br><b>${duration} ms</b></div>
+                <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">Peak RMS</span><br><b>${extremeRmsStr} V</b></div>
+                <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">Waveform RMS</span><br><b>${(data.vrms || 0).toFixed(1)} V</b></div>
+                <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">Min Voltage</span><br><b>${min} V</b></div>
+                <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">Max Voltage</span><br><b>${max} V</b></div>
+                <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">Duration</span><br><b>${durationMs} ms</b></div>
                 <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">Sample Count</span><br><b>${data.samples.length}</b></div>
                 <div><span style="opacity: 0.6; font-size: 11px; text-transform: uppercase;">Sample Rate</span><br><b>${data.sample_rate} Hz</b></div>
             `;

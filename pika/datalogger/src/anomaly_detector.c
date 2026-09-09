@@ -1,4 +1,5 @@
 #include "anomaly_detector.h"
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -115,9 +116,25 @@ static uint32_t min_duration_for_type(anomaly_detector_t *ad, event_type_t t) {
   }
 }
 
+static void update_extreme_rms(anomaly_detector_t *ad, float vrms_mains) {
+  if (ad->current_type == EVENT_TYPE_SAG) {
+    if (vrms_mains < ad->extreme_rms_v)
+      ad->extreme_rms_v = vrms_mains;
+  } else if (ad->current_type == EVENT_TYPE_SWELL) {
+    if (vrms_mains > ad->extreme_rms_v)
+      ad->extreme_rms_v = vrms_mains;
+  }
+}
+
+static void update_peak_raw(anomaly_detector_t *ad, int16_t raw_ac) {
+  int32_t cur = raw_ac >= 0 ? raw_ac : -raw_ac;
+  int32_t prev = ad->peak_raw >= 0 ? ad->peak_raw : -ad->peak_raw;
+  if (cur > prev)
+    ad->peak_raw = raw_ac;
+}
+
 static int finish_event_sample(anomaly_detector_t *ad, event_type_t ended_type,
-                               uint64_t sample_time_ns, float vrms_mains,
-                               ad_notification_t *out) {
+                               uint64_t sample_time_ns, ad_notification_t *out) {
   uint32_t min_dur = min_duration_for_type(ad, ended_type);
 
   if (ad->current_duration >= min_dur) {
@@ -125,13 +142,14 @@ static int finish_event_sample(anomaly_detector_t *ad, event_type_t ended_type,
     out->event = (anomaly_event_t){
         .timestamp_ns = ad->start_time_ns,
         .type = ended_type,
-        .rms_vrms = vrms_mains,
+        .rms_vrms = ad->extreme_rms_v,
         .peak_value = ad->peak_raw,
         .duration_samples = ad->current_duration,
     };
 
-    printf("[Detector] Event ENDED: Type %d, Duration %u samples, VRMS=%.2f V\n",
-           ended_type, ad->current_duration, vrms_mains);
+    printf("[Detector] Event ENDED: Type %d, Duration %u samples, "
+           "extreme_RMS=%.2f V\n",
+           ended_type, ad->current_duration, ad->extreme_rms_v);
   } else {
     printf("[Detector] Event discarded (duration %u < min %u samples)\n",
            ad->current_duration, min_dur);
@@ -139,6 +157,7 @@ static int finish_event_sample(anomaly_detector_t *ad, event_type_t ended_type,
     ad->in_event = 0;
     ad->current_type = EVENT_TYPE_NONE;
     ad->current_duration = 0;
+    ad->extreme_rms_v = 0.0f;
     return 0;
   }
 
@@ -146,7 +165,16 @@ static int finish_event_sample(anomaly_detector_t *ad, event_type_t ended_type,
   ad->in_event = 0;
   ad->current_type = EVENT_TYPE_NONE;
   ad->current_duration = 0;
+  ad->extreme_rms_v = 0.0f;
   return 1;
+}
+
+int anomaly_detector_force_complete(anomaly_detector_t *ad,
+                                    uint64_t sample_time_ns,
+                                    ad_notification_t *out) {
+  if (!ad || !out || !ad->in_event)
+    return 0;
+  return finish_event_sample(ad, ad->current_type, sample_time_ns, out);
 }
 
 int anomaly_detector_process_sample(anomaly_detector_t *ad, int16_t raw,
@@ -234,6 +262,7 @@ int anomaly_detector_process_sample(anomaly_detector_t *ad, int16_t raw,
       ad->start_time_ns = sample_time_ns;
       ad->current_duration = 1;
       ad->peak_raw = raw_ac;
+      ad->extreme_rms_v = vrms_mains;
 
       out->kind = AD_NOTIFY_STARTED;
       out->event = (anomaly_event_t){
@@ -251,19 +280,18 @@ int anomaly_detector_process_sample(anomaly_detector_t *ad, int16_t raw,
 
     if (cur_type == ad->current_type) {
       ad->current_duration++;
-      if ((raw_ac > 0 ? raw_ac : -raw_ac) >
-          (ad->peak_raw > 0 ? ad->peak_raw : -ad->peak_raw))
-        ad->peak_raw = raw_ac;
+      update_peak_raw(ad, raw_ac);
+      update_extreme_rms(ad, vrms_mains);
       return 0;
     }
 
-    finish_event_sample(ad, ad->current_type, sample_time_ns, vrms_mains, out);
-    return 0;
+    /* Type flip: emit COMPLETED for the prior event; new type starts next
+     * sample (at most one notification per call). */
+    return finish_event_sample(ad, ad->current_type, sample_time_ns, out);
   }
 
   if (ad->in_event)
-    return finish_event_sample(ad, ad->current_type, sample_time_ns, vrms_mains,
-                               out);
+    return finish_event_sample(ad, ad->current_type, sample_time_ns, out);
 
   return 0;
 }

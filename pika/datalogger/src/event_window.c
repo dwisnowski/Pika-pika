@@ -89,10 +89,11 @@ void event_window_push_sample(event_window_t *ew, int16_t ch0_sample) {
 
   if (ew->state == EW_CAPTURING) {
     uint32_t event_samples = ew->capture_count - ew->pre_samples_at_start;
-    if (event_samples >= ew->max_event_samples) {
-      printf("[EventWindow] Max event duration reached, starting post-capture\n");
-      ew->state = EW_POST;
-      ew->post_samples_remaining = ew->post_samples_total;
+    if (!ew->max_duration_hit && event_samples >= ew->max_event_samples) {
+      printf("[EventWindow] Max event duration reached, requesting force-end\n");
+      /* Keep CAPTURING until main force-completes the detector and calls
+       * on_end; sticky flag tells main to do that on this sample. */
+      ew->max_duration_hit = true;
     }
   } else if (ew->state == EW_POST) {
     if (ew->post_skip_decrement_once) {
@@ -107,6 +108,13 @@ void event_window_push_sample(event_window_t *ew, int16_t ch0_sample) {
   }
 }
 
+bool event_window_consume_max_hit(event_window_t *ew) {
+  if (!ew->max_duration_hit)
+    return false;
+  ew->max_duration_hit = false;
+  return true;
+}
+
 void event_window_on_start(event_window_t *ew, const anomaly_event_t *event) {
   if (ew->state != EW_IDLE || ew->ready) {
     fprintf(stderr, "[EventWindow] Ignoring START while busy\n");
@@ -116,6 +124,7 @@ void event_window_on_start(event_window_t *ew, const anomaly_event_t *event) {
   ew->ready_event = *event;
   copy_pre_to_capture(ew);
   ew->pre_samples_at_start = ew->capture_count;
+  ew->max_duration_hit = false;
 
   if (ew->ns_per_sample > 0 && ew->pre_count > 0) {
     ew->waveform_start_ns =
@@ -135,6 +144,7 @@ void event_window_on_end(event_window_t *ew, const anomaly_event_t *event) {
   ew->state = EW_POST;
   ew->post_samples_remaining = ew->post_samples_total;
   ew->post_skip_decrement_once = true;
+  ew->max_duration_hit = false;
 }
 
 bool event_window_poll_ready(event_window_t *ew, anomaly_event_t *out_event,

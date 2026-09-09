@@ -52,16 +52,29 @@ class ConfigService:
             'anomalies': {
                 'sag': {
                     'threshold_pct': -10,
-                    'min_duration_ms': 8
+                    'min_duration_ms': 9
                 },
                 'swell': {
                     'threshold_pct': 10,
-                    'min_duration_ms': 8
+                    'min_duration_ms': 9
                 },
                 'spike': {
                     'threshold_pct': 20,
                     'max_duration_ms': 100
                 }
+            },
+            'review': {
+                'interruption_pct': 10,
+                'deep_sag_pct': 70,
+                'damaging_swell_pct': 120,
+                'sustained_duration_ms': 60000,
+                'range_b_low_pct': -13.3,
+                'range_b_high_pct': 5.8,
+            },
+            'debounce': {
+                'sag_cooldown_ms': 1000,
+                'swell_cooldown_ms': 1000,
+                'spike_cooldown_ms': 1000,
             },
             'logging': {
                 'level': 'info'
@@ -95,7 +108,31 @@ class ConfigService:
     def get_swell_threshold_pct(self) -> int:
         """Get SWELL threshold percentage"""
         return self.config.get('anomalies', {}).get('swell', {}).get('threshold_pct', 10)
-    
+
+    def get_sag_min_duration_ms(self) -> int:
+        return int(self.config.get('anomalies', {}).get('sag', {}).get('min_duration_ms', 9))
+
+    def get_swell_min_duration_ms(self) -> int:
+        return int(self.config.get('anomalies', {}).get('swell', {}).get('min_duration_ms', 9))
+
+    def get_sag_cooldown_ms(self) -> int:
+        return int(self.config.get('debounce', {}).get('sag_cooldown_ms', 1000))
+
+    def get_swell_cooldown_ms(self) -> int:
+        return int(self.config.get('debounce', {}).get('swell_cooldown_ms', 1000))
+
+    def get_anomalies_config(self) -> dict:
+        """User-editable log thresholds (not professional-review policy)."""
+        return {
+            "sag_threshold_pct": self.get_sag_threshold_pct(),
+            "swell_threshold_pct": self.get_swell_threshold_pct(),
+            "sag_min_duration_ms": self.get_sag_min_duration_ms(),
+            "swell_min_duration_ms": self.get_swell_min_duration_ms(),
+            "target_mains_vrms": self.get_target_mains_vrms(),
+            "sag_cooldown_ms": self.get_sag_cooldown_ms(),
+            "swell_cooldown_ms": self.get_swell_cooldown_ms(),
+        }
+
     def get_calibration_scale(self) -> float:
         """Get the calibration scale factor for converting ADC to volts"""
         adc_vref = self.get_adc_vref()

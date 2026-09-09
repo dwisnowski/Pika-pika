@@ -153,6 +153,7 @@ static void save_ready_event(event_window_t *ew, writer_t *writer) {
       .event_type = (uint8_t)captured_event.type,
       .peak_value = captured_event.peak_value,
       .duration_samples = captured_event.duration_samples,
+      .extreme_rms_v = captured_event.rms_vrms,
   };
 
   writer_write_event(writer, &index, event_samples, ch0_sample_count);
@@ -278,6 +279,21 @@ void *processor_thread_func(void *arg) {
         }
 
         event_window_push_sample(&ew, ch0_sample);
+
+        if (event_window_consume_max_hit(&ew)) {
+          ad_notification_t forced;
+          if (anomaly_detector_force_complete(&ad, sample_time_ns, &forced)) {
+            event_window_on_end(&ew, &forced.event);
+          } else if (ew.state == EW_CAPTURING) {
+            /* Detector discarded (below min duration) — still close capture. */
+            anomaly_event_t truncated = ew.ready_event;
+            truncated.duration_samples =
+                ew.capture_count > ew.pre_samples_at_start
+                    ? (ew.capture_count - ew.pre_samples_at_start)
+                    : 0;
+            event_window_on_end(&ew, &truncated);
+          }
+        }
 
         if (dec.samples_in_bucket == 0)
           current_bucket_start_ns = sample_time_ns;

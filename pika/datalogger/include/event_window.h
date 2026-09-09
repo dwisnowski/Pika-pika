@@ -33,6 +33,7 @@ typedef struct {
   uint32_t post_samples_total;
   uint32_t max_event_samples;
   uint32_t pre_samples_at_start;
+  bool max_duration_hit;
 
   uint32_t sample_rate;
 } event_window_t;
@@ -50,6 +51,9 @@ void event_window_push_sample(event_window_t *ew, int16_t ch0_sample);
 void event_window_on_start(event_window_t *ew, const anomaly_event_t *event);
 
 void event_window_on_end(event_window_t *ew, const anomaly_event_t *event);
+
+/** True once after capture hits max_event_samples; clears the sticky flag. */
+bool event_window_consume_max_hit(event_window_t *ew);
 
 bool event_window_poll_ready(event_window_t *ew, anomaly_event_t *out_event,
                              int16_t **out_samples, uint32_t *out_count,

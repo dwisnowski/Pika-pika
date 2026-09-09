@@ -31,8 +31,10 @@ import argparse
 DECIMATED_HDR_FMT  = "<QIIII"   # start_time_ns(u64) sample_rate(u32) sample_count(u32) channels(u32) values_per_sample(u32)
 DECIMATED_HDR_SIZE = struct.calcsize(DECIMATED_HDR_FMT)
 
-EVENT_IDX_FMT  = "<QQQQBhIQ"   # v2 index record (47 bytes packed)
-EVENT_IDX_SIZE = struct.calcsize(EVENT_IDX_FMT)
+EVENT_IDX_FMT_V2 = "<QQQQBhIQ"   # v2 index record (47 bytes packed)
+EVENT_IDX_FMT_V3 = "<QQQQBhIfQ"  # v3 adds extreme_rms_v (51 bytes packed)
+EVENT_IDX_SIZE_V2 = struct.calcsize(EVENT_IDX_FMT_V2)
+EVENT_IDX_SIZE_V3 = struct.calcsize(EVENT_IDX_FMT_V3)
 
 # Unix epoch plausibility: 2020-01-01 .. 2100-01-01
 EPOCH_MIN_NS = 1577836800 * 1_000_000_000
@@ -215,29 +217,42 @@ def validate_event_index(index_path: str, events_path: str, verbose: bool = Fals
         return False
 
     file_size = os.path.getsize(index_path)
-    print(f"  File size: {file_size:,} bytes  ({file_size // EVENT_IDX_SIZE} records, "
-          f"record size {EVENT_IDX_SIZE} bytes)")
+    if file_size % EVENT_IDX_SIZE_V3 == 0:
+        idx_fmt, idx_size, has_extreme = EVENT_IDX_FMT_V3, EVENT_IDX_SIZE_V3, True
+    elif file_size % EVENT_IDX_SIZE_V2 == 0:
+        idx_fmt, idx_size, has_extreme = EVENT_IDX_FMT_V2, EVENT_IDX_SIZE_V2, False
+    else:
+        idx_fmt, idx_size, has_extreme = EVENT_IDX_FMT_V3, EVENT_IDX_SIZE_V3, True
+
+    print(f"  File size: {file_size:,} bytes  ({file_size // idx_size if idx_size else 0} records, "
+          f"record size {idx_size} bytes, {'v3' if has_extreme else 'v2'})")
 
     if file_size == 0:
         print(f"  [SKIP] No events recorded yet — nothing to validate")
         return True
 
-    if file_size % EVENT_IDX_SIZE != 0:
-        failures.append(f"index.bin size {file_size} is not a multiple of record size {EVENT_IDX_SIZE}")
+    if file_size % idx_size != 0:
+        failures.append(f"index.bin size {file_size} is not a multiple of record size {idx_size}")
 
     records = []
     with open(index_path, "rb") as f:
         rec_idx = 0
         while True:
-            raw = f.read(EVENT_IDX_SIZE)
+            raw = f.read(idx_size)
             if len(raw) == 0:
                 break
-            if len(raw) < EVENT_IDX_SIZE:
-                failures.append(f"Record {rec_idx}: truncated ({len(raw)} of {EVENT_IDX_SIZE} bytes)")
+            if len(raw) < idx_size:
+                failures.append(f"Record {rec_idx}: truncated ({len(raw)} of {idx_size} bytes)")
                 break
-            eid, ts, wf_start, ns_per_sample, etype, peak, dur, foff = struct.unpack(
-                EVENT_IDX_FMT, raw
-            )
+            if has_extreme:
+                eid, ts, wf_start, ns_per_sample, etype, peak, dur, extreme_rms, foff = struct.unpack(
+                    idx_fmt, raw
+                )
+            else:
+                eid, ts, wf_start, ns_per_sample, etype, peak, dur, foff = struct.unpack(
+                    idx_fmt, raw
+                )
+                extreme_rms = None
             records.append({
                 "id": eid,
                 "ts": ts,
@@ -246,6 +261,7 @@ def validate_event_index(index_path: str, events_path: str, verbose: bool = Fals
                 "type": etype,
                 "peak": peak,
                 "dur": dur,
+                "extreme_rms": extreme_rms,
                 "foff": foff,
             })
             rec_idx += 1
