@@ -171,8 +171,20 @@ void *processor_thread_func(void *arg) {
   }
 
   decimator_t dec;
-  decimator_init(&dec, global_config.nominal_rate_hz,
-                 global_config.storage.decimation.target_output_rate_hz);
+  uint32_t decimated_output_rate_hz =
+      global_config.storage.decimation.target_output_rate_hz;
+  if (decimated_output_rate_hz == 0)
+    decimated_output_rate_hz = 50;
+  /* When acquisition is slower than the configured output rate, emit one
+   * decimated sample per ADC sample so file metadata stays truthful. */
+  if (global_config.nominal_rate_hz > 0 &&
+      decimated_output_rate_hz > global_config.nominal_rate_hz) {
+    printf("[Processor] Clamping decimated output %u Hz -> acquisition %u Hz\n",
+           decimated_output_rate_hz, global_config.nominal_rate_hz);
+    decimated_output_rate_hz = global_config.nominal_rate_hz;
+  }
+
+  decimator_init(&dec, global_config.nominal_rate_hz, decimated_output_rate_hz);
 
   time_sync_t t_sync;
   time_sync_init(&t_sync, 0, 200000000U);
@@ -185,11 +197,6 @@ void *processor_thread_func(void *arg) {
     anomaly_detector_free(&ad);
     return NULL;
   }
-
-  uint32_t decimated_output_rate_hz =
-      global_config.storage.decimation.target_output_rate_hz;
-  if (decimated_output_rate_hz == 0)
-    decimated_output_rate_hz = 50;
 
   uint8_t temp_buf[MAX_BLOCK_COPY_SIZE];
   int16_t decimated_samples[128 * 8];

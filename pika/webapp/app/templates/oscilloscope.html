@@ -166,6 +166,26 @@
         </div>
 
         <div class="knob-group">
+            <h3>Acquisition</h3>
+            <div class="control-row">
+                <span>Sample Rate</span>
+                <span id="srate-label">10.0 kS/s</span>
+            </div>
+            <input type="range" class="slider" min="0" max="14" value="9" step="1"
+                id="srate-slider" oninput="previewSampleRate(this.value)"
+                onchange="applySampleRate(this.value)">
+            <div id="srate-status" style="font-size:11px; opacity:0.7; margin-top:6px;">
+                Physical AD7606 / PRU rate
+            </div>
+            <div id="srate-alias-warn"
+                style="display:none; margin-top:8px; padding:8px; border-radius:4px;
+                       background:rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.4);
+                       color:#FFC107; font-size:11px; line-height:1.4;">
+                Rates below 120 S/s cannot faithfully represent 60 Hz mains (aliasing).
+            </div>
+        </div>
+
+        <div class="knob-group">
             <h3>Horizontal</h3>
             <div class="control-row">
                 <span>Time/Div</span>
@@ -246,8 +266,159 @@
     let trigEdge = 'RISING';
     let trigLevel = 0.0;
 
+    // Acquisition rate (physical PRU/AD7606)
+    const SAMPLE_RATES = [
+        10, 20, 50, 100, 200, 500,
+        1000, 2000, 5000, 10000, 20000, 50000,
+        100000, 150000, 180000
+    ];
+    const ALIASING_WARN_BELOW_HZ = 120;
+    let sampleRateHz = 10000;
+    let sampleRateApplying = false;
+    let pendingRateConfirm = null;
+
     const canvas = document.getElementById('scopeCanvas');
     const ctx = canvas.getContext('2d');
+
+    function formatSampleRate(hz) {
+        if (hz >= 1000) {
+            const khz = hz / 1000;
+            return (Number.isInteger(khz) ? khz.toFixed(0) : khz.toFixed(1)) + ' kS/s';
+        }
+        return hz + ' S/s';
+    }
+
+    function rateIndex(hz) {
+        let best = 0;
+        let bestDiff = Math.abs(SAMPLE_RATES[0] - hz);
+        for (let i = 1; i < SAMPLE_RATES.length; i++) {
+            const d = Math.abs(SAMPLE_RATES[i] - hz);
+            if (d < bestDiff) {
+                best = i;
+                bestDiff = d;
+            }
+        }
+        return best;
+    }
+
+    function updateAliasWarning(hz) {
+        const warn = document.getElementById('srate-alias-warn');
+        warn.style.display = hz < ALIASING_WARN_BELOW_HZ ? 'block' : 'none';
+    }
+
+    function setSampleRateUi(hz, statusText) {
+        sampleRateHz = hz;
+        const idx = rateIndex(hz);
+        const slider = document.getElementById('srate-slider');
+        slider.value = idx;
+        document.getElementById('srate-label').innerText = formatSampleRate(SAMPLE_RATES[idx]);
+        updateAliasWarning(SAMPLE_RATES[idx]);
+        if (statusText) {
+            document.getElementById('srate-status').innerText = statusText;
+        }
+    }
+
+    function previewSampleRate(index) {
+        const hz = SAMPLE_RATES[parseInt(index, 10)];
+        document.getElementById('srate-label').innerText = formatSampleRate(hz);
+        updateAliasWarning(hz);
+    }
+
+    function ensureUsableTimebase(hz) {
+        // Prefer at least ~50 samples across the 10-division display window.
+        const minWindowSec = 50 / Math.max(hz, 1);
+        const minTDiv = minWindowSec / 10.0;
+        const options = Array.from(document.getElementById('tdiv-sel').options)
+            .map(o => parseFloat(o.value))
+            .sort((a, b) => a - b);
+        let chosen = options[options.length - 1];
+        for (const opt of options) {
+            if (opt >= minTDiv) {
+                chosen = opt;
+                break;
+            }
+        }
+        if (chosen !== tDiv) {
+            tDiv = chosen;
+            document.getElementById('tdiv-sel').value = String(chosen);
+            updateReadouts();
+            sendConfig();
+        }
+    }
+
+    async function applySampleRate(index) {
+        const hz = SAMPLE_RATES[parseInt(index, 10)];
+        if (hz === sampleRateHz && !sampleRateApplying) {
+            setSampleRateUi(hz, 'Physical AD7606 / PRU rate');
+            return;
+        }
+
+        sampleRateApplying = true;
+        pendingRateConfirm = hz;
+        setSampleRateUi(hz, 'Applying rate and reconnecting…');
+        document.getElementById('srate-slider').disabled = true;
+
+        try {
+            const res = await fetch('/api/v1/config/sample-rate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sample_rate: hz })
+            });
+            const data = await res.json();
+            if (!data.success) {
+                throw new Error(data.error || 'Sample rate update failed');
+            }
+            ensureUsableTimebase(hz);
+            document.getElementById('srate-status').innerText =
+                'Restarting acquisition… waiting for reconnect';
+            // WebSocket will drop; connect() already auto-retries.
+            setTimeout(() => confirmAppliedRate(hz), 4000);
+        } catch (err) {
+            console.error(err);
+            sampleRateApplying = false;
+            pendingRateConfirm = null;
+            document.getElementById('srate-slider').disabled = false;
+            document.getElementById('srate-status').innerText =
+                'Failed to apply rate: ' + err.message;
+            syncSampleRateFromServer();
+        }
+    }
+
+    async function confirmAppliedRate(expectedHz, attempt = 0) {
+        try {
+            const res = await fetch('/api/v1/config/sample-rate');
+            const data = await res.json();
+            const live = data.sample_rate || data.configured_sample_rate;
+            if (live === expectedHz || attempt >= 8) {
+                sampleRateApplying = false;
+                pendingRateConfirm = null;
+                document.getElementById('srate-slider').disabled = false;
+                setSampleRateUi(live || expectedHz,
+                    live === expectedHz
+                        ? 'Physical AD7606 / PRU rate'
+                        : `Configured ${formatSampleRate(expectedHz)}; live ${formatSampleRate(live || 0)}`);
+                ensureUsableTimebase(live || expectedHz);
+                sendConfig();
+                return;
+            }
+        } catch (e) {
+            // Service may still be restarting.
+        }
+        setTimeout(() => confirmAppliedRate(expectedHz, attempt + 1), 1500);
+    }
+
+    async function syncSampleRateFromServer() {
+        try {
+            const res = await fetch('/api/v1/config/sample-rate');
+            const data = await res.json();
+            const hz = data.sample_rate || data.configured_sample_rate || 10000;
+            setSampleRateUi(hz, 'Physical AD7606 / PRU rate');
+            ensureUsableTimebase(hz);
+        } catch (e) {
+            console.warn('Could not sync sample rate', e);
+            setSampleRateUi(sampleRateHz, 'Physical AD7606 / PRU rate');
+        }
+    }
 
     function resize() {
         // High DPI canvas scaling
@@ -349,9 +520,22 @@
     function connect() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         ws = new WebSocket(`${protocol}//${window.location.host}/ws/live`);
-        ws.onopen = () => sendConfig();
+        ws.onopen = () => {
+            sendConfig();
+            if (sampleRateApplying && pendingRateConfirm) {
+                document.getElementById('srate-status').innerText =
+                    'Reconnected — confirming rate…';
+                confirmAppliedRate(pendingRateConfirm);
+            }
+        };
         ws.onmessage = handleData;
-        ws.onclose = () => setTimeout(connect, 2000);
+        ws.onclose = () => {
+            if (sampleRateApplying) {
+                document.getElementById('srate-status').innerText =
+                    'Restarting acquisition… waiting for reconnect';
+            }
+            setTimeout(connect, 2000);
+        };
     }
 
     function processAutoset(samples) {
@@ -391,6 +575,12 @@
         if (!isRunning) return;
 
         const data = JSON.parse(event.data);
+        if (data.health && data.health.sample_rate && !sampleRateApplying) {
+            const live = data.health.sample_rate;
+            if (live !== sampleRateHz) {
+                setSampleRateUi(live, 'Physical AD7606 / PRU rate');
+            }
+        }
         if (!data.samples || data.samples.length < 2) return;
 
         let samples = data.samples;
@@ -541,6 +731,7 @@
 
     // Startup
     updateReadouts();
+    syncSampleRateFromServer();
     connect();
 
 </script>

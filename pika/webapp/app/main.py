@@ -2,7 +2,10 @@ import asyncio
 import glob
 import logging
 import os
+import re
+import subprocess
 import time
+from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -30,8 +33,56 @@ logging.getLogger("uvicorn.error").setLevel(log_level_enum)
 
 logger = logging.getLogger(__name__)
 
+# Discrete physical acquisition rates for the oscilloscope / PRU slider.
+ALLOWED_SAMPLE_RATES_HZ = (
+    10, 20, 50, 100, 200, 500,
+    1000, 2000, 5000, 10000, 20000, 50000,
+    100000, 150000, 180000,
+)
+PIKA_BLOCK_SIZE = 128
+ALIASING_WARN_BELOW_HZ = 120
+
 _last_scope_total = None
 _last_scope_progress_at = 0.0
+
+
+def _scope_liveness_timeout_s(sample_rate: int) -> float:
+    """Allow slow block fill at low rates (128 samples @ 10 S/s ≈ 12.8 s)."""
+    if sample_rate <= 0:
+        return 30.0
+    block_period_s = PIKA_BLOCK_SIZE / float(sample_rate)
+    return max(15.0, block_period_s * 2.5 + 5.0)
+
+
+def _persist_nominal_rate_hz(config_path: Path, sample_rate: int) -> None:
+    """Update only nominal_rate_hz so YAML comments/layout stay intact."""
+    text = config_path.read_text()
+    new_text, n = re.subn(
+        r'(?m)^(  nominal_rate_hz:\s*)\d+(\b.*)$',
+        rf'\g<1>{sample_rate}\2',
+        text,
+        count=1,
+    )
+    if n != 1:
+        raise FileNotFoundError(
+            f"Could not update nominal_rate_hz in {config_path}"
+        )
+    config_path.write_text(new_text)
+
+
+async def _restart_acquisition_service():
+    """Restart PRU+datalogger+webapp after the HTTP response has flushed."""
+    await asyncio.sleep(1.5)
+    try:
+        subprocess.Popen(
+            ["sudo", "-n", "systemctl", "restart", "pika-run-all.service"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        logger.info("Scheduled restart of pika-run-all.service for sample-rate change")
+    except Exception as e:
+        logger.error(f"Failed to schedule acquisition restart: {e}")
 
 
 def get_health_snapshot():
@@ -80,8 +131,9 @@ def get_health_snapshot():
         if _last_scope_total is None or current_total != _last_scope_total:
             _last_scope_total = current_total
             _last_scope_progress_at = now
+        liveness_timeout = _scope_liveness_timeout_s(int(sample_rate or 0))
         datalogger_running = (
-            current_total > 0 and now - _last_scope_progress_at < 10.0
+            current_total > 0 and now - _last_scope_progress_at < liveness_timeout
         )
 
     actual_sample_rate = 0
@@ -212,49 +264,61 @@ async def get_event_data_api(event_id: int):
     logger.info(f"Successfully retrieved event {event_id}")
     return data
 
+@app.get("/api/v1/config/sample-rate")
+async def get_sample_rate():
+    """Return the configured and allowed physical acquisition rates."""
+    configured = config_service.get_nominal_rate_hz()
+    live = 0
+    if shm.header and shm.header.magic == 0x5C09E000:
+        live = int(shm.header.sample_rate or 0)
+    return {
+        "sample_rate": live or configured,
+        "configured_sample_rate": configured,
+        "allowed_rates": list(ALLOWED_SAMPLE_RATES_HZ),
+        "aliasing_warn_below_hz": ALIASING_WARN_BELOW_HZ,
+    }
+
+
 @app.post("/api/v1/config/sample-rate")
 async def update_sample_rate(request: Request):
-    """Update the ADC sample rate and persist to config file."""
+    """Update the physical ADC/PRU sample rate, persist it, and restart acquisition."""
     try:
         body = await request.json()
         sample_rate = int(body.get("sample_rate", 10000))
-        
-        # Validate range
-        if sample_rate < 1000 or sample_rate > 100000:
-            return {"success": False, "error": "Sample rate must be between 1000 and 100000 Hz"}
-        
-        # Update the datalogger config file
-        import yaml
-        from pathlib import Path
-        
-        config_path = Path("../pika.yaml")
-        if config_path.exists():
-            with open(config_path, 'r') as f:
-                config = yaml.safe_load(f)
-            
-            # Update the sample rate
-            if 'sampling' not in config:
-                config['sampling'] = {}
-            config['sampling']['nominal_rate_hz'] = sample_rate
-            
-            # Write back to file
-            with open(config_path, 'w') as f:
-                yaml.dump(config, f, default_flow_style=False)
-            
-            # Update the global config in memory
-            from app.services.calibration_service import config_service
-            global_config_updated = True
-            
+
+        if sample_rate not in ALLOWED_SAMPLE_RATES_HZ:
             return {
-                "success": True,
-                "message": f"Sample rate updated to {sample_rate} Hz",
-                "sample_rate": sample_rate,
-                "note": "Restart datalogger for changes to take effect"
+                "success": False,
+                "error": (
+                    f"Sample rate must be one of: "
+                    f"{', '.join(str(r) for r in ALLOWED_SAMPLE_RATES_HZ)}"
+                ),
+                "allowed_rates": list(ALLOWED_SAMPLE_RATES_HZ),
             }
-        else:
+
+        config_path = Path(__file__).resolve().parents[2] / "pika.yaml"
+        if not config_path.exists():
+            # Fallback relative to webapp CWD (BBB: /home/debian/pika/pika/webapp)
+            config_path = Path("../pika.yaml")
+        if not config_path.exists():
             return {"success": False, "error": "Config file not found"}
-            
+
+        _persist_nominal_rate_hz(config_path, sample_rate)
+        config_service.load_config()
+
+        asyncio.create_task(_restart_acquisition_service())
+
+        return {
+            "success": True,
+            "message": f"Sample rate updated to {sample_rate} Hz",
+            "sample_rate": sample_rate,
+            "restarting": True,
+            "aliasing_warning": sample_rate < ALIASING_WARN_BELOW_HZ,
+            "note": "Acquisition is restarting to apply the new rate",
+        }
+
     except Exception as e:
+        logger.exception("Failed to update sample rate")
         return {"success": False, "error": str(e)}
 
 @app.post("/api/v1/events/delete")
