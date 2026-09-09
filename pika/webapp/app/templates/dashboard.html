@@ -625,16 +625,24 @@
                 const stats = updateLiveStats(trendData.samples, trendData.rate, trendData.samples_raw, trendData.timestamps);
                 if (stats) {
                     console.log('[Dashboard] Stats calculated, rendering trend chart');
-                    renderTrend(trendData.samples, stats, trendData.timestamps);
+                    try {
+                        renderTrend(trendData.samples, stats, trendData.timestamps);
+                    } catch (error) {
+                        console.error('Failed to render trend chart:', error);
+                    }
                 } else {
                     console.warn('[Dashboard] No stats returned, skipping chart render');
                 }
 
                 // Update FFT at the same cadence as the dashboard refresh.
-                if (latestSamples.length > 0) {
-                    updateFFT(latestSamples, latestEffectiveRate);
-                } else if (trendData.samples && trendData.samples.length >= 128) {
-                    updateFFT(trendData.samples, trendData.rate);
+                try {
+                    if (latestSamples.length > 0) {
+                        updateFFT(latestSamples, latestEffectiveRate);
+                    } else if (trendData.samples && trendData.samples.length >= 128) {
+                        updateFFT(trendData.samples, trendData.rate);
+                    }
+                } catch (error) {
+                    console.error('Failed to render FFT chart:', error);
                 }
             } catch (error) {
                 console.error('Failed to update history:', error);
@@ -670,7 +678,7 @@
         const max = Math.max(...samples);
         const sqSum = samples.reduce((a, b) => a + (b * b), 0);
         const rms = Math.sqrt(sqSum / samples.length);   // RMS of AC waveform ≈ VRMS
-        const windowSec = samples.length / (rate || 1);
+        let windowSec = samples.length / (rate || 1);
         const p2p = max - min;
 
         // Samples are already calibrated to VAC by the backend
@@ -743,9 +751,12 @@
 
         console.log('[renderTrend] Creating new chart with', samples.length, 'samples');
 
-        const points = (timestamps && timestamps.length === samples.length)
+        const hasTimestamps = timestamps && timestamps.length === samples.length;
+        const points = hasTimestamps
             ? samples.map((y, i) => ({ x: timestamps[i] / 1e6, y }))
             : samples.map((y, i) => ({ x: i, y }));
+        const rmsPoints = points.map(point => ({ x: point.x, y: stats.rms }));
+        const avgPoints = points.map(point => ({ x: point.x, y: stats.avg }));
 
         trendChart = new Chart(ctx, {
             type: 'line',
@@ -764,7 +775,7 @@
                     },
                     {
                         label: 'RMS',
-                        data: new Array(samples.length).fill(stats.rms),
+                        data: rmsPoints,
                         borderColor: '#00BCD4',
                         borderWidth: 1,
                         borderDash: [5, 5],
@@ -774,7 +785,7 @@
                     },
                     {
                         label: 'Avg',
-                        data: new Array(samples.length).fill(stats.avg),
+                        data: avgPoints,
                         borderColor: '#E91E63',
                         borderWidth: 1,
                         borderDash: [2, 4, 10, 4],
@@ -810,21 +821,32 @@
                         enabled: true,
                         callbacks: {
                             label: (context) => {
+                                const value = typeof context.raw === 'object'
+                                    ? context.raw.y
+                                    : context.raw;
                                 if (context.dataset.label === 'Line Voltage (VAC)') {
-                                    return `${context.raw !== null ? context.raw.toFixed(2) : 'N/A'} VAC`;
+                                    return `${value !== null ? value.toFixed(2) : 'N/A'} VAC`;
                                 }
-                                return `${context.dataset.label}: ${context.raw !== null ? context.raw.toFixed(1) : 'N/A'} VAC`;
+                                return `${context.dataset.label}: ${value !== null ? value.toFixed(1) : 'N/A'} VAC`;
                             }
                         }
                     }
                 },
                 scales: {
                     x: {
-                        type: (timestamps && timestamps.length === samples.length) ? 'time' : 'linear',
-                        display: !!(timestamps && timestamps.length === samples.length),
-                        time: { tooltipFormat: 'HH:mm:ss', displayFormats: { second: 'HH:mm:ss' } },
+                        // A linear millisecond axis avoids requiring a separate
+                        // Chart.js date adapter on the offline BBB dashboard.
+                        type: 'linear',
+                        display: hasTimestamps,
                         grid: { color: 'rgba(255,255,255,0.05)' },
-                        ticks: { color: '#888', font: { size: 10 }, maxTicksLimit: 8 }
+                        ticks: {
+                            color: '#888',
+                            font: { size: 10 },
+                            maxTicksLimit: 8,
+                            callback: value => hasTimestamps
+                                ? new Date(value).toLocaleTimeString()
+                                : value
+                        }
                     },
                     y: {
                         grid: { color: 'rgba(255,255,255,0.05)' },
