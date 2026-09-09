@@ -382,8 +382,20 @@ int main(int argc, char **argv) {
     }
   }
 
+  /*
+   * Invalidate the previous boot's handshake before starting remoteproc.
+   * Otherwise a fast host can mistake stale SHM_MAGIC for the new PRU boot,
+   * publish the DDR address, and have PRU initialization erase it afterward.
+   */
+  if (shm_reader.header) {
+    shm_reader.header->magic = 0;
+    __sync_synchronize();
+  }
   printf("Starting PRU firmware...\n");
-  shm_pru_set_state("start");
+  if (shm_pru_set_state("start") != 0) {
+    fprintf(stderr, "[Main] Failed to start PRU firmware\n");
+    return 1;
+  }
 
   /* PRU wipes the Shared RAM header on boot — wait for magic, map DDR carveout,
    * then re-apply host config */
