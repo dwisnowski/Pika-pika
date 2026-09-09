@@ -442,6 +442,32 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
       }
       if (found == 0)
         printf("[SHM Reader] No completion flags found in DDR ring\n");
+
+      uint32_t *snapshot = malloc(reader->ddr_size_bytes);
+      if (snapshot) {
+        ssize_t bytes_read =
+            pread(reader->mem_fd, snapshot, reader->ddr_size_bytes,
+                  (off_t)reader->ddr_phys_addr);
+        if (bytes_read == (ssize_t)reader->ddr_size_bytes) {
+          uint32_t pread_found = 0;
+          for (uint32_t word = 0; word < word_count && pread_found < 16;
+               word++) {
+            if (snapshot[word] == BLOCK_FLAG_COMPLETE) {
+              uint32_t offset = word * sizeof(uint32_t);
+              printf("[SHM Reader] pread complete flag at DDR offset=%u "
+                     "(block=%u, within_block=%u)\n",
+                     offset, offset / block_total_size,
+                     offset % block_total_size);
+              pread_found++;
+            }
+          }
+          if (pread_found == 0)
+            printf("[SHM Reader] pread also found no completion flags\n");
+        } else {
+          perror("[SHM Reader] pread DDR ring");
+        }
+        free(snapshot);
+      }
       scanned_for_complete_flags = 1;
     }
     rejected_desc_count++;
