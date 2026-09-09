@@ -168,7 +168,7 @@
     </div>
     <!-- Events settings popover (log thresholds only) -->
     <div id="events-settings-popover"
-        style="display: none; position: fixed; z-index: 1000; width: 340px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); padding: 16px; pointer-events: auto;">
+        style="display: none; position: fixed; z-index: 1000; width: 400px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); padding: 16px; pointer-events: auto;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
             <div style="font-size: 14px; font-weight: 500; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px;">Log Thresholds</div>
             <button type="button" onclick="hideEventsSettings()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
@@ -176,16 +176,16 @@
             </button>
         </div>
         <p style="font-size: 11px; opacity: 0.7; margin: 0 0 12px; line-height: 1.4;">
-            These control what gets <b>logged</b>. Professional-review flags use a fixed policy and are not changed here.
+            These control what gets <b>logged</b>. Values in parentheses are the fixed professional-review references (not editable here).
         </p>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
-            <label>Sag %<input id="cfg-sag-pct" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
-            <label>Swell %<input id="cfg-swell-pct" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
-            <label>Sag min ms<input id="cfg-sag-ms" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
-            <label>Swell min ms<input id="cfg-swell-ms" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
-            <label>Nominal V<input id="cfg-nominal-v" type="number" step="0.1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
-            <label>Sag cooldown ms<input id="cfg-sag-cd" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
-            <label style="grid-column: 1 / -1;">Swell cooldown ms<input id="cfg-swell-cd" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+            <label>Sag % <span id="ref-sag-pct" style="opacity: 0.55; font-weight: 400;">(review ≤70% / ≤10%)</span><input id="cfg-sag-pct" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+            <label>Swell % <span id="ref-swell-pct" style="opacity: 0.55; font-weight: 400;">(review ≥120%)</span><input id="cfg-swell-pct" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+            <label>Sag min ms <span id="ref-sag-ms" style="opacity: 0.55; font-weight: 400;">(review ≥60000 ms)</span><input id="cfg-sag-ms" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+            <label>Swell min ms <span id="ref-swell-ms" style="opacity: 0.55; font-weight: 400;">(review ≥60000 ms)</span><input id="cfg-swell-ms" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+            <label>Nominal V <span id="ref-nominal-v" style="opacity: 0.55; font-weight: 400;">(Range B −13.3%…+5.8%)</span><input id="cfg-nominal-v" type="number" step="0.1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+            <label>Sag cooldown ms <span id="ref-sag-cd" style="opacity: 0.55; font-weight: 400;">(logging only)</span><input id="cfg-sag-cd" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
+            <label style="grid-column: 1 / -1;">Swell cooldown ms <span id="ref-swell-cd" style="opacity: 0.55; font-weight: 400;">(logging only)</span><input id="cfg-swell-cd" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
         </div>
         <div id="events-settings-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
         <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
@@ -1083,6 +1083,28 @@
             const res = await fetch('/api/v1/config/anomalies');
             const cfg = await res.json();
             const log = cfg.log || {};
+            const review = cfg.review || {};
+            const deep = review.deep_sag_pct != null ? Number(review.deep_sag_pct) : 70;
+            const interrupt = review.interruption_pct != null ? Number(review.interruption_pct) : 10;
+            const damaging = review.damaging_swell_pct != null ? Number(review.damaging_swell_pct) : 120;
+            const sustained = review.sustained_duration_ms != null ? Number(review.sustained_duration_ms) : 60000;
+            const rangeLo = review.range_b_low_pct != null ? Number(review.range_b_low_pct) : -13.3;
+            const rangeHi = review.range_b_high_pct != null ? Number(review.range_b_high_pct) : 5.8;
+            const fmtPct = (v) => (v > 0 ? `+${v}` : `${v}`);
+
+            document.getElementById('ref-sag-pct').textContent =
+                `(review ≤${deep}% deep / ≤${interrupt}% interrupt)`;
+            document.getElementById('ref-swell-pct').textContent =
+                `(review ≥${damaging}%)`;
+            document.getElementById('ref-sag-ms').textContent =
+                `(review sustained ≥${sustained} ms)`;
+            document.getElementById('ref-swell-ms').textContent =
+                `(review sustained ≥${sustained} ms)`;
+            document.getElementById('ref-nominal-v').textContent =
+                `(Range B ${fmtPct(rangeLo)}%…${fmtPct(rangeHi)}%)`;
+            document.getElementById('ref-sag-cd').textContent = '(logging only)';
+            document.getElementById('ref-swell-cd').textContent = '(logging only)';
+
             document.getElementById('cfg-sag-pct').value = log.sag_threshold_pct;
             document.getElementById('cfg-swell-pct').value = log.swell_threshold_pct;
             document.getElementById('cfg-sag-ms').value = log.sag_min_duration_ms;
