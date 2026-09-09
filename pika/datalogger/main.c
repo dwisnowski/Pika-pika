@@ -275,6 +275,8 @@ void *processor_thread_func(void *arg) {
             event_window_on_start(&ew, &note.event);
           } else if (note.kind == AD_NOTIFY_COMPLETED) {
             event_window_on_end(&ew, &note.event);
+          } else if (note.kind == AD_NOTIFY_ABORTED) {
+            event_window_abort(&ew);
           }
         }
 

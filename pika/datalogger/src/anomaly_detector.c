@@ -153,12 +153,20 @@ static int finish_event_sample(anomaly_detector_t *ad, event_type_t ended_type,
   } else {
     printf("[Detector] Event discarded (duration %u < min %u samples)\n",
            ad->current_duration, min_dur);
+    out->kind = AD_NOTIFY_ABORTED;
+    out->event = (anomaly_event_t){
+        .timestamp_ns = ad->start_time_ns,
+        .type = ended_type,
+        .rms_vrms = ad->extreme_rms_v,
+        .peak_value = ad->peak_raw,
+        .duration_samples = ad->current_duration,
+    };
     ad->last_event_end_ns[ended_type] = sample_time_ns;
     ad->in_event = 0;
     ad->current_type = EVENT_TYPE_NONE;
     ad->current_duration = 0;
     ad->extreme_rms_v = 0.0f;
-    return 0;
+    return 1;
   }
 
   ad->last_event_end_ns[ended_type] = sample_time_ns;

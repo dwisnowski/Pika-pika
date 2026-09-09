@@ -147,6 +147,21 @@ void event_window_on_end(event_window_t *ew, const anomaly_event_t *event) {
   ew->max_duration_hit = false;
 }
 
+void event_window_abort(event_window_t *ew) {
+  if (ew->state == EW_IDLE && !ew->ready)
+    return;
+
+  printf("[EventWindow] Aborting capture (event discarded)\n");
+  ew->state = EW_IDLE;
+  ew->ready = false;
+  ew->capture_count = 0;
+  ew->waveform_start_ns = 0;
+  ew->max_duration_hit = false;
+  ew->post_samples_remaining = ew->post_samples_total;
+  ew->post_skip_decrement_once = false;
+  memset(&ew->ready_event, 0, sizeof(ew->ready_event));
+}
+
 bool event_window_poll_ready(event_window_t *ew, anomaly_event_t *out_event,
                              int16_t **out_samples, uint32_t *out_count,
                              uint64_t *out_waveform_start_ns,

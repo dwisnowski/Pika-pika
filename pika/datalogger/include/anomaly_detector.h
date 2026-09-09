@@ -11,6 +11,7 @@
 typedef enum {
   AD_NOTIFY_STARTED = 1,
   AD_NOTIFY_COMPLETED = 2,
+  AD_NOTIFY_ABORTED = 3, /* started then discarded (below min duration) */
 } ad_notify_kind_t;
 
 typedef struct {

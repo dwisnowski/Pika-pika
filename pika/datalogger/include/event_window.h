@@ -52,6 +52,9 @@ void event_window_on_start(event_window_t *ew, const anomaly_event_t *event);
 
 void event_window_on_end(event_window_t *ew, const anomaly_event_t *event);
 
+/** Cancel an in-progress capture without saving (short event discarded). */
+void event_window_abort(event_window_t *ew);
+
 /** True once after capture hits max_event_samples; clears the sticky flag. */
 bool event_window_consume_max_hit(event_window_t *ew);
 
