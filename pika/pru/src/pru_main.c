@@ -25,8 +25,9 @@
 #define STAGE_FIRST_READ 0xD2000004u
 #define STAGE_FIRST_BLOCK_DONE 0xD2000005u
 
-/* Temporary isolation test: prove SHM remains stable before ADC acquisition. */
-#define DIAG_HOLD_AFTER_DDR_CLEAR 1
+/* Temporary isolation tests; enable only one hold point at a time. */
+#define DIAG_HOLD_AFTER_DDR_CLEAR 0
+#define DIAG_HOLD_AFTER_ADC_READY 1
 
 /*
  * DDR is outside the PRU near address space. Build with --mem_model:data=far
@@ -168,6 +169,16 @@ void main(void) {
     }
     if (shm->sample_count == 0 && smp_in_blk == 0)
       shm->error_flags = STAGE_ADC_READY;
+
+#if DIAG_HOLD_AFTER_ADC_READY
+    if (shm->sample_count == 0 && smp_in_blk == 0) {
+      while (1) {
+        shm->error_flags = STAGE_ADC_READY;
+        shm->heartbeat++;
+        __delay_cycles(20000000);
+      }
+    }
+#endif
 
     ccnt_accum(&last_cycles, &total_cycles);
 
