@@ -33,28 +33,6 @@ static inline void ccnt_accum(uint32_t *last_cycles, uint64_t *total_cycles) {
   *last_cycles = current;
 }
 
-/* Avoid clpru runtime division helpers in the acquisition loop. */
-#pragma FUNC_ALWAYS_INLINE(divide_u32)
-static inline uint32_t divide_u32(uint32_t numerator, uint32_t denominator) {
-  uint32_t quotient = 0;
-  uint32_t remainder = 0;
-  int bit;
-
-  if (denominator == 0)
-    return 0;
-
-  for (bit = 0; bit < 32; bit++) {
-    remainder = (remainder << 1) | (numerator >> 31);
-    numerator <<= 1;
-    quotient <<= 1;
-    if (remainder >= denominator) {
-      remainder -= denominator;
-      quotient |= 1;
-    }
-  }
-  return quotient;
-}
-
 /*
  * Fixed offsets avoid both clpru's hardware-MAC path and its unreliable
  * software-multiply loop state. The Shared RAM ring always has four
@@ -103,6 +81,7 @@ void main(void) {
   shm->ddr_phys_addr = PIKA_SHARED_RING_PRU_ADDR;
   shm->ddr_size_bytes = PIKA_SHARED_RING_SIZE;
   shm->block_desc_size = BLOCK_DESCRIPTOR_SIZE;
+  shm->block_complete_flag = BLOCK_FLAG_COMPLETE;
   shm->error_flags = 0xDEAD00DDu;
   shm->ch_enable[0] = 1;
   for (i = 1; i < 8; i++)
@@ -143,8 +122,6 @@ void main(void) {
   shm->heartbeat++;
 
   uint32_t smp_in_blk = 0;
-  uint64_t block_start_cycles = 0;
-  uint64_t block_end_cycles = 0;
 
   __R30 |= PIN_RD;
   __R30 |= PIN_CONVST;
@@ -180,10 +157,6 @@ void main(void) {
 
     ccnt_accum(&last_cycles, &total_cycles);
 
-    /* Stamp end-of-block period before trailing pace delay on last sample. */
-    if (smp_in_blk == block_size - 1)
-      block_end_cycles = total_cycles;
-
     uint32_t current_blk = shm->write_block_idx;
     uint32_t block_offset = shared_ring_block_offset(current_blk);
     volatile uint8_t *b_base =
@@ -207,7 +180,6 @@ void main(void) {
       desc_words[3] = 0;
       desc_words[4] = 0;
       desc_words[5] = 0;
-      block_start_cycles = total_cycles;
     }
 
     uint32_t ch_ptr = smp_in_blk * 8;
@@ -258,19 +230,6 @@ void main(void) {
 
     if (smp_in_blk >= block_size) {
       uint32_t period = period_target;
-      if (block_size > 1) {
-        uint64_t end_cycles =
-            (block_end_cycles > block_start_cycles) ? block_end_cycles
-                                                    : total_cycles;
-        /*
-         * The default 128-sample block spans less than UINT32_MAX cycles even
-         * at the supported 10 Hz minimum. Keep this division 32-bit: clpru's
-         * 64-bit division helper corrupts execution state on this target.
-         */
-        uint32_t elapsed_cycles =
-            (uint32_t)(end_cycles - block_start_cycles);
-        period = divide_u32(elapsed_cycles, block_size - 1);
-      }
       current_blk = shm->write_block_idx;
       /*
        * Recalculate the descriptor address at publication time. Keeping the
@@ -283,7 +242,7 @@ void main(void) {
                                 final_block_offset);
       final_desc_words[4] = period;
       final_desc_words[2] = smp_in_blk;
-      final_desc_words[3] = BLOCK_FLAG_COMPLETE;
+      final_desc_words[3] = shm->block_complete_flag;
       current_blk++;
       if (current_blk >= num_blocks)
         current_blk = 0;

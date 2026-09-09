@@ -78,6 +78,7 @@ typedef struct {
   volatile uint32_t ddr_phys_addr;
   volatile uint32_t ddr_size_bytes;
   volatile uint32_t block_desc_size; /* sizeof(block_descriptor_t) */
+  volatile uint32_t block_complete_flag;
 } __attribute__((packed)) pru_shared_memory_t;
 
 #endif /* SHM_LAYOUT_H */
