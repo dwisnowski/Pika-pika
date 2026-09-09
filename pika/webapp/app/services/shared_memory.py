@@ -2,7 +2,7 @@ import mmap
 import ctypes
 import os
 import time
-from typing import Optional, Tuple
+from typing import Optional
 from app.services.config_service import config_service
 
 SCOPE_SHM_PATH = "/dev/shm/pika_scope_shm"
@@ -23,7 +23,25 @@ class SHMService:
         self.fd = -1
         self.mm = None
         self.header: Optional[ScopeSHM] = None
+        self.last_raw_range = None
         self._calibration_scale = config_service.get_calibration_scale()
+        self._calibration_updated_at = 0.0
+
+    def get_calibration_scale(self) -> float:
+        """Convert ADC counts to mains volts using the latest learned ratio."""
+        from app.services.calibration_service import calibration_service
+
+        now = time.monotonic()
+        if now - self._calibration_updated_at < 2.0:
+            return self._calibration_scale
+
+        calibration = calibration_service.get_calibration_values()
+        full_scale = float(1 << (config_service.get_adc_bits() - 1))
+        self._calibration_scale = (
+            config_service.get_adc_vref() / full_scale
+        ) * calibration["transformer_ratio"]
+        self._calibration_updated_at = now
+        return self._calibration_scale
 
     def connect(self):
         try:
@@ -98,8 +116,14 @@ class SHMService:
 
         if ch_raw:
             mean = sum(ch_raw) / len(ch_raw)
-            return [round((r - mean) * self._calibration_scale, 2) for r in ch_raw]
+            self.last_raw_range = (
+                int(min(ch_raw) - mean),
+                int(max(ch_raw) - mean),
+            )
+            scale = self.get_calibration_scale()
+            return [round((r - mean) * scale, 2) for r in ch_raw]
         else:
+            self.last_raw_range = None
             return []
 
 # Global instance replaces the old PRU SHM service

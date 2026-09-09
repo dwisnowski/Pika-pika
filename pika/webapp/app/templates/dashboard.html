@@ -388,6 +388,11 @@
                     document.getElementById('stat-freq').innerText = freq.toFixed(2) + ' Hz';
                 }
 
+                const rawRange = Number.isFinite(data.raw_min) && Number.isFinite(data.raw_max)
+                    ? [data.raw_min, data.raw_max]
+                    : null;
+                updateLiveStats(data.samples, rate, rawRange, null, true);
+
                 // Cache the latest high-res samples for the 5s FFT update
                 latestSamples = data.samples;
                 if (!fftChart) { updateFFT(latestSamples, rate); }
@@ -622,7 +627,13 @@
                     raw_samples_count: trendData.samples_raw ? trendData.samples_raw.length : 0,
                     first_5_samples: trendData.samples ? trendData.samples.slice(0, 5) : []
                 });
-                const stats = updateLiveStats(trendData.samples, trendData.rate, trendData.samples_raw, trendData.timestamps);
+                const stats = updateLiveStats(
+                    trendData.samples,
+                    trendData.rate,
+                    trendData.samples_raw,
+                    trendData.timestamps,
+                    false
+                );
                 if (stats) {
                     console.log('[Dashboard] Stats calculated, rendering trend chart');
                     try {
@@ -660,7 +671,7 @@
         }
     }
 
-    function updateLiveStats(samples, rate, samples_raw, timestamps) {
+    function updateLiveStats(samples, rate, samples_raw, timestamps, updateDisplay = true) {
         console.log('[updateLiveStats] Called with:', {
             samples_length: samples ? samples.length : 0,
             rate: rate,
@@ -681,41 +692,39 @@
         let windowSec = samples.length / (rate || 1);
         const p2p = max - min;
 
-        // Samples are already calibrated to VAC by the backend
-        document.getElementById('stat-avg').innerText = avg.toFixed(1) + ' VAC (rect)';
-        document.getElementById('stat-rms').innerText = rms.toFixed(1) + ' VAC';
-        document.getElementById('stat-min').innerText = min.toFixed(1) + ' VAC';
-        document.getElementById('stat-max').innerText = max.toFixed(1) + ' VAC';
-
-        // Use raw ADC values for percentage calculation
-        const adc_max_raw = 32767;
-        let min_raw = 0;
-        let max_raw = 0;
-        
-        if (samples_raw && samples_raw.length > 0) {
-            min_raw = Math.abs(Math.min(...samples_raw));
-            max_raw = Math.abs(Math.max(...samples_raw));
-        }
-        
-        const min_pct = (min_raw / adc_max_raw * 100);
-        const max_pct = (max_raw / adc_max_raw * 100);
-        
-        // Update progress bars
-        document.getElementById('stat-min-bar-fill').style.width = min_pct + '%';
-        document.getElementById('stat-min-bar-label').innerText = min_raw + ' / ' + adc_max_raw;
-        document.getElementById('stat-min-bar').title = 'Min: ' + min_raw + ' / ' + adc_max_raw + ' (' + min_pct.toFixed(1) + '%)';
-        
-        document.getElementById('stat-max-bar-fill').style.width = max_pct + '%';
-        document.getElementById('stat-max-bar-label').innerText = max_raw + ' / ' + adc_max_raw;
-        document.getElementById('stat-max-bar').title = 'Max: ' + max_raw + ' / ' + adc_max_raw + ' (' + max_pct.toFixed(1) + '%)';
-
         let windowStr = windowSec.toFixed(0) + 's';
         if (timestamps && timestamps.length >= 2) {
             windowSec = (timestamps[timestamps.length - 1] - timestamps[0]) / 1e9;
         }
         if (windowSec > 60) windowStr = (windowSec / 60).toFixed(1) + 'm';
-        document.getElementById('stat-window').innerText = windowStr;
-        document.getElementById('stat-p2p').innerText = p2p.toFixed(1) + ' VAC';
+
+        if (updateDisplay) {
+            // Live WebSocket samples are AC-centered and calibrated to VAC.
+            document.getElementById('stat-avg').innerText = avg.toFixed(1) + ' VAC (rect)';
+            document.getElementById('stat-rms').innerText = rms.toFixed(1) + ' VAC';
+            document.getElementById('stat-min').innerText = min.toFixed(1) + ' VAC';
+            document.getElementById('stat-max').innerText = max.toFixed(1) + ' VAC';
+
+            const adc_max_raw = 32767;
+            let min_raw = 0;
+            let max_raw = 0;
+            if (samples_raw && samples_raw.length > 0) {
+                min_raw = Math.abs(Math.min(...samples_raw));
+                max_raw = Math.abs(Math.max(...samples_raw));
+            }
+
+            const min_pct = (min_raw / adc_max_raw * 100);
+            const max_pct = (max_raw / adc_max_raw * 100);
+            document.getElementById('stat-min-bar-fill').style.width = min_pct + '%';
+            document.getElementById('stat-min-bar-label').innerText = min_raw + ' / ' + adc_max_raw;
+            document.getElementById('stat-min-bar').title = 'Min: ' + min_raw + ' / ' + adc_max_raw + ' (' + min_pct.toFixed(1) + '%)';
+            document.getElementById('stat-max-bar-fill').style.width = max_pct + '%';
+            document.getElementById('stat-max-bar-label').innerText = max_raw + ' / ' + adc_max_raw;
+            document.getElementById('stat-max-bar').title = 'Max: ' + max_raw + ' / ' + adc_max_raw + ' (' + max_pct.toFixed(1) + '%)';
+
+            document.getElementById('stat-window').innerText = windowStr;
+            document.getElementById('stat-p2p').innerText = p2p.toFixed(1) + ' VAC';
+        }
 
         return { avg, rms, min, max, rate };
     }

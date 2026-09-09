@@ -329,6 +329,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         "channel": req_channel,
                         "effective_rate": effective_rate
                     })
+                    if shm.last_raw_range:
+                        payload["raw_min"] = shm.last_raw_range[0]
+                        payload["raw_max"] = shm.last_raw_range[1]
             
             now = time.monotonic()
             if now - last_health_sent >= 2.0:

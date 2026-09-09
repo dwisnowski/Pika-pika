@@ -32,9 +32,9 @@ sensor:
   adc_bits: 16                # 16-bit signed ADC
   
   # ZMPT101B Sensor Configuration
-  transformer_ratio: 120      # ZMPT101B scaling factor (auto-calibrated on startup to 120V target)
+  transformer_ratio: 45200    # Fallback ratio for the currently installed ZMPT101B
                               # This value is used as fallback only; system learns actual ratio
-  target_mains_vrms: 120.0    # Target steady-state mains voltage (120V for NA, 230V for EU)
+  target_mains_vrms: 110.0    # Known steady-state voltage used for startup calibration
   
   # Channel Configuration (per-channel enable flags)
   active_channels: 1          # Number of active channels for event detection
@@ -57,7 +57,7 @@ sensor:
 detection:
   ac_freq_hz: 60              # mains frequency (60 for NA, 50 for EU)
   rms_window_cycles: 1        # 1-cycle RMS for fast sag/swell onset tagging
-  learn_cycles: 5000          # auto-learn nominal VRMS from first N cycles (~16s at 60Hz)
+  learn_cycles: 300           # auto-learn for about 5 seconds at 60Hz
 
 # Anomaly Thresholds
 anomalies:
