@@ -52,6 +52,22 @@ static inline uint32_t divide_u32(uint32_t numerator, uint32_t denominator) {
   return quotient;
 }
 
+/* Avoid the PRU hardware-MAC XIN path for DDR address calculation. */
+#pragma FUNC_ALWAYS_INLINE(multiply_u32)
+static inline uint32_t multiply_u32(uint32_t multiplicand,
+                                    uint32_t multiplier) {
+  uint32_t product = 0;
+  int bit;
+
+  for (bit = 0; bit < 32; bit++) {
+    if (multiplier & 1)
+      product += multiplicand;
+    multiplier >>= 1;
+    multiplicand <<= 1;
+  }
+  return product;
+}
+
 void main(void) {
   /* Enable OCP master port — required before any DDR access */
   CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
@@ -161,7 +177,8 @@ void main(void) {
       block_end_cycles = total_cycles;
 
     uint32_t current_blk = shm->write_block_idx;
-    volatile uint8_t *b_base = ddr_base + (current_blk * block_total_size);
+    uint32_t block_offset = multiply_u32(current_blk, block_total_size);
+    volatile uint8_t *b_base = ddr_base + block_offset;
     volatile uint32_t *desc_words = (volatile uint32_t *)(uint32_t)b_base;
     volatile uint16_t *b_data =
         (volatile uint16_t *)(uint32_t)(b_base + BLOCK_DESCRIPTOR_SIZE);
