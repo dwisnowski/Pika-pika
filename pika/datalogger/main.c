@@ -433,6 +433,12 @@ int main(int argc, char **argv) {
               (uint32_t)shm_reader.header->ddr_phys_addr);
       return 1;
     }
+    volatile uint32_t *ddr_mailbox =
+        (volatile uint32_t *)((uint8_t *)shm_reader.ddr_mmap_base +
+                              shm_reader.ddr_size_bytes - sizeof(uint32_t));
+    *ddr_mailbox = 0x13579BDFu;
+    __sync_synchronize();
+    printf("[Main] Wrote DDR mailbox sentinel at ring tail\n");
     for (int i = 0; i < 8; i++) {
       shm_reader.header->ch_enable[i] = global_config.sensor.ch_enable[i];
     }
