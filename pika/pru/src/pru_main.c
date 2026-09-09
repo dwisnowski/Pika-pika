@@ -24,13 +24,15 @@
 #define STAGE_FIRST_DESC 0xD2000003u
 #define STAGE_FIRST_READ 0xD2000004u
 #define STAGE_FIRST_CH0_DONE 0xD2000005u
-#define STAGE_FIRST_BLOCK_DONE 0xD2000006u
+#define STAGE_FIRST_SAMPLE_DONE 0xD2000006u
+#define STAGE_FIRST_BLOCK_DONE 0xD2000007u
 
 /* Temporary isolation tests; enable only one hold point at a time. */
 #define DIAG_HOLD_AFTER_DDR_CLEAR 0
 #define DIAG_HOLD_AFTER_ADC_READY 0
 #define DIAG_HOLD_BEFORE_FIRST_READ 0
-#define DIAG_HOLD_AFTER_FIRST_CH0 1
+#define DIAG_HOLD_AFTER_FIRST_CH0 0
+#define DIAG_HOLD_AFTER_FIRST_SAMPLE 1
 
 /*
  * DDR is outside the PRU near address space. Build with --mem_model:data=far
@@ -268,6 +270,17 @@ void main(void) {
       b_data[ch_ptr + 7] = adc_read_next();
     else
       b_data[ch_ptr + 7] = 0;
+
+    if (shm->sample_count == 0 && smp_in_blk == 0) {
+      shm->error_flags = STAGE_FIRST_SAMPLE_DONE;
+#if DIAG_HOLD_AFTER_FIRST_SAMPLE
+      while (1) {
+        shm->error_flags = STAGE_FIRST_SAMPLE_DONE;
+        shm->heartbeat++;
+        __delay_cycles(20000000);
+      }
+#endif
+    }
 
     if (period_target > 0) {
       uint32_t elapsed = ccnt_read() - sample_start_ccnt;
