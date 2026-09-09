@@ -126,9 +126,7 @@ void main(void) {
   }
   shm->heartbeat++;
 
-  uint32_t current_blk = 0;
   uint32_t smp_in_blk = 0;
-  uint32_t heartbeat_samples = 0;
   uint64_t block_start_cycles = 0;
   uint64_t block_end_cycles = 0;
 
@@ -147,12 +145,6 @@ void main(void) {
   while (1) {
     uint32_t period_target = shm->sample_period_cycles;
 
-    heartbeat_samples++;
-    if (heartbeat_samples >= 10) {
-      shm->heartbeat++;
-      heartbeat_samples = 0;
-    }
-
     uint32_t sample_start_ccnt = ccnt_read();
 
     if (adc_trigger_and_wait() != 0) {
@@ -168,6 +160,7 @@ void main(void) {
     if (smp_in_blk == block_size - 1)
       block_end_cycles = total_cycles;
 
+    uint32_t current_blk = shm->write_block_idx;
     volatile uint8_t *b_base = ddr_base + (current_blk * block_total_size);
     volatile uint32_t *desc_words = (volatile uint32_t *)(uint32_t)b_base;
     volatile uint16_t *b_data =
@@ -255,12 +248,14 @@ void main(void) {
       desc_words[4] = period;
       desc_words[2] = smp_in_blk;
       desc_words[3] = BLOCK_FLAG_COMPLETE;
+      current_blk = shm->write_block_idx;
       current_blk++;
       if (current_blk >= num_blocks)
         current_blk = 0;
       shm->write_block_idx = current_blk;
       smp_in_blk = 0;
       shm->sample_count += block_size;
+      shm->heartbeat++;
     }
   }
 }
