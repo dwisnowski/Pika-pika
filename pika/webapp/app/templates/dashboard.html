@@ -188,7 +188,9 @@
             <label style="grid-column: 1 / -1;">Swell cooldown ms <span id="ref-swell-cd" style="opacity: 0.55; font-weight: 400;">(logging only)</span><input id="cfg-swell-cd" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
         </div>
         <div id="events-settings-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
-        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
+        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap;">
+            <button type="button" onclick="resetEventsSettingsToReview()" title="Fill fields from professional-review references"
+                style="margin-right: auto; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 500;">Reset to review</button>
             <button type="button" onclick="hideEventsSettings()"
                 style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px;">Cancel</button>
             <button type="button" onclick="saveEventsSettings()"
@@ -1073,6 +1075,8 @@
         document.getElementById('events-help-popover').style.display = 'none';
     }
 
+    let lastAnomaliesReview = null;
+
     async function showEventsSettings(event) {
         hideEventsHelp();
         hideDeleteConfirm();
@@ -1084,6 +1088,7 @@
             const cfg = await res.json();
             const log = cfg.log || {};
             const review = cfg.review || {};
+            lastAnomaliesReview = review;
             const deep = review.deep_sag_pct != null ? Number(review.deep_sag_pct) : 70;
             const interrupt = review.interruption_pct != null ? Number(review.interruption_pct) : 10;
             const damaging = review.damaging_swell_pct != null ? Number(review.damaging_swell_pct) : 120;
@@ -1116,6 +1121,26 @@
         } catch (err) {
             document.getElementById('events-settings-status').innerText = 'Load failed: ' + err.message;
         }
+    }
+
+    function resetEventsSettingsToReview() {
+        const review = lastAnomaliesReview || {};
+        const deep = review.deep_sag_pct != null ? Number(review.deep_sag_pct) : 70;
+        const damaging = review.damaging_swell_pct != null ? Number(review.damaging_swell_pct) : 120;
+        const sustained = review.sustained_duration_ms != null ? Number(review.sustained_duration_ms) : 60000;
+
+        // Map retained-voltage % → log threshold_pct (offset from nominal).
+        document.getElementById('cfg-sag-pct').value = Math.round(deep - 100);
+        document.getElementById('cfg-swell-pct').value = Math.round(damaging - 100);
+        document.getElementById('cfg-sag-ms').value = Math.round(sustained);
+        document.getElementById('cfg-swell-ms').value = Math.round(sustained);
+        document.getElementById('cfg-nominal-v').value = 120;
+        // Cooldowns have no review equivalent — leave as-is.
+
+        const status = document.getElementById('events-settings-status');
+        status.style.color = '#888';
+        status.innerText =
+            `Filled from review (sag ${deep - 100}%, swell +${damaging - 100}%, min ${sustained} ms, 120 V). Cooldowns unchanged — click Save & Restart to apply.`;
     }
 
     function hideEventsSettings() {
