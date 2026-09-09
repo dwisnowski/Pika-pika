@@ -166,6 +166,13 @@ int anomaly_detector_process_sample(anomaly_detector_t *ad, int16_t raw,
   }
   ad->dc_ema = ad->ema_alpha * v + (1.0f - ad->ema_alpha) * ad->dc_ema;
   float v_ac = v - ad->dc_ema;
+  float full_scale = (float)(1u << (ad->sensor.adc_bits - 1));
+  int32_t raw_ac_i = (int32_t)(v_ac * full_scale / ad->sensor.adc_vref);
+  if (raw_ac_i > INT16_MAX)
+    raw_ac_i = INT16_MAX;
+  else if (raw_ac_i < INT16_MIN)
+    raw_ac_i = INT16_MIN;
+  int16_t raw_ac = (int16_t)raw_ac_i;
   float rms_adc = push_rms_ring(ad, v_ac * v_ac);
 
   if (rms_adc < 0.0f)
@@ -226,14 +233,14 @@ int anomaly_detector_process_sample(anomaly_detector_t *ad, int16_t raw,
       ad->current_type = cur_type;
       ad->start_time_ns = sample_time_ns;
       ad->current_duration = 1;
-      ad->peak_raw = raw;
+      ad->peak_raw = raw_ac;
 
       out->kind = AD_NOTIFY_STARTED;
       out->event = (anomaly_event_t){
           .timestamp_ns = sample_time_ns,
           .type = cur_type,
           .rms_vrms = vrms_mains,
-          .peak_value = raw,
+          .peak_value = raw_ac,
           .duration_samples = 0,
       };
 
@@ -244,9 +251,9 @@ int anomaly_detector_process_sample(anomaly_detector_t *ad, int16_t raw,
 
     if (cur_type == ad->current_type) {
       ad->current_duration++;
-      if ((raw > 0 ? raw : -raw) >
+      if ((raw_ac > 0 ? raw_ac : -raw_ac) >
           (ad->peak_raw > 0 ? ad->peak_raw : -ad->peak_raw))
-        ad->peak_raw = raw;
+        ad->peak_raw = raw_ac;
       return 0;
     }
 
