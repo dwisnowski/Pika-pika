@@ -55,20 +55,23 @@ static inline uint32_t divide_u32(uint32_t numerator, uint32_t denominator) {
   return quotient;
 }
 
-/* Avoid the PRU hardware-MAC XIN path for DDR address calculation. */
-#pragma FUNC_ALWAYS_INLINE(multiply_u32)
-static inline uint32_t multiply_u32(uint32_t multiplicand,
-                                    uint32_t multiplier) {
-  uint32_t product = 0;
-  int bit;
-
-  for (bit = 0; bit < 32; bit++) {
-    if (multiplier & 1)
-      product += multiplicand;
-    multiplier >>= 1;
-    multiplicand <<= 1;
+/*
+ * Fixed offsets avoid both clpru's hardware-MAC path and its unreliable
+ * software-multiply loop state. The Shared RAM ring always has four
+ * 128-sample blocks.
+ */
+#pragma FUNC_ALWAYS_INLINE(shared_ring_block_offset)
+static inline uint32_t shared_ring_block_offset(uint32_t block_idx) {
+  switch (block_idx) {
+  case 1:
+    return 2072u;
+  case 2:
+    return 4144u;
+  case 3:
+    return 6216u;
+  default:
+    return 0;
   }
-  return product;
 }
 
 void main(void) {
@@ -182,7 +185,7 @@ void main(void) {
       block_end_cycles = total_cycles;
 
     uint32_t current_blk = shm->write_block_idx;
-    uint32_t block_offset = multiply_u32(current_blk, block_total_size);
+    uint32_t block_offset = shared_ring_block_offset(current_blk);
     volatile uint8_t *b_base =
         ((volatile uint8_t *)shm) + SHM_HEADER_OFFSET + block_offset;
     volatile uint32_t *desc_words = (volatile uint32_t *)(uint32_t)b_base;
@@ -274,8 +277,7 @@ void main(void) {
        * earlier pointer live across ADC reads and the runtime pacing call lets
        * clpru reuse a register whose value is no longer reliable here.
        */
-      uint32_t final_block_offset =
-          multiply_u32(current_blk, block_total_size);
+      uint32_t final_block_offset = shared_ring_block_offset(current_blk);
       volatile uint32_t *final_desc_words =
           (volatile uint32_t *)(((volatile uint8_t *)shm) + SHM_HEADER_OFFSET +
                                 final_block_offset);
