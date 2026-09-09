@@ -284,47 +284,78 @@
     }
 
     let webserverHealthCheckInterval = null;
+    let webserverHealthCheckActive = false;
+    let healthCheckFailures = 0;
+
+    function applyHealth(health) {
+        const pruStatus = document.getElementById('pru-status');
+        if (health.pru_state === 'running') {
+            pruStatus.innerText = 'RUNNING';
+            pruStatus.style.color = '#4CAF50';
+        } else if (health.pru_state === 'offline') {
+            pruStatus.innerText = 'OFFLINE';
+            pruStatus.style.color = '#888';
+        } else {
+            pruStatus.innerText = 'ERROR';
+            pruStatus.style.color = '#F44336';
+        }
+
+        const dataloggerStatus = document.getElementById('datalogger-status');
+        dataloggerStatus.innerText = health.datalogger_running ? 'RUNNING' : 'IDLE';
+        dataloggerStatus.style.color = health.datalogger_running ? '#4CAF50' : '#FFC107';
+
+        document.getElementById('webserver-status').innerText = 'RUNNING';
+        document.getElementById('webserver-status').style.color = '#4CAF50';
+
+        if (health.sample_rate) {
+            latestSampleRate = health.sample_rate;
+            document.getElementById('pru-samplerate').innerText = (health.sample_rate / 1000).toFixed(1) + ' kHz';
+        }
+        if (health.actual_sample_rate) {
+            document.getElementById('pru-actual-samplerate').innerText = (health.actual_sample_rate / 1000).toFixed(1) + ' kHz';
+        }
+        if (health.learned_adc_vrms) {
+            document.getElementById('stat-learned-adc-vrms').innerText = health.learned_adc_vrms.toFixed(4) + ' V';
+        }
+        if (health.learned_transformer_ratio) {
+            document.getElementById('stat-learned-transformer-ratio').innerText = health.learned_transformer_ratio.toFixed(2);
+        }
+    }
 
     function startWebserverHealthCheck() {
-        // Poll health endpoint every 2 seconds when websocket is down
-        if (webserverHealthCheckInterval) clearInterval(webserverHealthCheckInterval);
-        
-        webserverHealthCheckInterval = setInterval(() => {
-            fetch('/health')
-                .then(res => {
-                    if (res.ok) {
-                        document.getElementById('webserver-status').innerText = 'RUNNING';
-                        document.getElementById('webserver-status').style.color = '#4CAF50';
-                        // Webserver is reachable, so we can trust PRU/Datalogger status from updateDashboard
-                    } else {
-                        // Webserver returned an error
-                        document.getElementById('webserver-status').innerText = 'ERROR';
-                        document.getElementById('webserver-status').style.color = '#F44336';
-                        // Can't determine PRU/Datalogger status if webserver has errors
-                        document.getElementById('pru-status').innerText = 'OFFLINE';
-                        document.getElementById('pru-status').style.color = '#888';
-                        document.getElementById('datalogger-status').innerText = 'OFFLINE';
-                        document.getElementById('datalogger-status').style.color = '#888';
-                    }
-                })
-                .catch(() => {
-                    // Webserver is completely unreachable
+        // Only poll when the WebSocket is down; schedule after each response so
+        // slow requests cannot overlap.
+        if (webserverHealthCheckActive) return;
+        webserverHealthCheckActive = true;
+
+        const pollHealth = async () => {
+            try {
+                const response = await fetch('/health');
+                if (!response.ok) throw new Error(`Health returned ${response.status}`);
+                applyHealth(await response.json());
+                healthCheckFailures = 0;
+            } catch (error) {
+                healthCheckFailures += 1;
+                if (healthCheckFailures >= 2) {
                     document.getElementById('webserver-status').innerText = 'OFFLINE';
                     document.getElementById('webserver-status').style.color = '#F44336';
-                    // Can't determine PRU/Datalogger status if webserver is offline
-                    document.getElementById('pru-status').innerText = 'OFFLINE';
-                    document.getElementById('pru-status').style.color = '#888';
-                    document.getElementById('datalogger-status').innerText = 'OFFLINE';
-                    document.getElementById('datalogger-status').style.color = '#888';
-                });
-        }, 2000);
+                }
+            } finally {
+                if (webserverHealthCheckActive) {
+                    webserverHealthCheckInterval = setTimeout(pollHealth, 2000);
+                }
+            }
+        };
+        pollHealth();
     }
 
     function stopWebserverHealthCheck() {
+        webserverHealthCheckActive = false;
         if (webserverHealthCheckInterval) {
-            clearInterval(webserverHealthCheckInterval);
+            clearTimeout(webserverHealthCheckInterval);
             webserverHealthCheckInterval = null;
         }
+        healthCheckFailures = 0;
     }
 
     // WebSocket for high-res frequency detection
@@ -342,6 +373,9 @@
 
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
+            if (data.health) {
+                applyHealth(data.health);
+            }
             if (data.samples && data.samples.length > 0) {
                 // Determine rate of this block (backend might decimate)
                 const rate = data.effective_rate || latestSampleRate;
@@ -550,107 +584,64 @@
     }
 
     async function updateDashboard() {
-        try {
-            // 1. Fetch Health
-            const healthRes = await fetch('/health');
-            if (!healthRes.ok) {
-                throw new Error('Health endpoint returned error');
+        const updateEvents = async () => {
+            try {
+                const eventsRes = await fetch('/api/v1/events');
+                if (!eventsRes.ok) throw new Error(`Events returned ${eventsRes.status}`);
+                const events = await eventsRes.json();
+                events.sort((a, b) => b.timestamp - a.timestamp);
+                const list = document.getElementById('event-list');
+                list.innerHTML = events.map(e => `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: background 0.2s;"
+                        onclick="showEventModal(${e.id})"
+                        onmouseover="this.style.background='rgba(255,214,0,0.05)'"
+                        onmouseout="this.style.background='transparent'">
+                        <td style="padding: 12px 8px; font-weight: 500; color: #FFD600; cursor: help;"
+                            onmouseenter="showEventPreview(event, '${e.type}'); event.stopPropagation();"
+                            onmouseleave="hideEventPreview()">
+                            ${e.type}
+                        </td>
+                        <td style="font-size: 12px; opacity: 0.8;">${new Date(e.timestamp / 1000000).toLocaleTimeString()}</td>
+                        <td>${e.peak_volts !== undefined ? e.peak_volts.toFixed(1) + ' V' : (e.peak_volts || '0.0 V')}</td>
+                        <td>${e.duration_ms.toFixed(1)}ms</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="4" style="text-align: center;">No events detected yet</td></tr>';
+            } catch (error) {
+                console.error('Failed to update events:', error);
             }
-            const health = await healthRes.json();
-            
-            // Update PRU status based on state
-            if (health.pru_state === 'running') {
-                document.getElementById('pru-status').innerText = 'RUNNING';
-                document.getElementById('pru-status').style.color = '#4CAF50';
-            } else if (health.pru_state === 'offline') {
-                document.getElementById('pru-status').innerText = 'OFFLINE';
-                document.getElementById('pru-status').style.color = '#888';
-            } else {
-                // error or unknown
-                document.getElementById('pru-status').innerText = 'ERROR';
-                document.getElementById('pru-status').style.color = '#F44336';
-            }
-            
-            document.getElementById('datalogger-status').innerText = health.datalogger_running ? 'RUNNING' : 'IDLE';
-            document.getElementById('datalogger-status').style.color = health.datalogger_running ? '#4CAF50' : '#FFC107';
-            
-            // Webserver is running if we got a successful response
-            document.getElementById('webserver-status').innerText = 'RUNNING';
-            document.getElementById('webserver-status').style.color = '#4CAF50';
-            
-            if (health.sample_rate) {
-                latestSampleRate = health.sample_rate;
-                document.getElementById('pru-samplerate').innerText = (health.sample_rate / 1000).toFixed(1) + ' kHz';
-            }
-            
-            if (health.actual_sample_rate) {
-                document.getElementById('pru-actual-samplerate').innerText = (health.actual_sample_rate / 1000).toFixed(1) + ' kHz';
-            }
-            
-            if (health.learned_adc_vrms) {
-                document.getElementById('stat-learned-adc-vrms').innerText = health.learned_adc_vrms.toFixed(4) + ' V';
-            }
-            
-            if (health.learned_transformer_ratio) {
-                document.getElementById('stat-learned-transformer-ratio').innerText = health.learned_transformer_ratio.toFixed(2);
-            }
+        };
 
-            // 2. Fetch Events
-            const eventsRes = await fetch('/api/v1/events');
-            const events = await eventsRes.json();
-            // Sort events by timestamp descending (most recent first)
-            events.sort((a, b) => b.timestamp - a.timestamp);
-            const list = document.getElementById('event-list');
-            list.innerHTML = events.map(e => `
-                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: background 0.2s;" 
-                    onclick="showEventModal(${e.id})"
-                    onmouseover="this.style.background='rgba(255,214,0,0.05)'" 
-                    onmouseout="this.style.background='transparent'">
-                    <td style="padding: 12px 8px; font-weight: 500; color: #FFD600; cursor: help;" 
-                        onmouseenter="showEventPreview(event, '${e.type}'); event.stopPropagation();" 
-                        onmouseleave="hideEventPreview()">
-                        ${e.type}
-                    </td>
-                    <td style="font-size: 12px; opacity: 0.8;">${new Date(e.timestamp / 1000000).toLocaleTimeString()}</td>
-                    <td>${e.peak_volts !== undefined ? e.peak_volts.toFixed(1) + ' V' : (e.peak_volts || '0.0 V')}</td>
-                    <td>${e.duration_ms.toFixed(1)}ms</td>
-                </tr>
-            `).join('') || '<tr><td colspan="4" style="text-align: center;">No events detected yet</td></tr>';
+        const updateTrend = async () => {
+            try {
+                const trendRes = await fetch('/api/v1/history');
+                if (!trendRes.ok) throw new Error(`History returned ${trendRes.status}`);
+                const trendData = await trendRes.json();
+                console.log('[Dashboard] Trend data received:', {
+                    samples_count: trendData.samples ? trendData.samples.length : 0,
+                    rate: trendData.rate,
+                    raw_samples_count: trendData.samples_raw ? trendData.samples_raw.length : 0,
+                    first_5_samples: trendData.samples ? trendData.samples.slice(0, 5) : []
+                });
+                const stats = updateLiveStats(trendData.samples, trendData.rate, trendData.samples_raw, trendData.timestamps);
+                if (stats) {
+                    console.log('[Dashboard] Stats calculated, rendering trend chart');
+                    renderTrend(trendData.samples, stats, trendData.timestamps);
+                } else {
+                    console.warn('[Dashboard] No stats returned, skipping chart render');
+                }
 
-            // 3. Fetch Trend Data
-            const trendRes = await fetch('/api/v1/history');
-            const trendData = await trendRes.json();
-            console.log('[Dashboard] Trend data received:', {
-                samples_count: trendData.samples ? trendData.samples.length : 0,
-                rate: trendData.rate,
-                raw_samples_count: trendData.samples_raw ? trendData.samples_raw.length : 0,
-                first_5_samples: trendData.samples ? trendData.samples.slice(0, 5) : []
-            });
-            const stats = updateLiveStats(trendData.samples, trendData.rate, trendData.samples_raw, trendData.timestamps);
-            if (stats) {
-                console.log('[Dashboard] Stats calculated, rendering trend chart');
-                renderTrend(trendData.samples, stats, trendData.timestamps);
-            } else {
-                console.warn('[Dashboard] No stats returned, skipping chart render');
+                // Update FFT at the same cadence as the dashboard refresh.
+                if (latestSamples.length > 0) {
+                    updateFFT(latestSamples, latestEffectiveRate);
+                } else if (trendData.samples && trendData.samples.length >= 128) {
+                    updateFFT(trendData.samples, trendData.rate);
+                }
+            } catch (error) {
+                console.error('Failed to update history:', error);
             }
+        };
 
-            // 4. Update FFT (matched to 5s timer)
-            if (latestSamples.length > 0) {
-                updateFFT(latestSamples, latestEffectiveRate);
-            } else if (trendData.samples && trendData.samples.length >= 128) {
-                // Fallback to trend data if live stream is missing (lower resolution)
-                updateFFT(trendData.samples, trendData.rate);
-            }
-        } catch (error) {
-            // Webserver is unreachable or returned an error
-            console.error('Failed to update dashboard:', error);
-            document.getElementById('webserver-status').innerText = 'OFFLINE';
-            document.getElementById('webserver-status').style.color = '#F44336';
-            document.getElementById('pru-status').innerText = 'OFFLINE';
-            document.getElementById('pru-status').style.color = '#888';
-            document.getElementById('datalogger-status').innerText = 'OFFLINE';
-            document.getElementById('datalogger-status').style.color = '#888';
-        }
+        await Promise.all([updateEvents(), updateTrend()]);
     }
 
     function manualFFT() {
@@ -1096,9 +1087,13 @@
         document.getElementById('event-modal').style.display = 'none';
     }
 
-    updateDashboard();
+    async function scheduleDashboardUpdate() {
+        await updateDashboard();
+        setTimeout(scheduleDashboardUpdate, 5000);
+    }
+
+    scheduleDashboardUpdate();
     setupWebSocket();
-    setInterval(updateDashboard, 5000);
 </script>
 
 <!-- Event Detail Modal - Full Screen Scrim -->

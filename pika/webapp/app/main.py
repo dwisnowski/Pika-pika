@@ -1,13 +1,13 @@
 import asyncio
-import json
-import time
+import glob
 import logging
+import os
+import time
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 
-from app.core.config import settings
 from app.services.shared_memory import shm
 from app.services.config_service import config_service
 
@@ -29,6 +29,89 @@ logging.getLogger("uvicorn.access").setLevel(log_level_enum)
 logging.getLogger("uvicorn.error").setLevel(log_level_enum)
 
 logger = logging.getLogger(__name__)
+
+_last_scope_total = None
+_last_scope_progress_at = 0.0
+
+
+def get_health_snapshot():
+    """Return component health based on live PRU and scope-buffer progress."""
+    from app.services.calibration_service import calibration_service
+
+    global _last_scope_total, _last_scope_progress_at
+
+    sample_rate = 0
+    pru_clock_hz = 0
+    sample_period_cycles = 0
+    pru_state = "unknown"
+
+    try:
+        pru_found = False
+        for name_file in glob.glob("/sys/class/remoteproc/remoteproc*/name"):
+            with open(name_file, "r") as f:
+                if "4a334000.pru" not in f.read().strip():
+                    continue
+
+            pru_found = True
+            with open(name_file.replace("/name", "/state"), "r") as state_file:
+                state = state_file.read().strip()
+            if state == "running":
+                pru_state = "running"
+            elif state == "offline":
+                pru_state = "offline"
+            else:
+                pru_state = "error"
+            break
+
+        if not pru_found:
+            pru_state = "error"
+    except Exception as e:
+        logger.warning(f"Could not check PRU remoteproc state: {e}")
+        pru_state = "error"
+
+    now = time.monotonic()
+    datalogger_running = False
+    if shm.header and shm.header.magic == 0x5C09E000:
+        sample_rate = shm.header.sample_rate
+        pru_clock_hz = shm.header.pru_clock_hz
+        sample_period_cycles = shm.header.sample_period_cycles
+        current_total = shm.header.total_samples
+
+        if _last_scope_total is None or current_total != _last_scope_total:
+            _last_scope_total = current_total
+            _last_scope_progress_at = now
+        datalogger_running = (
+            current_total > 0 and now - _last_scope_progress_at < 10.0
+        )
+
+    actual_sample_rate = 0
+    if pru_clock_hz > 0 and sample_period_cycles > 0:
+        actual_sample_rate = pru_clock_hz / sample_period_cycles
+
+    calibration = calibration_service.get_calibration_values()
+    learned_voltage = calibration["nominal_vrms"]
+    learned_transformer_ratio = calibration["transformer_ratio"]
+    learned_adc_vrms = (
+        learned_voltage / learned_transformer_ratio
+        if learned_transformer_ratio > 0
+        else 0.0
+    )
+
+    return {
+        "status": "ok",
+        "pru_state": pru_state,
+        "pru_connected": pru_state == "running",
+        "datalogger_running": datalogger_running,
+        "shm_magic": hex(shm.header.magic) if shm.header else "N/A",
+        "sample_rate": sample_rate,
+        "actual_sample_rate": actual_sample_rate,
+        "pru_clock_hz": pru_clock_hz,
+        "sample_period_cycles": sample_period_cycles,
+        "learned_voltage": learned_voltage,
+        "learned_adc_vrms": learned_adc_vrms,
+        "learned_transformer_ratio": learned_transformer_ratio,
+    }
+
 
 # Templates and Static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -60,104 +143,7 @@ async def get_events_view(request: Request):
 
 @app.get("/health")
 async def health():
-    from app.services.calibration_service import calibration_service
-    import os
-    import time
-    import glob
-    
-    sample_rate = 0
-    pru_clock_hz = 0
-    sample_period_cycles = 0
-    pru_state = "unknown"  # Can be: "running", "offline", "error", "unknown"
-    
-    # Check PRU status from remoteproc state file
-    # Find PRU0 by looking for "4a334000.pru" in remoteproc names
-    try:
-        remoteproc_path = "/sys/class/remoteproc"
-        pru_found = False
-        for name_file in glob.glob(f"{remoteproc_path}/remoteproc*/name"):
-            with open(name_file, 'r') as f:
-                name = f.read().strip()
-                if "4a334000.pru" in name:
-                    pru_found = True
-                    # Found PRU0, check its state
-                    state_file = name_file.replace("/name", "/state")
-                    with open(state_file, 'r') as sf:
-                        state = sf.read().strip()
-                        # State can be: "offline", "running", "crashed", etc.
-                        if state == "running":
-                            pru_state = "running"
-                        elif state == "offline":
-                            pru_state = "offline"
-                        else:
-                            pru_state = "error"  # crashed or other unexpected state
-                    break
-        
-        if not pru_found:
-            pru_state = "error"  # PRU0 not found in remoteproc
-            
-    except Exception as e:
-        logger.warning(f"Could not check PRU remoteproc state: {e}")
-        pru_state = "error"
-        # Fallback to old method if remoteproc check fails
-        if shm.header:
-            current_total = shm.header.total_samples
-            time.sleep(0.05)
-            try:
-                shm.connect()
-            except:
-                pass
-            if shm.header:
-                new_total = shm.header.total_samples
-                if new_total > current_total:
-                    pru_state = "running"
-    
-    # Get sample rate info from shared memory if PRU is running
-    if pru_state == "running" and shm.header:
-        sample_rate = shm.header.sample_rate
-        pru_clock_hz = shm.header.pru_clock_hz
-        sample_period_cycles = shm.header.sample_period_cycles
-    
-    # Calculate actual sample rate from PRU timing
-    actual_sample_rate = 0
-    if pru_clock_hz > 0 and sample_period_cycles > 0:
-        actual_sample_rate = pru_clock_hz / sample_period_cycles
-    
-    learned_voltage = calibration_service.get_calibration_values()["nominal_vrms"]
-    learned_transformer_ratio = calibration_service.get_calibration_values()["transformer_ratio"]
-    
-    # Calculate learned ADC VRMS from nominal_vrms and transformer_ratio
-    # learned_adc_vrms = nominal_vrms / transformer_ratio
-    learned_adc_vrms = 0.0
-    if learned_transformer_ratio > 0:
-        learned_adc_vrms = learned_voltage / learned_transformer_ratio
-    
-    # Check if datalogger is running by looking at calibration_status.txt modification time
-    datalogger_running = False
-    try:
-        status_file = os.path.join(settings.data_dir, "calibration_status.txt")
-        if os.path.exists(status_file):
-            # If file was modified within the last 10 seconds, datalogger is likely running
-            mtime = os.path.getmtime(status_file)
-            current_time = time.time()
-            datalogger_running = (current_time - mtime) < 10
-    except Exception as e:
-        logger.warning(f"Could not check datalogger status: {e}")
-        
-    return {
-        "status": "ok",
-        "pru_state": pru_state,  # "running", "offline", "error", "unknown"
-        "pru_connected": pru_state == "running",  # Keep for backward compatibility
-        "datalogger_running": datalogger_running,
-        "shm_magic": hex(shm.header.magic) if shm.header else "N/A",
-        "sample_rate": sample_rate,
-        "actual_sample_rate": actual_sample_rate,
-        "pru_clock_hz": pru_clock_hz,
-        "sample_period_cycles": sample_period_cycles,
-        "learned_voltage": learned_voltage,
-        "learned_adc_vrms": learned_adc_vrms,
-        "learned_transformer_ratio": learned_transformer_ratio
-    }
+    return get_health_snapshot()
 
 # --- REST APIs ---
 
@@ -328,20 +314,30 @@ async def websocket_endpoint(websocket: WebSocket):
 
     # Spin up async listener
     listen_task = asyncio.create_task(receive_messages())
+    last_health_sent = 0.0
 
     try:
         while True:
+            payload = {}
             if not pause:
                 samples = shm.get_window(req_window, req_channel)
                 if samples:
                     effective_rate = len(samples) / req_window if req_window > 0 else 0
-                    await websocket.send_json({
+                    payload.update({
                         "samples": samples,
                         "time_window": req_window,
                         "channel": req_channel,
                         "effective_rate": effective_rate
                     })
             
+            now = time.monotonic()
+            if now - last_health_sent >= 2.0:
+                payload["health"] = get_health_snapshot()
+                last_health_sent = now
+
+            if payload:
+                await websocket.send_json(payload)
+
             # Throttle to 20Hz update (smooth UI)
             await asyncio.sleep(0.05)
     except WebSocketDisconnect:
