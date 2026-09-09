@@ -18,10 +18,46 @@
             <p><span class="status-dot"></span> PRU: <strong id="pru-status">Connecting...</strong></p>
             <p><span class="status-dot"></span> Datalogger: <strong id="datalogger-status">Connecting...</strong></p>
             <p><span class="status-dot"></span> Webserver: <strong id="webserver-status">Connecting...</strong></p>
-            <p>Configured Rate: <strong id="pru-samplerate">--</strong></p>
+            <p style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                Configured Rate: <strong id="pru-samplerate">--</strong>
+                <button type="button" onclick="showSampleRateSettings(event)" title="Change sample rate"
+                    style="background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 2px 4px; display: inline-flex; align-items: center; line-height: 1;">
+                    <span class="material-icons-outlined" style="font-size: 16px;">settings</span>
+                </button>
+            </p>
             <p>Actual Rate: <strong id="pru-actual-samplerate">--</strong></p>
             <p style="margin-top: 12px;">Uptime: <strong id="uptime">--</strong></p>
             <p>Storage: <strong id="storage">Stable</strong></p>
+        </div>
+    </div>
+    <!-- Sample-rate settings popover (System Health) -->
+    <div id="sample-rate-popover"
+        style="display: none; position: fixed; z-index: 1000; width: 340px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); padding: 16px; pointer-events: auto;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div style="font-size: 14px; font-weight: 500; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px;">Sample Rate</div>
+            <button type="button" onclick="hideSampleRateSettings()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
+                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
+            </button>
+        </div>
+        <p style="font-size: 11px; opacity: 0.75; margin: 0 0 12px; line-height: 1.45;">
+            IEEE 1159 does not mandate a sample rate. IEC 61000-4-30 Class A practice is
+            <b>≥256 samples/cycle (~15.4 kHz @ 60 Hz)</b>. For Pika’s 1-cycle RMS sag/swell
+            logging, <b>~2–4 kHz</b> is a practical floor; <b>10 kHz+</b> is recommended.
+        </p>
+        <label style="font-size: 12px; display: block;">
+            Acquisition rate
+            <select id="cfg-sample-rate" style="width: 100%; margin-top: 6px; box-sizing: border-box; padding: 6px;"></select>
+        </label>
+        <div id="sample-rate-alias-warn"
+            style="display: none; margin-top: 10px; padding: 8px; border-radius: 4px; background: rgba(255,193,7,0.12); border: 1px solid rgba(255,193,7,0.4); color: #FFC107; font-size: 11px; line-height: 1.4;">
+            Rates below 120 S/s cannot faithfully represent 60 Hz mains (aliasing).
+        </div>
+        <div id="sample-rate-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
+            <button type="button" onclick="hideSampleRateSettings()"
+                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px;">Cancel</button>
+            <button type="button" onclick="saveSampleRateSettings()"
+                style="background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 12px; font-weight: 600;">Save &amp; Restart</button>
         </div>
     </div>
 
@@ -234,12 +270,90 @@
     let latestSamples = [];
     let currentFrequency = 0;
     let fftYMax = 150;
+    let sampleRateAliasWarnBelow = 120;
+
+    function formatSampleRateLabel(hz) {
+        if (hz >= 1000) return (hz / 1000).toFixed(hz % 1000 === 0 ? 0 : 1) + ' kHz';
+        return hz + ' Hz';
+    }
+
+    function updateSampleRateAliasWarn() {
+        const sel = document.getElementById('cfg-sample-rate');
+        const warn = document.getElementById('sample-rate-alias-warn');
+        if (!sel || !warn) return;
+        const hz = parseInt(sel.value, 10);
+        warn.style.display = (hz < sampleRateAliasWarnBelow) ? 'block' : 'none';
+    }
+
+    async function showSampleRateSettings(event) {
+        hideEventsHelp();
+        hideEventsSettings();
+        hideDeleteConfirm();
+        const popover = document.getElementById('sample-rate-popover');
+        const status = document.getElementById('sample-rate-status');
+        const sel = document.getElementById('cfg-sample-rate');
+        status.style.color = '#888';
+        status.innerText = '';
+        positionCardPopover(popover, event);
+        try {
+            const res = await fetch('/api/v1/config/sample-rate');
+            const data = await res.json();
+            const allowed = data.allowed_rates || [];
+            sampleRateAliasWarnBelow = data.aliasing_warn_below_hz || 120;
+            const current = data.configured_sample_rate || data.sample_rate || latestSampleRate;
+            sel.innerHTML = allowed.map((hz) => {
+                let note = '';
+                if (hz >= 15000 && hz < 20000) note = ' — Class A-ish (≥15.4 kHz)';
+                else if (hz === 10000) note = ' — recommended';
+                else if (hz >= 2000 && hz < 5000) note = ' — practical RMS floor';
+                else if (hz < sampleRateAliasWarnBelow) note = ' — aliasing risk';
+                return `<option value="${hz}">${formatSampleRateLabel(hz)}${note}</option>`;
+            }).join('');
+            if (allowed.includes(current)) sel.value = String(current);
+            else if (allowed.length) sel.value = String(allowed[0]);
+            sel.onchange = updateSampleRateAliasWarn;
+            updateSampleRateAliasWarn();
+            positionCardPopover(popover, event);
+        } catch (err) {
+            status.style.color = '#F44336';
+            status.innerText = 'Load failed: ' + err.message;
+        }
+    }
+
+    function hideSampleRateSettings() {
+        document.getElementById('sample-rate-popover').style.display = 'none';
+    }
+
+    async function saveSampleRateSettings() {
+        const status = document.getElementById('sample-rate-status');
+        const hz = parseInt(document.getElementById('cfg-sample-rate').value, 10);
+        status.style.color = '#888';
+        status.innerText = 'Saving…';
+        try {
+            const res = await fetch('/api/v1/config/sample-rate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sample_rate: hz }),
+            });
+            const data = await res.json();
+            if (!data.success) {
+                status.style.color = '#F44336';
+                status.innerText = data.error || 'Save failed';
+                return;
+            }
+            document.getElementById('pru-samplerate').innerText = formatSampleRateLabel(hz);
+            status.style.color = '#66BB6A';
+            status.innerText = 'Saved — acquisition restarting…';
+            setTimeout(() => window.location.reload(), 2500);
+        } catch (err) {
+            status.style.color = '#F44336';
+            status.innerText = err.message;
+        }
+    }
 
     function updateSampleRate(value) {
         const sampleRate = parseInt(value);
-        document.getElementById('sample-rate-display').innerText = (sampleRate / 1000).toFixed(1) + ' kHz';
-        
-        // Send update to backend
+        // Legacy helper used by older controls; prefer saveSampleRateSettings().
         fetch('/api/v1/config/sample-rate', {
             method: 'POST',
             headers: {
@@ -251,17 +365,14 @@
         .then(data => {
             if (data.success) {
                 console.log('Sample rate updated to ' + sampleRate + ' Hz');
-                // Update the configured rate display immediately
-                document.getElementById('pru-samplerate').innerText = (sampleRate / 1000).toFixed(1) + ' kHz';
+                document.getElementById('pru-samplerate').innerText = formatSampleRateLabel(sampleRate);
             } else {
                 console.error('Failed to update sample rate:', data.error);
-                // Revert slider on error
                 updateDashboard();
             }
         })
         .catch(error => {
             console.error('Error updating sample rate:', error);
-            // Revert slider on error
             updateDashboard();
         });
     }
@@ -362,10 +473,10 @@
 
         if (health.sample_rate) {
             latestSampleRate = health.sample_rate;
-            document.getElementById('pru-samplerate').innerText = (health.sample_rate / 1000).toFixed(1) + ' kHz';
+            document.getElementById('pru-samplerate').innerText = formatSampleRateLabel(health.sample_rate);
         }
         if (health.actual_sample_rate) {
-            document.getElementById('pru-actual-samplerate').innerText = (health.actual_sample_rate / 1000).toFixed(1) + ' kHz';
+            document.getElementById('pru-actual-samplerate').innerText = formatSampleRateLabel(health.actual_sample_rate);
         }
         if (health.learned_adc_vrms) {
             document.getElementById('stat-learned-adc-vrms').innerText = health.learned_adc_vrms.toFixed(4) + ' V';
@@ -1043,6 +1154,7 @@
     async function showEventsHelp(event) {
         hideEventsSettings();
         hideDeleteConfirm();
+        hideSampleRateSettings();
         const popover = document.getElementById('events-help-popover');
         const body = document.getElementById('events-help-body');
         body.innerHTML = 'Loading…';
@@ -1080,6 +1192,7 @@
     async function showEventsSettings(event) {
         hideEventsHelp();
         hideDeleteConfirm();
+        hideSampleRateSettings();
         const popover = document.getElementById('events-settings-popover');
         document.getElementById('events-settings-status').innerText = '';
         positionCardPopover(popover, event);
