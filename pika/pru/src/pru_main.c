@@ -11,9 +11,6 @@
 
 #define PRU_CTRL_REG (*(volatile uint32_t *)(0x22000))
 #define PRU_CCNT_REG (*(volatile uint32_t *)(0x2200C))
-#define DDR_MAILBOX_HOST_SENTINEL 0x13579BDFu
-#define DDR_MAILBOX_PRU_RESPONSE 0x2468ACE0u
-#define DDR_MAILBOX_SEEN_FLAG 0xDDBB0001u
 
 /*
  * DDR is outside the PRU near address space. Build with --mem_model:data=far
@@ -136,14 +133,6 @@ void main(void) {
   uint64_t total_cycles = 0;
 
   while (1) {
-    volatile uint32_t *ddr_mailbox =
-        (volatile uint32_t *)(((volatile uint8_t *)shm) + 0x3000u -
-                              sizeof(uint32_t));
-    if (*ddr_mailbox == DDR_MAILBOX_HOST_SENTINEL) {
-      *ddr_mailbox = DDR_MAILBOX_PRU_RESPONSE;
-      shm->error_flags = DDR_MAILBOX_SEEN_FLAG;
-    }
-
     uint32_t period_target = shm->sample_period_cycles;
 
     uint32_t sample_start_ccnt = ccnt_read();

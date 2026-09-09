@@ -365,18 +365,13 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   uint32_t derived_write_idx = completed_blocks % num_blocks;
 
   if (poll_count % 5000 == 0) {
-    volatile uint32_t *ddr_mailbox =
-        (volatile uint32_t *)((uint8_t *)reader->ddr_mmap_base +
-                              reader->ddr_size_bytes - sizeof(uint32_t));
     printf("[SHM Reader] Tick: write_idx(raw=%u, derived=%u), "
            "last_idx=%u, num_blocks=%u, block_size=%u, sample_count=%u, "
-           "completed_blocks=%u, heartbeat=%u, err=0x%08X, ddr=0x%08X, "
-           "mailbox=0x%08X\n",
+           "completed_blocks=%u, heartbeat=%u, err=0x%08X, ring=0x%08X\n",
            raw_write_idx, derived_write_idx, reader->last_read_block_idx,
            num_blocks, block_size, sample_count, completed_blocks,
            (uint32_t)reader->header->heartbeat,
-           (uint32_t)reader->header->error_flags, reader->ddr_phys_addr,
-           (uint32_t)*ddr_mailbox);
+           (uint32_t)reader->header->error_flags, reader->ddr_phys_addr);
   }
 
   if (reader->last_completed_blocks == UINT32_MAX) {
@@ -434,77 +429,7 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
 
   volatile block_descriptor_t *desc = (volatile block_descriptor_t *)b_base;
 
-  if (poll_count % 5000 == 0) {
-    printf("[SHM Reader] Candidate desc: ready_idx=%u flags=0x%08X "
-           "num_samples=%u timestamp_cycles=%llu period_cycles=%u\n",
-           ready_idx, (uint32_t)desc->flags, (uint32_t)desc->num_samples,
-           (unsigned long long)desc->timestamp_cycles,
-           (uint32_t)desc->period_cycles);
-    block_descriptor_t physical_desc;
-    off_t physical_offset =
-        (off_t)reader->ddr_phys_addr + (ready_idx * block_total_size);
-    ssize_t physical_bytes =
-        pread(reader->mem_fd, &physical_desc, sizeof(physical_desc),
-              physical_offset);
-    if (physical_bytes == (ssize_t)sizeof(physical_desc)) {
-      printf("[SHM Reader] pread desc: ready_idx=%u flags=0x%08X "
-             "num_samples=%u timestamp_cycles=%llu period_cycles=%u\n",
-             ready_idx, physical_desc.flags, physical_desc.num_samples,
-             (unsigned long long)physical_desc.timestamp_cycles,
-             physical_desc.period_cycles);
-    } else {
-      perror("[SHM Reader] pread candidate descriptor");
-    }
-  }
-
   if (desc->flags != BLOCK_FLAG_COMPLETE) {
-    static int scanned_for_complete_flags = 0;
-    if (!scanned_for_complete_flags) {
-      uint32_t found = 0;
-      volatile uint32_t *words =
-          (volatile uint32_t *)reader->ddr_mmap_base;
-      uint32_t word_count = reader->ddr_size_bytes / sizeof(uint32_t);
-      printf("[SHM Reader] Scanning DDR ring for completion flags...\n");
-      for (uint32_t word = 0; word < word_count && found < 16; word++) {
-        if (words[word] == BLOCK_FLAG_COMPLETE) {
-          uint32_t offset = word * sizeof(uint32_t);
-          printf("[SHM Reader] Complete flag at DDR offset=%u "
-                 "(block=%u, within_block=%u)\n",
-                 offset, offset / block_total_size,
-                 offset % block_total_size);
-          found++;
-        }
-      }
-      if (found == 0)
-        printf("[SHM Reader] No completion flags found in DDR ring\n");
-
-      uint32_t *snapshot = malloc(reader->ddr_size_bytes);
-      if (snapshot) {
-        ssize_t bytes_read =
-            pread(reader->mem_fd, snapshot, reader->ddr_size_bytes,
-                  (off_t)reader->ddr_phys_addr);
-        if (bytes_read == (ssize_t)reader->ddr_size_bytes) {
-          uint32_t pread_found = 0;
-          for (uint32_t word = 0; word < word_count && pread_found < 16;
-               word++) {
-            if (snapshot[word] == BLOCK_FLAG_COMPLETE) {
-              uint32_t offset = word * sizeof(uint32_t);
-              printf("[SHM Reader] pread complete flag at DDR offset=%u "
-                     "(block=%u, within_block=%u)\n",
-                     offset, offset / block_total_size,
-                     offset % block_total_size);
-              pread_found++;
-            }
-          }
-          if (pread_found == 0)
-            printf("[SHM Reader] pread also found no completion flags\n");
-        } else {
-          perror("[SHM Reader] pread DDR ring");
-        }
-        free(snapshot);
-      }
-      scanned_for_complete_flags = 1;
-    }
     rejected_desc_count++;
     if (rejected_desc_count % 1000 == 0) {
       printf("[SHM Reader] Reject desc: ready_idx=%u bad flags=0x%08X "

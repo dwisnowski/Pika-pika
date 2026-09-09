@@ -149,8 +149,8 @@ sudo nano /boot/uEnv.txt
 # Uncomment or add:
 uboot_overlay_pru=/lib/firmware/AM335X-PRU-RPROC-4-19-TI-00A0.dtbo
 
-# Reserve top of DDR only if you use a fixed-PA experiment; the production
-# path uses a remoteproc carveout and does not need mem=448M.
+# The production Shared RAM sample ring does not require a DDR reservation.
+# Remove an old mem=448M setting if the full Linux RAM capacity is desired.
 # cmdline=coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 quiet
 
 # Save and reboot

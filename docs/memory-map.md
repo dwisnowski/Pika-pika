@@ -2,14 +2,13 @@
 
 ## Overview
 
-Communication between PRU firmware and Linux uses two regions:
+Communication between PRU firmware and Linux uses one 12 KiB region:
 
-1. **PRU Shared RAM (control)** — header, config, status (`pru_shared_memory_t`)
-2. **DDR sample ring** — block descriptors + interleaved ADC samples
+1. **PRU Shared RAM** — header, config, status, and four sample blocks
 
 **Key Characteristics:**
-- Control plane in 12 KB Shared RAM (fast, uncached)
-- Deep sample ring in carved-out DDR (≥50–100 ms at high SPS)
+- Header and sample ring share fast, uncached PRUSS Shared RAM
+- Four 128-sample blocks provide 51.2 ms of buffering at 10 kHz
 - Block-level PRU cycle timestamps; host reconstructs per-sample times
 - Disk stores decimated overview + anomaly event windows only (no full-rate archive)
 
@@ -21,16 +20,16 @@ Layout version: **`SHM_VERSION = 2`** (see [`pika/pru/include/shm_layout.h`](../
 
 | Region | PRU view | ARM physical | Size | Role |
 |--------|----------|--------------|------|------|
-| Shared RAM | `0x00010000` | `0x4A310000` | 12 KB | Control header only |
-| DDR carveout | phys from remoteproc | same as phys | 1 MiB | Sample ring (`pika_sample_ring`) |
+| Shared RAM | `0x00010000` | `0x4A310000` | 12 KB | 128-byte control header + sample ring |
 
-### DDR sample ring (remoteproc carveout)
+### Shared RAM sample ring
 
-The sample ring is **not** a fixed physical address. The PRU firmware requests 1 MiB via a `TYPE_CARVEOUT` entry in its resource table (`pika_sample_ring`). Linux remoteproc allocates contiguous CMA/DDR, patches `da`/`pa` into the resource table, and the PRU publishes that address in `pru_shared_memory_t.ddr_phys_addr`.
+The ring begins at PRU address `0x00010080`, immediately after the reserved
+128-byte header. Linux accesses the same bytes at offset `0x80` in its existing
+`0x4A310000` Shared RAM mapping.
 
-The datalogger reads `ddr_phys_addr` after `magic` appears and `mmap`s `/dev/mem` at that PA.
-
-`mem=448M` in `uEnv.txt` is **not required** for this path (it was for an earlier fixed-PA approach). Keeping it is harmless.
+The previous fixed DDR window at `0x9C000000` was not coherent with PRU0 on the
+deployed 4.19-ti kernel. `mem=448M` is no longer required by the sample path.
 
 ## Control Header (`pru_shared_memory_t`)
 
@@ -42,7 +41,7 @@ Located at Shared RAM offset 0; first **128 bytes** reserved (`SHM_HEADER_OFFSET
 | version | u32 | R | Layout version (`2`) |
 | sample_period_cycles | u32 | R/W | Target period in PRU cycles; **`0` = free-run / max-rate** |
 | block_size | u32 | R | Samples per block (default 128) |
-| num_blocks | u32 | R | Ring depth (default 256) |
+| num_blocks | u32 | R | Ring depth (default 4) |
 | write_block_idx | u32 | R | Next block PRU will write |
 | error_flags | u32 | R | Error bits |
 | sample_count | u32 | R | Total samples acquired (progress source of truth) |
@@ -50,20 +49,21 @@ Located at Shared RAM offset 0; first **128 bytes** reserved (`SHM_HEADER_OFFSET
 | pru_clock_hz | u32 | R | 200000000 on BBB |
 | heartbeat | u32 | R | Incremented in acquisition loop |
 | ch_enable[8] | u32×8 | R/W | Per-channel enable (1 = RD that channel) |
-| ddr_phys_addr | u32 | R | Physical base of sample ring |
-| ddr_size_bytes | u32 | R | Ring size in bytes |
+| ddr_phys_addr | u32 | R | PRU-local sample ring base (`0x00010080`) |
+| ddr_size_bytes | u32 | R | Available ring area (12160 bytes) |
 | block_desc_size | u32 | R | `sizeof(block_descriptor_t)` = 24 |
+| block_complete_flag | u32 | R | Stable publication marker (`0xAA55AA55`) |
 
 ## Block Descriptor (`block_descriptor_t`) — 24 bytes
 
-Each DDR ring slot:
+Each Shared RAM ring slot:
 
 ```c
 typedef struct {
   uint64_t timestamp_cycles; /* first sample (accumulated PRU CCNT) */
   uint32_t num_samples;
   uint32_t flags;            /* 0xAA55AA55 when complete */
-  uint32_t period_cycles;    /* measured mean period this block */
+  uint32_t period_cycles;    /* configured period for this block */
   uint32_t reserved;
 } block_descriptor_t;
 ```
@@ -74,7 +74,7 @@ typedef struct {
 block_total_size = 24 + block_size × 8 × 2
 ```
 
-Default: `128` samples → `2072` bytes/block; `256` blocks → ~518 KiB (fits in 1 MiB ring).
+Default: `128` samples → `2072` bytes/block; four blocks consume 8288 bytes.
 
 ## Timestamps
 
@@ -89,14 +89,14 @@ Default: `128` samples → `2072` bytes/block; `256` blocks → ~518 KiB (fits i
 | Mode | Config | PRU behavior |
 |------|--------|--------------|
 | Paced | `sample_rate > 0`, `sample_period_cycles = 200e6 / rate` | Wait remaining cycles after each conversion+read |
-| Free-run | `sample_rate == 0`, `sample_period_cycles == 0` | No wait; measured `period_cycles` still valid |
+| Free-run | `sample_rate == 0`, `sample_period_cycles == 0` | No pacing delay |
 
 Host re-applies rate/channels after PRU sets `magic` (PRU wipes the header on boot).
 
-## Ring Buffer Layout (DDR)
+## Ring Buffer Layout
 
 ```
-DDR @ 0x9C000000:
+Shared RAM @ offset 0x80:
 ┌─────────────────────────────────────────┐
 │ Block 0: descriptor (24) + samples      │
 │ Block 1: ...                            │
@@ -126,8 +126,8 @@ Progress: consumer uses `sample_count / block_size` (not `write_block_idx` alone
 ```c
 /* Shared RAM header */
 mmap(..., 0x3000, ..., fd, 0x4A310000);
-/* DDR sample ring — physical address from header after PRU start */
-mmap(..., header->ddr_size_bytes, ..., fd, header->ddr_phys_addr);
+/* Sample ring aliases the same mapping at byte offset 128. */
+ring = (uint8_t *)shared_ram + SHM_HEADER_OFFSET;
 ```
 
 See [`pika/datalogger/src/shm_reader.c`](../pika/datalogger/src/shm_reader.c).

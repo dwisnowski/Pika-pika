@@ -4,10 +4,10 @@ Hard-won notes for editing PRU firmware and the Linux datalogger that consumes i
 
 Canonical contracts:
 
-- [`pika/pru/include/shm_layout.h`](../pika/pru/include/shm_layout.h) — SHM header, block descriptor, DDR size/PA constants
+- [`pika/pru/include/shm_layout.h`](../pika/pru/include/shm_layout.h) — SHM header and block descriptor
 - [`pika/pru/include/resource_table.h`](../pika/pru/include/resource_table.h) — explicit remoteproc resource table
 - [`pika/pru/src/pru_main.c`](../pika/pru/src/pru_main.c) — acquisition loop
-- [`pika/datalogger/src/shm_reader.c`](../pika/datalogger/src/shm_reader.c) — host mapping / DDR publish / poll
+- [`pika/datalogger/src/shm_reader.c`](../pika/datalogger/src/shm_reader.c) — host mapping and block polling
 
 ---
 
@@ -16,12 +16,12 @@ Canonical contracts:
 ```text
 AD7606 ──(CONVST/BUSY/RD + parallel DB)──► PRU0
                                             │
-                     ┌──────────────────────┼──────────────────────┐
-                     ▼                      ▼                      │
-              Shared RAM 12KB          DDR sample ring             │
-              (header/status)          (blocks + samples)          │
-                     │                      │                      │
-                     └──────────► datalogger ◄─────────────────────┘
+                                            ▼
+                                    Shared RAM 12KB
+                                 (header + four blocks)
+                                            │
+                                            ▼
+                                       datalogger
                                       │
                           decimated.bin + events only
 ```
@@ -41,27 +41,17 @@ AD7606 ──(CONVST/BUSY/RD + parallel DB)──► PRU0
 | PRU | `0x00010000` | 12 KB |
 | ARM | `0x4A310000` | map `0x3000` |
 
-Put **only** `pru_shared_memory_t` here (first 128 bytes reserved). It is too small for a deep high-rate ring.
+The first 128 bytes hold `pru_shared_memory_t`. The remaining bytes hold four
+128-sample blocks beginning at PRU address `0x00010080`. This provides 51.2 ms
+of buffering at 10 kHz and uses the already coherent Shared RAM mapping.
 
-### DDR sample ring + host-owned PA
+### Ring address calculations
 
-1. Boot with `mem=448M` so Linux does not use the top of 512 MiB DRAM.
-2. Fixed ring PA: `PIKA_DDR_RING_PHYS = 0x9C000000`, size 1 MiB.
-3. Host verifies R/W, publishes that PA into SHM; PRU waits (`0xDEAD00DD`) then uses only that PA.
-4. Do **not** remove `mem=448M` while this path is in use.
-
-### Accessing DDR from PRU C (critical)
-
-DDR addresses (`0x80000000+`) are outside the PRU **near** data model. With the default near model, absolute pointers truncate and the OCP transaction **hangs**.
-
-Required:
-
-- Compile with `--mem_model:data=far` (see `pika/pru/Makefile`)
-- Use ordinary `volatile` pointers; do **not** invent MS-DOS-style `far` pointer typedefs (`typedef T * far` → clpru error #41; `volatile far T *` on locals → error #81). clpru’s `far`/`__far` qualifies data symbols, not pointer width.
-- Clear `STANDBY_INIT` before touching DDR
-- Host publishes PA; PRU waits — do not invent carveout addresses in the PRU
-
-Symptom of a near/truncated DDR address: host maps DDR fine, `error_flags` clears, `sample_count` stays 0, heartbeat freezes right after the wait loop.
+TI `clpru` 2.3.3 generated unreliable hardware and software multiplication
+sequences for the ring stride on this target. The four fixed block offsets
+(`0`, `2072`, `4144`, `6216`) are intentional. Derive ring pointers directly
+from the live `shm` pointer; do not retain a numeric ring-base local across the
+acquisition loop.
 
 ### Host-side compile check (macOS)
 
@@ -83,7 +73,9 @@ Requesting `TYPE_CARVEOUT` in the resource table can make Linux allocate CMA (e.
 - Reading “resource table at PRU DMEM offset 0” via `/dev/mem` can return **garbage** (wrong placement / not the patched host copy).
 - debugfs `.../remoteprocN/resource_table` may be absent unless debugfs is mounted.
 
-Until carveout PA discovery is proven on-target, treat carveout as secondary; **host-published PA + `mem=448M` is the supported path**.
+The deployed 4.19-ti kernel also failed bidirectional coherence tests against
+the fixed reserved DDR window at `0x9C000000`. Shared RAM is therefore the
+supported production path; DDR carveouts remain experimental.
 
 ### Resource table authoring
 
@@ -104,13 +96,13 @@ Important fields:
 | `magic` | `0xDEADBEEF` when PRU init finished enough for host attach |
 | `sample_period_cycles` | `0` = free-run / max rate; else paced period @ 200 MHz |
 | `sample_rate` | Hz from datalogger (`0` = free-run intent) |
-| `block_size` / `num_blocks` | defaults 128 / 256 for DDR ring |
+| `block_size` / `num_blocks` | defaults 128 / 4 for Shared RAM ring |
 | `sample_count` | **source of truth** for completed samples |
 | `write_block_idx` | diagnostics only; has been flaky on some reads |
-| `ddr_phys_addr` / `ddr_size_bytes` | host-published ring geometry |
+| `ddr_phys_addr` / `ddr_size_bytes` | PRU-local Shared RAM ring geometry |
 | `ch_enable[8]` | skip `adc_read_next` when 0; payload still 8 slots |
 | `heartbeat` | alive counter |
-| `error_flags` | `0xDEAD0002` BUSY fail; `0xDEAD00DD` waiting for DDR PA |
+| `error_flags` | `0xDEAD0002` BUSY timeout |
 
 ### Block descriptor (24 bytes) + payload
 
@@ -118,7 +110,7 @@ Important fields:
 timestamp_cycles  // u64, first sample of block (post-BUSY)
 num_samples       // u32
 flags             // u32, 0xAA55AA55 when complete
-period_cycles     // u32, measured mean period this block
+period_cycles     // u32, configured period this block
 reserved          // u32
 // then: num_samples × 8 × int16 interleaved
 ```
@@ -130,7 +122,7 @@ YAML `nominal_rate_hz` is pacing intent / fallback only.
 
 1. Host may write config into SHM **before** start.
 2. PRU **zeros** the header, then publishes geometry / magic.
-3. Host must **wait for magic**, publish/verify DDR PA if needed, **re-apply** channel enables and sample period, then consume blocks.
+3. Host must **wait for magic**, alias the Shared RAM ring, **re-apply** channel enables and sample period, then consume blocks.
 
 Skipping step 3 looks like “PRU ignores config.”
 
@@ -146,7 +138,7 @@ Skipping step 3 looks like “PRU ignores config.”
 ## Timing and the hot loop
 
 - Stamp CCNT **after** successful `adc_trigger_and_wait()`, **before** channel reads, on `smp_in_blk == 0`.
-- On block close, set `period_cycles` from `(total_cycles - block_start) / (block_size - 1)`.
+- On block close, publish the configured `period_cycles`.
 - Pacing: measure elapsed since sample start; `delay_cycles_runtime(remaining >> 1)` — the asm loop is ~2 cycles per iteration.
 - Accumulate 32-bit CCNT into `uint64_t` with wrap-safe subtract.
 - At ~180 kSPS, period budget is ~5–5.5 µs; bit-bang GPIO assemble dominates. Do not add per-sample SHM timestamp stores.
@@ -177,13 +169,8 @@ make run-pru-datalogger  # both
 |---------|-----|
 | Alive? | `heartbeat` increasing in SHM |
 | Producing? | `sample_count` increasing |
-| Hung on DDR? | heartbeat frozen + count stuck after N samples |
-| Waiting for PA? | `error_flags == 0xDEAD00DD`, heartbeat ~10 Hz |
 | BUSY issues? | `error_flags == 0xDEAD0002` |
-| Block valid? | DDR at published PA; `flags == 0xAA55AA55` |
-| Cmdline reserve? | `cat /proc/cmdline` → `mem=448M`; `free -h` ~419 MiB |
-
-ARM-side probe before trusting a PA: `mmap` `/dev/mem`, write a pattern, read it back, then publish to PRU.
+| Block valid? | Shared RAM descriptor has `flags == 0xAA55AA55` |
 
 Logic analyzer: startup CONVST panic pulse in `pru_main.c` is intentional for bring-up.
 
@@ -200,8 +187,7 @@ Logic analyzer: startup CONVST panic pulse in `pru_main.c` is intentional for br
 
 - [ ] `shm_layout.h` and ARM consumer sizes agree (`BLOCK_DESCRIPTOR_SIZE`, ring element size)
 - [ ] Host re-applies config after magic
-- [ ] DDR PA host-verified and published; PRU does not assume carveout self-discovery
-- [ ] `mem=448M` still present if using `0x9C000000`
+- [ ] Four 2072-byte blocks still fit after the 128-byte header
 - [ ] Firmware rebuilt **and** reloaded on hardware
 - [ ] No per-sample timestamp arrays added “for accuracy”
 - [ ] Docs updated only if they match the headers
