@@ -38,9 +38,13 @@
 #define PIKA_DDR_RING_PHYS 0x9C000000u
 #define PIKA_DDR_RING_SIZE 0x00100000u /* 1 MiB */
 
-/** Defaults for DDR-backed ring (must fit in PIKA_DDR_RING_SIZE) */
+/** Reliable fallback ring in the 12 KiB PRUSS Shared RAM window. */
+#define PIKA_SHARED_RING_PRU_ADDR (0x00010000u + SHM_HEADER_OFFSET)
+#define PIKA_SHARED_RING_SIZE (0x3000u - SHM_HEADER_OFFSET)
+
+/** Defaults for the Shared RAM ring (4 × 2072-byte blocks fit). */
 #define PIKA_DEFAULT_BLOCK_SIZE 128u
-#define PIKA_DEFAULT_NUM_BLOCKS 256u
+#define PIKA_DEFAULT_NUM_BLOCKS 4u
 
 /** Block complete flag */
 #define BLOCK_FLAG_COMPLETE 0xAA55AA55u

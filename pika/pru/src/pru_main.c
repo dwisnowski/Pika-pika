@@ -97,8 +97,8 @@ void main(void) {
   shm->sample_count = 0;
   shm->pru_clock_hz = PRU_CLOCK_HZ;
   shm->sample_rate = 0;
-  shm->ddr_phys_addr = 0; /* host must publish */
-  shm->ddr_size_bytes = PIKA_DDR_RING_SIZE;
+  shm->ddr_phys_addr = PIKA_SHARED_RING_PRU_ADDR;
+  shm->ddr_size_bytes = PIKA_SHARED_RING_SIZE;
   shm->block_desc_size = BLOCK_DESCRIPTOR_SIZE;
   shm->error_flags = 0xDEAD00DDu;
   shm->ch_enable[0] = 1;
@@ -106,11 +106,6 @@ void main(void) {
     shm->ch_enable[i] = 0;
 
   shm->magic = SHM_MAGIC;
-
-  while (shm->ddr_phys_addr == 0) {
-    shm->heartbeat++;
-    __delay_cycles(20000000);
-  }
 
   uint32_t ddr_phys = shm->ddr_phys_addr;
   uint32_t ddr_size = shm->ddr_size_bytes;
@@ -122,7 +117,8 @@ void main(void) {
   uint32_t block_size = shm->block_size;
   uint32_t num_blocks = shm->num_blocks;
   uint32_t block_total_size = BLOCK_TOTAL_SIZE(block_size);
-  volatile uint8_t *ddr_base = (volatile uint8_t *)ddr_phys;
+  volatile uint8_t *ddr_base =
+      (volatile uint8_t *)PIKA_SHARED_RING_PRU_ADDR;
 
   if ((uint32_t)num_blocks * block_total_size > ddr_size) {
     num_blocks = ddr_size / block_total_size;

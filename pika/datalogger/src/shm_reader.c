@@ -121,6 +121,17 @@ int shm_reader_map_ddr(shm_reader_t *reader) {
     return -1;
   }
 
+  if (phys == PIKA_SHARED_RING_PRU_ADDR) {
+    reader->ddr_mmap_base =
+        (uint8_t *)reader->mmap_base + SHM_HEADER_OFFSET;
+    reader->ddr_phys_addr = phys;
+    reader->ddr_size_bytes = size;
+    reader->ring_in_shared_memory = true;
+    printf("[SHM Reader] Using PRUSS Shared RAM sample ring (%u bytes)\n",
+           size);
+    return 0;
+  }
+
   if (reader->ddr_mmap_base != MAP_FAILED && reader->ddr_mmap_base != NULL &&
       reader->ddr_phys_addr == phys && reader->ddr_size_bytes == size) {
     return 0; /* already mapped */
@@ -162,6 +173,9 @@ int shm_reader_publish_carveout_pa(shm_reader_t *reader) {
   static int published_ok = 0;
   if (!reader || reader->mem_fd < 0 || !reader->header)
     return -1;
+
+  if (reader->header->ddr_phys_addr == PIKA_SHARED_RING_PRU_ADDR)
+    return 0;
 
   if (published_ok && reader->header->ddr_phys_addr == PIKA_DDR_RING_PHYS &&
       reader->header->error_flags != 0xDEAD00DD) {
@@ -219,10 +233,11 @@ int shm_reader_publish_carveout_pa(shm_reader_t *reader) {
 }
 
 void shm_reader_cleanup(shm_reader_t *reader) {
-  if (reader->ddr_mmap_base && reader->ddr_mmap_base != MAP_FAILED) {
+  if (!reader->ring_in_shared_memory && reader->ddr_mmap_base &&
+      reader->ddr_mmap_base != MAP_FAILED) {
     munmap(reader->ddr_mmap_base, reader->ddr_size_bytes);
-    reader->ddr_mmap_base = NULL;
   }
+  reader->ddr_mmap_base = NULL;
   if (reader->mmap_base && reader->mmap_base != MAP_FAILED) {
     munmap(reader->mmap_base, PRU_SHM_SIZE);
     reader->mmap_base = NULL;

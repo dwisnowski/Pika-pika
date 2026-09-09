@@ -13,6 +13,7 @@ typedef struct {
   int mem_fd;
   void *mmap_base;     /* PRU Shared RAM (header) */
   void *ddr_mmap_base; /* DDR sample ring (mapped after PRU publishes PA) */
+  bool ring_in_shared_memory;
   uint32_t pru_shm_phys_addr;
   uint32_t ddr_phys_addr;
   uint32_t ddr_size_bytes;
