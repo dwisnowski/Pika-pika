@@ -413,6 +413,27 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   }
 
   if (desc->flags != BLOCK_FLAG_COMPLETE) {
+    static int scanned_for_complete_flags = 0;
+    if (!scanned_for_complete_flags) {
+      uint32_t found = 0;
+      volatile uint32_t *words =
+          (volatile uint32_t *)reader->ddr_mmap_base;
+      uint32_t word_count = reader->ddr_size_bytes / sizeof(uint32_t);
+      printf("[SHM Reader] Scanning DDR ring for completion flags...\n");
+      for (uint32_t word = 0; word < word_count && found < 16; word++) {
+        if (words[word] == BLOCK_FLAG_COMPLETE) {
+          uint32_t offset = word * sizeof(uint32_t);
+          printf("[SHM Reader] Complete flag at DDR offset=%u "
+                 "(block=%u, within_block=%u)\n",
+                 offset, offset / block_total_size,
+                 offset % block_total_size);
+          found++;
+        }
+      }
+      if (found == 0)
+        printf("[SHM Reader] No completion flags found in DDR ring\n");
+      scanned_for_complete_flags = 1;
+    }
     rejected_desc_count++;
     if (rejected_desc_count % 1000 == 0) {
       printf("[SHM Reader] Reject desc: ready_idx=%u bad flags=0x%08X "
