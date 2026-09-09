@@ -31,7 +31,8 @@ static inline void ccnt_accum(uint32_t *last_cycles, uint64_t *total_cycles) {
 }
 
 /* Avoid clpru runtime division helpers in the acquisition loop. */
-static uint32_t divide_u32(uint32_t numerator, uint32_t denominator) {
+#pragma FUNC_ALWAYS_INLINE(divide_u32)
+static inline uint32_t divide_u32(uint32_t numerator, uint32_t denominator) {
   uint32_t quotient = 0;
   uint32_t remainder = 0;
   int bit;
