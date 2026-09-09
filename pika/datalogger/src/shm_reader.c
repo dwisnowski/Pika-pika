@@ -240,7 +240,17 @@ int shm_pru_set_state(const char *state) {
     perror("open remoteproc state");
     return -1;
   }
-  write(fd, state, strlen(state));
+  size_t state_len = strlen(state);
+  ssize_t written = write(fd, state, state_len);
+  if (written != (ssize_t)state_len) {
+    if (written < 0)
+      perror("write remoteproc state");
+    else
+      fprintf(stderr, "short write to remoteproc state: %zd/%zu\n", written,
+              state_len);
+    close(fd);
+    return -1;
+  }
   close(fd);
   return 0;
 }

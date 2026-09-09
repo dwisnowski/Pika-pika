@@ -383,10 +383,13 @@ int main(int argc, char **argv) {
   }
 
   /*
-   * Invalidate the previous boot's handshake before starting remoteproc.
+   * Always stop an existing PRU instance before invalidating the previous
+   * boot's handshake. A running PRU only publishes SHM_MAGIC during startup.
    * Otherwise a fast host can mistake stale SHM_MAGIC for the new PRU boot,
    * publish the DDR address, and have PRU initialization erase it afterward.
    */
+  (void)shm_pru_set_state("stop");
+  usleep(100000);
   if (shm_reader.header) {
     shm_reader.header->magic = 0;
     __sync_synchronize();
