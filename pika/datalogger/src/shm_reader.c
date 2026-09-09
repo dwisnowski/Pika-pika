@@ -420,6 +420,21 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
            ready_idx, (uint32_t)desc->flags, (uint32_t)desc->num_samples,
            (unsigned long long)desc->timestamp_cycles,
            (uint32_t)desc->period_cycles);
+    block_descriptor_t physical_desc;
+    off_t physical_offset =
+        (off_t)reader->ddr_phys_addr + (ready_idx * block_total_size);
+    ssize_t physical_bytes =
+        pread(reader->mem_fd, &physical_desc, sizeof(physical_desc),
+              physical_offset);
+    if (physical_bytes == (ssize_t)sizeof(physical_desc)) {
+      printf("[SHM Reader] pread desc: ready_idx=%u flags=0x%08X "
+             "num_samples=%u timestamp_cycles=%llu period_cycles=%u\n",
+             ready_idx, physical_desc.flags, physical_desc.num_samples,
+             (unsigned long long)physical_desc.timestamp_cycles,
+             physical_desc.period_cycles);
+    } else {
+      perror("[SHM Reader] pread candidate descriptor");
+    }
   }
 
   if (desc->flags != BLOCK_FLAG_COMPLETE) {
