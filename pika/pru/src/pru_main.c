@@ -262,10 +262,19 @@ void main(void) {
             (uint32_t)(end_cycles - block_start_cycles);
         period = divide_u32(elapsed_cycles, block_size - 1);
       }
-      desc_words[4] = period;
-      desc_words[2] = smp_in_blk;
-      desc_words[3] = BLOCK_FLAG_COMPLETE;
       current_blk = shm->write_block_idx;
+      /*
+       * Recalculate the descriptor address at publication time. Keeping the
+       * earlier pointer live across ADC reads and the runtime pacing call lets
+       * clpru reuse a register whose value is no longer reliable here.
+       */
+      uint32_t final_block_offset =
+          multiply_u32(current_blk, block_total_size);
+      volatile uint32_t *final_desc_words =
+          (volatile uint32_t *)(ddr_phys + final_block_offset);
+      final_desc_words[4] = period;
+      final_desc_words[2] = smp_in_blk;
+      final_desc_words[3] = BLOCK_FLAG_COMPLETE;
       current_blk++;
       if (current_blk >= num_blocks)
         current_blk = 0;
