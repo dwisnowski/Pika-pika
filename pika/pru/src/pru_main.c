@@ -26,13 +26,15 @@
 #define STAGE_FIRST_CH0_DONE 0xD2000005u
 #define STAGE_FIRST_SAMPLE_DONE 0xD2000006u
 #define STAGE_FIRST_BLOCK_DONE 0xD2000007u
+#define STAGE_SAMPLE_PROGRESS_BASE 0xD2100000u
 
 /* Temporary isolation tests; enable only one hold point at a time. */
 #define DIAG_HOLD_AFTER_DDR_CLEAR 0
 #define DIAG_HOLD_AFTER_ADC_READY 0
 #define DIAG_HOLD_BEFORE_FIRST_READ 0
 #define DIAG_HOLD_AFTER_FIRST_CH0 0
-#define DIAG_HOLD_AFTER_FIRST_SAMPLE 1
+#define DIAG_HOLD_AFTER_FIRST_SAMPLE 0
+#define DIAG_HOLD_AFTER_FIRST_BLOCK 1
 
 /*
  * DDR is outside the PRU near address space. Build with --mem_model:data=far
@@ -157,6 +159,9 @@ void main(void) {
 
   while (1) {
     uint32_t period_target = shm->sample_period_cycles;
+
+    if (shm->sample_count == 0)
+      shm->error_flags = STAGE_SAMPLE_PROGRESS_BASE | smp_in_blk;
 
     if (smp_in_blk % 10 == 0) {
       shm->heartbeat++;
@@ -310,6 +315,13 @@ void main(void) {
       shm->sample_count += block_size;
       if (shm->sample_count == block_size) {
         shm->error_flags = STAGE_FIRST_BLOCK_DONE;
+#if DIAG_HOLD_AFTER_FIRST_BLOCK
+        while (1) {
+          shm->error_flags = STAGE_FIRST_BLOCK_DONE;
+          shm->heartbeat++;
+          __delay_cycles(20000000);
+        }
+#endif
         shm->error_flags = 0;
       }
     }
