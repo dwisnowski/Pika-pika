@@ -25,6 +25,9 @@
 #define STAGE_FIRST_READ 0xD2000004u
 #define STAGE_FIRST_BLOCK_DONE 0xD2000005u
 
+/* Temporary isolation test: prove SHM remains stable before ADC acquisition. */
+#define DIAG_HOLD_AFTER_DDR_CLEAR 1
+
 /*
  * DDR is outside the PRU near address space. Build with --mem_model:data=far
  * so absolute pointers (0x8xxxxxxx+) use full 32-bit addressing.
@@ -120,6 +123,14 @@ void main(void) {
     shm->error_flags = STAGE_DDR_CLEAR_DONE;
   }
   shm->heartbeat++;
+
+#if DIAG_HOLD_AFTER_DDR_CLEAR
+  while (1) {
+    shm->error_flags = STAGE_DDR_CLEAR_DONE;
+    shm->heartbeat++;
+    __delay_cycles(20000000);
+  }
+#endif
 
   uint32_t current_blk = 0;
   uint32_t smp_in_blk = 0;
