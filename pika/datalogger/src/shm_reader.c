@@ -379,8 +379,12 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
     printf("[SHM Reader] Overrun: pending=%u blocks (ring=%u) — skipping to "
            "latest\n",
            pending, num_blocks);
-    reader->last_completed_blocks = completed_blocks - num_blocks;
-    next_completed_blocks = reader->last_completed_blocks + 1;
+    /*
+     * Consume the newest completed block. Retrying the oldest retained block
+     * can livelock when the producer overwrites it before validation.
+     */
+    reader->last_completed_blocks = completed_blocks - 1;
+    next_completed_blocks = completed_blocks;
   }
 
   uint32_t ready_idx = (next_completed_blocks - 1) % num_blocks;

@@ -398,6 +398,20 @@ int main(int argc, char **argv) {
       fprintf(stderr, "[Main] Failed to publish DDR ring PA\n");
       return 1;
     }
+    /*
+     * Pace the PRU before it finishes DDR setup. Waiting until after the
+     * mapping delay lets it free-run long enough to overrun the ring.
+     */
+    for (int i = 0; i < 8; i++) {
+      shm_reader.header->ch_enable[i] = global_config.sensor.ch_enable[i];
+    }
+    shm_reader.header->sample_rate = global_config.nominal_rate_hz;
+    if (global_config.nominal_rate_hz > 0) {
+      shm_reader.header->sample_period_cycles =
+          200000000u / global_config.nominal_rate_hz;
+    } else {
+      shm_reader.header->sample_period_cycles = 0;
+    }
     usleep(200000); /* let PRU leave the wait loop and probe DDR */
     if (shm_reader_map_ddr(&shm_reader) != 0) {
       fprintf(stderr, "[Main] Failed to mmap DDR sample ring at 0x%08X\n",
