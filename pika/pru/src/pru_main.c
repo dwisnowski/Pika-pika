@@ -24,12 +24,6 @@ extern void delay_cycles_runtime(uint32_t iterations);
 
 static inline uint32_t ccnt_read(void) { return PRU_CCNT_REG; }
 
-static inline void ccnt_accum(uint32_t *last_cycles, uint64_t *total_cycles) {
-  uint32_t current = ccnt_read();
-  *total_cycles += (uint32_t)(current - *last_cycles);
-  *last_cycles = current;
-}
-
 /*
  * Fixed offsets avoid both clpru's hardware-MAC path and its unreliable
  * software-multiply loop state. The Shared RAM ring always has four
@@ -129,9 +123,6 @@ void main(void) {
   __R30 &= ~PIN_RESET;
   __delay_cycles(200000);
 
-  uint32_t last_cycles = ccnt_read();
-  uint64_t total_cycles = 0;
-
   while (1) {
     uint32_t period_target = shm->sample_period_cycles;
 
@@ -143,8 +134,6 @@ void main(void) {
       __delay_cycles(1000000);
       continue;
     }
-
-    ccnt_accum(&last_cycles, &total_cycles);
 
     uint32_t current_blk = shm->write_block_idx;
     uint32_t block_offset = shared_ring_block_offset(current_blk);
@@ -163,8 +152,8 @@ void main(void) {
      *   [5]    reserved
      */
     if (smp_in_blk == 0) {
-      desc_words[0] = (uint32_t)(total_cycles & 0xFFFFFFFFu);
-      desc_words[1] = (uint32_t)(total_cycles >> 32);
+      desc_words[0] = sample_start_ccnt;
+      desc_words[1] = 0;
       desc_words[2] = 0;
       desc_words[3] = 0;
       desc_words[4] = 0;
@@ -212,7 +201,6 @@ void main(void) {
         uint32_t remaining = period_target - elapsed;
         delay_cycles_runtime(remaining >> 1);
       }
-      ccnt_accum(&last_cycles, &total_cycles);
     }
 
     smp_in_blk++;

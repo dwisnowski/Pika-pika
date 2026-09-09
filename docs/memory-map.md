@@ -60,7 +60,7 @@ Each Shared RAM ring slot:
 
 ```c
 typedef struct {
-  uint64_t timestamp_cycles; /* first sample (accumulated PRU CCNT) */
+  uint64_t timestamp_cycles; /* raw CCNT from PRU; host extends wraps */
   uint32_t num_samples;
   uint32_t flags;            /* 0xAA55AA55 when complete */
   uint32_t period_cycles;    /* configured period for this block */
@@ -79,7 +79,8 @@ Default: `128` samples → `2072` bytes/block; four blocks consume 8288 bytes.
 ## Timestamps
 
 - **Authoritative time base:** PRU cycle counter (CCNT), 5 ns @ 200 MHz.
-- **Per block:** `timestamp_cycles` at post-BUSY / start of first sample readout; `period_cycles` on block close.
+- **Per block:** PRU publishes raw 32-bit CCNT in `timestamp_cycles`; Linux
+  extends wraps into a monotonic 64-bit cycle count before processing.
 - **Per sample (host):**  
   `t[i] = cycles_to_ns(timestamp_cycles + i × period_cycles)`  
   YAML `nominal_rate_hz` is pacing intent / fallback only.

@@ -107,7 +107,7 @@ Important fields:
 ### Block descriptor (24 bytes) + payload
 
 ```c
-timestamp_cycles  // u64, first sample of block (post-BUSY)
+timestamp_cycles  // u64 field carrying raw 32-bit CCNT from PRU
 num_samples       // u32
 flags             // u32, 0xAA55AA55 when complete
 period_cycles     // u32, configured period this block
@@ -115,7 +115,8 @@ reserved          // u32
 // then: num_samples × 8 × int16 interleaved
 ```
 
-Host sample time: `t[i] = cycles_to_ns(timestamp_cycles + i * period_cycles)`.  
+Linux extends CCNT wraps to 64 bits before applying
+`t[i] = cycles_to_ns(timestamp_cycles + i * period_cycles)`.
 YAML `nominal_rate_hz` is pacing intent / fallback only.
 
 ### Boot handshake (easy to get wrong)
@@ -137,7 +138,7 @@ Skipping step 3 looks like “PRU ignores config.”
 
 ## Timing and the hot loop
 
-- Stamp CCNT **after** successful `adc_trigger_and_wait()`, **before** channel reads, on `smp_in_blk == 0`.
+- Stamp raw CCNT before conversion on `smp_in_blk == 0`; Linux extends wraps.
 - On block close, publish the configured `period_cycles`.
 - Pacing: measure elapsed since sample start; `delay_cycles_runtime(remaining >> 1)` — the asm loop is ~2 cycles per iteration.
 - Accumulate 32-bit CCNT into `uint64_t` with wrap-safe subtract.

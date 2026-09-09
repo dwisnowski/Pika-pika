@@ -44,6 +44,9 @@ void *reader_thread_func(void *arg) {
   uint64_t blocks_pushed = 0;
   uint64_t null_polls = 0;
   uint32_t first_seen = 0;
+  uint32_t last_raw_ccnt = 0;
+  uint64_t ccnt_epoch = 0;
+  bool have_raw_ccnt = false;
   uint8_t temp_buf[MAX_BLOCK_COPY_SIZE];
 
   while (keep_running) {
@@ -57,14 +60,6 @@ void *reader_thread_func(void *arg) {
 
       drained++;
 
-      if (!first_seen) {
-        printf("[Reader] First valid block from PRU: num_samples=%u  "
-               "timestamp_cycles=%llu  period_cycles=%u  flags=0x%08X\n",
-               desc->num_samples, (unsigned long long)desc->timestamp_cycles,
-               desc->period_cycles, desc->flags);
-        first_seen = 1;
-      }
-
       size_t data_size = (size_t)desc->num_samples * CHANNELS * 2;
       size_t copy_size = BLOCK_DESCRIPTOR_SIZE + data_size;
       if (copy_size > sizeof(temp_buf)) {
@@ -75,6 +70,24 @@ void *reader_thread_func(void *arg) {
 
       memcpy(temp_buf, (const void *)desc, BLOCK_DESCRIPTOR_SIZE);
       memcpy(temp_buf + BLOCK_DESCRIPTOR_SIZE, data, data_size);
+      block_descriptor_t *copied_desc = (block_descriptor_t *)temp_buf;
+      uint32_t raw_ccnt = (uint32_t)copied_desc->timestamp_cycles;
+      if (have_raw_ccnt && raw_ccnt < last_raw_ccnt &&
+          last_raw_ccnt - raw_ccnt > 0x80000000u) {
+        ccnt_epoch += (1ULL << 32);
+      }
+      copied_desc->timestamp_cycles = ccnt_epoch + raw_ccnt;
+      last_raw_ccnt = raw_ccnt;
+      have_raw_ccnt = true;
+
+      if (!first_seen) {
+        printf("[Reader] First valid block from PRU: num_samples=%u  "
+               "timestamp_cycles=%llu  period_cycles=%u  flags=0x%08X\n",
+               copied_desc->num_samples,
+               (unsigned long long)copied_desc->timestamp_cycles,
+               copied_desc->period_cycles, copied_desc->flags);
+        first_seen = 1;
+      }
 
       if (!ring_buffer_push(&raw_block_rb, temp_buf)) {
         fprintf(stderr, "[Reader] Warning: Ring buffer overflow!\n");
