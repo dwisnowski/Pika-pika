@@ -30,6 +30,27 @@ static inline void ccnt_accum(uint32_t *last_cycles, uint64_t *total_cycles) {
   *last_cycles = current;
 }
 
+/* Avoid clpru runtime division helpers in the acquisition loop. */
+static uint32_t divide_u32(uint32_t numerator, uint32_t denominator) {
+  uint32_t quotient = 0;
+  uint32_t remainder = 0;
+  int bit;
+
+  if (denominator == 0)
+    return 0;
+
+  for (bit = 0; bit < 32; bit++) {
+    remainder = (remainder << 1) | (numerator >> 31);
+    numerator <<= 1;
+    quotient <<= 1;
+    if (remainder >= denominator) {
+      remainder -= denominator;
+      quotient |= 1;
+    }
+  }
+  return quotient;
+}
+
 void main(void) {
   /* Enable OCP master port — required before any DDR access */
   CT_CFG.SYSCFG_bit.STANDBY_INIT = 0;
@@ -106,6 +127,7 @@ void main(void) {
 
   uint32_t current_blk = 0;
   uint32_t smp_in_blk = 0;
+  uint32_t heartbeat_samples = 0;
   uint64_t block_start_cycles = 0;
   uint64_t block_end_cycles = 0;
 
@@ -124,8 +146,10 @@ void main(void) {
   while (1) {
     uint32_t period_target = shm->sample_period_cycles;
 
-    if (smp_in_blk % 10 == 0) {
+    heartbeat_samples++;
+    if (heartbeat_samples >= 10) {
       shm->heartbeat++;
+      heartbeat_samples = 0;
     }
 
     uint32_t sample_start_ccnt = ccnt_read();
@@ -225,7 +249,7 @@ void main(void) {
          */
         uint32_t elapsed_cycles =
             (uint32_t)(end_cycles - block_start_cycles);
-        period = elapsed_cycles / (block_size - 1);
+        period = divide_u32(elapsed_cycles, block_size - 1);
       }
       desc_words[4] = period;
       desc_words[2] = smp_in_blk;
