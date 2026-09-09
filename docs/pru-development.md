@@ -115,7 +115,8 @@ reserved          // u32
 // then: num_samples × 8 × int16 interleaved
 ```
 
-Linux extends CCNT wraps to 64 bits before applying
+Linux uses the first CCNT value as a seed, then advances each block by
+`num_samples * period_cycles` before applying
 `t[i] = cycles_to_ns(timestamp_cycles + i * period_cycles)`.
 YAML `nominal_rate_hz` is pacing intent / fallback only.
 
@@ -138,7 +139,8 @@ Skipping step 3 looks like “PRU ignores config.”
 
 ## Timing and the hot loop
 
-- Stamp raw CCNT before conversion on `smp_in_blk == 0`; Linux extends wraps.
+- Stamp raw CCNT before conversion on `smp_in_blk == 0`; Linux uses it only to
+  seed a deterministic paced timeline because CCNT saturates after ~21.47 s.
 - On block close, publish the configured `period_cycles`.
 - Pacing: measure elapsed since sample start; `delay_cycles_runtime(remaining >> 1)` — the asm loop is ~2 cycles per iteration.
 - Accumulate 32-bit CCNT into `uint64_t` with wrap-safe subtract.

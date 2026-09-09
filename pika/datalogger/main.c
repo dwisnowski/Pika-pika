@@ -44,9 +44,8 @@ void *reader_thread_func(void *arg) {
   uint64_t blocks_pushed = 0;
   uint64_t null_polls = 0;
   uint32_t first_seen = 0;
-  uint32_t last_raw_ccnt = 0;
-  uint64_t ccnt_epoch = 0;
-  bool have_raw_ccnt = false;
+  uint64_t next_block_cycles = 0;
+  bool have_block_time = false;
   uint8_t temp_buf[MAX_BLOCK_COPY_SIZE];
 
   while (keep_running) {
@@ -71,14 +70,13 @@ void *reader_thread_func(void *arg) {
       memcpy(temp_buf, (const void *)desc, BLOCK_DESCRIPTOR_SIZE);
       memcpy(temp_buf + BLOCK_DESCRIPTOR_SIZE, data, data_size);
       block_descriptor_t *copied_desc = (block_descriptor_t *)temp_buf;
-      uint32_t raw_ccnt = (uint32_t)copied_desc->timestamp_cycles;
-      if (have_raw_ccnt && raw_ccnt < last_raw_ccnt &&
-          last_raw_ccnt - raw_ccnt > 0x80000000u) {
-        ccnt_epoch += (1ULL << 32);
+      if (!have_block_time) {
+        next_block_cycles = copied_desc->timestamp_cycles;
+        have_block_time = true;
       }
-      copied_desc->timestamp_cycles = ccnt_epoch + raw_ccnt;
-      last_raw_ccnt = raw_ccnt;
-      have_raw_ccnt = true;
+      copied_desc->timestamp_cycles = next_block_cycles;
+      next_block_cycles +=
+          (uint64_t)copied_desc->num_samples * copied_desc->period_cycles;
 
       if (!first_seen) {
         printf("[Reader] First valid block from PRU: num_samples=%u  "
