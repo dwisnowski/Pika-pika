@@ -38,6 +38,7 @@ void decimator_init_iec(decimator_t *dec, uint32_t nominal_rate_hz,
     dec->output_rate_hz = 1;
 
   dec->samples_in_bucket = 0;
+  dec->valid_in_bucket = 0;
   dec->sum = 0.0;
   dec->sum_sq = 0.0;
   dec->min_mains = 0.0f;
@@ -86,36 +87,67 @@ int decimator_process(decimator_t *dec, int16_t sample,
   float v_ac = v_adc - dec->dc_ema;
   float v_mains = v_ac * dec->transformer_ratio;
 
+  /* Ignore ADC rail hits — rare glitches saturate int16 envelopes. */
+  const int near_rail = (sample <= -32000 || sample >= 32000);
+
   if (dec->samples_in_bucket == 0) {
-    dec->min_mains = v_mains;
-    dec->max_mains = v_mains;
+    dec->min_mains = 0.0f;
+    dec->max_mains = 0.0f;
     dec->sum = 0.0;
     dec->sum_sq = 0.0;
+    dec->valid_in_bucket = 0;
   }
 
-  if (v_mains < dec->min_mains)
-    dec->min_mains = v_mains;
-  if (v_mains > dec->max_mains)
-    dec->max_mains = v_mains;
-
-  dec->sum += (double)v_mains;
-  dec->sum_sq += (double)v_mains * (double)v_mains;
+  if (!near_rail) {
+    if (dec->valid_in_bucket == 0) {
+      dec->min_mains = v_mains;
+      dec->max_mains = v_mains;
+    } else {
+      if (v_mains < dec->min_mains)
+        dec->min_mains = v_mains;
+      if (v_mains > dec->max_mains)
+        dec->max_mains = v_mains;
+    }
+    dec->sum += (double)v_mains;
+    dec->sum_sq += (double)v_mains * (double)v_mains;
+    dec->valid_in_bucket++;
+  }
   dec->samples_in_bucket++;
 
   if (dec->samples_in_bucket < dec->samples_per_bucket)
     return 0;
 
-  double n = (double)dec->samples_in_bucket;
+  if (dec->valid_in_bucket == 0) {
+    out->vrms_centivolts = 0;
+    out->min_centivolts = 0;
+    out->max_centivolts = 0;
+    dec->samples_in_bucket = 0;
+    return 1;
+  }
+
+  double n = (double)dec->valid_in_bucket;
   double mean = dec->sum / n;
   double var = dec->sum_sq / n - mean * mean;
   if (var < 0.0)
     var = 0.0;
   float vrms = (float)sqrt(var);
 
-  /* Envelope relative to interval mean so residual DC/bias cannot saturate int16. */
+  /* Mean-centered envelope; cap absurd single-sample spikes for disk. */
+  float min_ac = dec->min_mains - (float)mean;
+  float max_ac = dec->max_mains - (float)mean;
+  float crest_cap = vrms * 2.2f;
+  if (crest_cap < 80.0f)
+    crest_cap = 80.0f;
+  if (crest_cap > 320.0f)
+    crest_cap = 320.0f;
+  if (min_ac < -crest_cap)
+    min_ac = -crest_cap;
+  if (max_ac > crest_cap)
+    max_ac = crest_cap;
+
   out->vrms_centivolts = clamp_centivolts(vrms);
-  out->min_centivolts = clamp_centivolts(dec->min_mains - (float)mean);
-  out->max_centivolts = clamp_centivolts(dec->max_mains - (float)mean);
+  out->min_centivolts = clamp_centivolts(min_ac);
+  out->max_centivolts = clamp_centivolts(max_ac);
 
   dec->samples_in_bucket = 0;
   return 1;

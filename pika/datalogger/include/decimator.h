@@ -36,6 +36,7 @@ typedef struct {
   float dc_ema;
   int dc_initialized;
   float ema_alpha;
+  uint32_t valid_in_bucket;
 } decimator_t;
 
 /**
