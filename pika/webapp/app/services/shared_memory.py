@@ -1,5 +1,6 @@
 import mmap
 import ctypes
+import math
 import os
 import time
 from typing import Optional
@@ -24,6 +25,9 @@ class SHMService:
         self.mm = None
         self.header: Optional[ScopeSHM] = None
         self.last_raw_range = None
+        self.last_adc_vrms = None
+        self.last_adc_vpp = None
+        self.last_adc_vref = float(config_service.get_adc_vref())
         self._calibration_scale = config_service.get_calibration_scale()
         self._calibration_updated_at = 0.0
 
@@ -116,14 +120,23 @@ class SHMService:
 
         if ch_raw:
             mean = sum(ch_raw) / len(ch_raw)
-            self.last_raw_range = (
-                int(min(ch_raw) - mean),
-                int(max(ch_raw) - mean),
-            )
+            ac = [r - mean for r in ch_raw]
+            self.last_raw_range = (int(min(ac)), int(max(ac)))
+
+            adc_vref = float(config_service.get_adc_vref())
+            full_scale = float(1 << (config_service.get_adc_bits() - 1))
+            adc_scale = adc_vref / full_scale
+            mean_sq = sum(x * x for x in ac) / len(ac)
+            self.last_adc_vref = adc_vref
+            self.last_adc_vrms = math.sqrt(mean_sq) * adc_scale
+            self.last_adc_vpp = (max(ac) - min(ac)) * adc_scale
+
             scale = self.get_calibration_scale()
-            return [round((r - mean) * scale, 2) for r in ch_raw]
+            return [round(x * scale, 2) for x in ac]
         else:
             self.last_raw_range = None
+            self.last_adc_vrms = None
+            self.last_adc_vpp = None
             return []
 
 # Global instance replaces the old PRU SHM service

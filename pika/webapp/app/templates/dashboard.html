@@ -66,6 +66,8 @@
         <div class="card-header">
             <span class="material-icons-outlined">insights</span>
             <h2 class="card-title">Live Stats</h2>
+            <button type="button" onclick="showZmptTrimPopover(event)" title="Trim ZMPT pot using live ADC Vrms"
+                style="margin-left: auto; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Trim ZMPT</button>
         </div>
         <div id="live-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
             <div>Avg: <strong id="stat-avg">--</strong></div>
@@ -111,6 +113,38 @@
                 Transformer Ratio: <strong id="stat-learned-transformer-ratio" style="color: var(--primary);">--</strong>
             </div>
         </div>
+    </div>
+
+    <!-- ZMPT pot trim popover (Live Stats) -->
+    <div id="zmpt-trim-popover"
+        style="display: none; position: fixed; z-index: 1000; width: 360px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); padding: 16px; pointer-events: auto;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div style="font-size: 14px; font-weight: 500; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px;">ZMPT pot trim</div>
+            <button type="button" onclick="hideZmptTrimPopover()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
+                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
+            </button>
+        </div>
+        <p style="font-size: 11px; opacity: 0.75; margin: 0 0 12px; line-height: 1.45;">
+            Live <b>ADC-input Vrms</b> (ZMPT → AD7606), not mains volts.
+            Target <b>1.0–1.2 VAC</b>. Turn the pot clockwise to raise, then fine-trim into the green band.
+            Stay well below AD7606 ±5&nbsp;V clipping. After trimming, restart the datalogger so auto-cal re-learns the ratio.
+        </p>
+        <div style="text-align: center; margin-bottom: 14px;">
+            <div style="font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.4px;">ADC Vrms</div>
+            <div id="zmpt-trim-vrms" style="font-size: 32px; font-weight: 600; color: var(--primary); line-height: 1.2; font-variant-numeric: tabular-nums;">--</div>
+            <div id="zmpt-trim-vpp" style="font-size: 11px; opacity: 0.65; margin-top: 2px;">P–P: --</div>
+        </div>
+        <div id="zmpt-tuner" style="position: relative; height: 56px; margin: 8px 0 4px;">
+            <div style="position: absolute; left: 0; right: 0; top: 22px; height: 12px; border-radius: 6px; overflow: hidden; background: linear-gradient(90deg, #f44336 0%, #ff9800 28%, #4caf50 40%, #4caf50 48%, #ff9800 55%, #f44336 100%); opacity: 0.85;"></div>
+            <div id="zmpt-tuner-band" title="1.0–1.2 V target"
+                style="position: absolute; top: 18px; height: 20px; border: 1px solid rgba(255,255,255,0.55); border-radius: 4px; background: rgba(76,175,80,0.25); pointer-events: none;"></div>
+            <div id="zmpt-tuner-needle"
+                style="position: absolute; top: 8px; width: 3px; height: 40px; margin-left: -1.5px; background: #fff; border-radius: 2px; box-shadow: 0 0 6px rgba(0,0,0,0.6); transition: left 0.08s linear;"></div>
+            <div style="position: absolute; left: 0; right: 0; top: 42px; display: flex; justify-content: space-between; font-size: 10px; opacity: 0.55;">
+                <span>0</span><span>1.0</span><span>1.2</span><span>2.5 V</span>
+            </div>
+        </div>
+        <div id="zmpt-trim-status" style="text-align: center; font-size: 14px; font-weight: 600; margin-top: 10px; color: #aaa;">Waiting for live data…</div>
     </div>
 
     <!-- Trend Chart -->
@@ -561,6 +595,10 @@
                     ? [data.raw_min, data.raw_max]
                     : null;
                 updateLiveStats(data.samples, rate, rawRange, null, true);
+
+                if (isZmptTrimPopoverOpen() && Number.isFinite(data.adc_vrms)) {
+                    updateZmptTrimTuner(data.adc_vrms, data.adc_vpp);
+                }
 
                 // Cache the latest high-res samples for the 5s FFT update
                 latestSamples = data.samples;
@@ -1169,6 +1207,81 @@
         top = Math.max(pad, Math.min(top, window.innerHeight - rect.height - pad));
         popover.style.left = left + 'px';
         popover.style.top = top + 'px';
+    }
+
+    const ZMPT_TRIM_LO = 1.0;
+    const ZMPT_TRIM_HI = 1.2;
+    const ZMPT_TUNER_MAX = 2.5;
+    const ZMPT_NEAR_CLIP = 2.5;
+
+    function isZmptTrimPopoverOpen() {
+        const popover = document.getElementById('zmpt-trim-popover');
+        return popover && popover.style.display === 'block';
+    }
+
+    function layoutZmptTunerBand() {
+        const band = document.getElementById('zmpt-tuner-band');
+        if (!band) return;
+        const leftPct = (ZMPT_TRIM_LO / ZMPT_TUNER_MAX) * 100;
+        const widthPct = ((ZMPT_TRIM_HI - ZMPT_TRIM_LO) / ZMPT_TUNER_MAX) * 100;
+        band.style.left = leftPct + '%';
+        band.style.width = widthPct + '%';
+    }
+
+    function showZmptTrimPopover(event) {
+        hideEventsHelp();
+        hideEventsSettings();
+        hideDeleteConfirm();
+        hideSampleRateSettings();
+        const popover = document.getElementById('zmpt-trim-popover');
+        layoutZmptTunerBand();
+        positionCardPopover(popover, event);
+        document.getElementById('zmpt-trim-status').innerText = 'Waiting for live data…';
+        document.getElementById('zmpt-trim-status').style.color = '#aaa';
+    }
+
+    function hideZmptTrimPopover() {
+        document.getElementById('zmpt-trim-popover').style.display = 'none';
+    }
+
+    function updateZmptTrimTuner(adcVrms, adcVpp) {
+        if (!Number.isFinite(adcVrms)) return;
+        const vrmsEl = document.getElementById('zmpt-trim-vrms');
+        const vppEl = document.getElementById('zmpt-trim-vpp');
+        const needle = document.getElementById('zmpt-tuner-needle');
+        const status = document.getElementById('zmpt-trim-status');
+        if (!vrmsEl || !needle || !status) return;
+
+        vrmsEl.innerText = adcVrms >= 0.1
+            ? adcVrms.toFixed(3) + ' V'
+            : (adcVrms * 1000).toFixed(2) + ' mV';
+        if (vppEl) {
+            vppEl.innerText = Number.isFinite(adcVpp)
+                ? ('P–P: ' + (adcVpp >= 0.1 ? adcVpp.toFixed(3) + ' V' : (adcVpp * 1000).toFixed(2) + ' mV'))
+                : 'P–P: --';
+        }
+
+        const pct = Math.max(0, Math.min(100, (adcVrms / ZMPT_TUNER_MAX) * 100));
+        needle.style.left = pct + '%';
+
+        let label = 'Too low';
+        let color = '#ff9800';
+        if (adcVrms >= ZMPT_NEAR_CLIP) {
+            label = 'Near clip — turn down';
+            color = '#f44336';
+        } else if (adcVrms > ZMPT_TRIM_HI) {
+            label = 'Too high';
+            color = '#ff9800';
+        } else if (adcVrms >= ZMPT_TRIM_LO) {
+            label = 'Just right';
+            color = '#4caf50';
+        } else if (adcVrms < 0.05) {
+            label = 'Too low — turn pot CW';
+            color = '#f44336';
+        }
+        status.innerText = label;
+        status.style.color = color;
+        vrmsEl.style.color = color;
     }
 
     async function showEventsHelp(event) {

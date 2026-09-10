@@ -511,6 +511,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     if shm.last_raw_range:
                         payload["raw_min"] = shm.last_raw_range[0]
                         payload["raw_max"] = shm.last_raw_range[1]
+                    if shm.last_adc_vrms is not None:
+                        payload["adc_vrms"] = round(shm.last_adc_vrms, 6)
+                        payload["adc_vref"] = shm.last_adc_vref
+                        if shm.last_adc_vpp is not None:
+                            payload["adc_vpp"] = round(shm.last_adc_vpp, 6)
             
             now = time.monotonic()
             if now - last_health_sent >= 2.0:
