@@ -148,7 +148,7 @@ class ConfigService:
 
     def get_history_max_points(self) -> int:
         """Get maximum number of decimated points to load for trend chart"""
-        return self.config.get('webapp', {}).get('history_max_points', 6000)
+        return self.config.get('webapp', {}).get('history_max_points', 20000)
 
     def get_nominal_rate_hz(self) -> int:
         """Get ADC nominal sample rate from shared config."""

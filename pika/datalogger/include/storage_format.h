@@ -7,6 +7,14 @@
 #define EVENT_INDEX_FORMAT_VERSION 3
 
 /**
+ * Decimated chunk payload versions (values_per_sample):
+ *   v1 (legacy): 2 × int16 — waveform min, max (ADC counts)
+ *   v2 (IEC):    3 × int16 — vrms_centivolts, min_centivolts, max_centivolts
+ */
+#define DECIMATED_VPS_LEGACY_MINMAX 2U
+#define DECIMATED_VPS_IEC_VRMS 3U
+
+/**
  * Decimated Data Chunk Header
  */
 typedef struct {

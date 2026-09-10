@@ -10,6 +10,7 @@
 #include "anomaly_detector.h"
 #include "decimator.h"
 #include "event_window.h"
+#include "vrms_rollup.h"
 #include "logger_config.h"
 #include "ring_buffer.h"
 #include "scope_buffer.h"
@@ -172,12 +173,27 @@ void *processor_thread_func(void *arg) {
   }
 
   decimator_t dec;
-  uint32_t decimated_output_rate_hz =
-      global_config.storage.decimation.target_output_rate_hz;
+  uint32_t ac_freq_hz = global_config.detection.ac_freq_hz;
+  if (ac_freq_hz == 0)
+    ac_freq_hz = 60;
+  uint32_t iec_cycles = (ac_freq_hz == 50) ? DECIMATOR_IEC_CYCLES_50HZ
+                                           : DECIMATOR_IEC_CYCLES_60HZ;
+  uint32_t decimated_output_rate_hz = ac_freq_hz / iec_cycles;
   if (decimated_output_rate_hz == 0)
-    decimated_output_rate_hz = 50;
-  /* When acquisition is slower than the configured output rate, emit one
-   * decimated sample per ADC sample so file metadata stays truthful. */
+    decimated_output_rate_hz = 5;
+
+  /* Prefer IEC 12/10-cycle rate; allow YAML override only when it matches
+   * acquisition constraints (cannot exceed sample rate). */
+  if (global_config.storage.decimation.target_output_rate_hz > 0 &&
+      global_config.storage.decimation.target_output_rate_hz <=
+          global_config.nominal_rate_hz &&
+      global_config.storage.decimation.target_output_rate_hz !=
+          decimated_output_rate_hz) {
+    printf("[Processor] YAML target_output_rate_hz=%u ignored in favor of "
+           "IEC %u-cycle rate %u Hz\n",
+           global_config.storage.decimation.target_output_rate_hz, iec_cycles,
+           decimated_output_rate_hz);
+  }
   if (global_config.nominal_rate_hz > 0 &&
       decimated_output_rate_hz > global_config.nominal_rate_hz) {
     printf("[Processor] Clamping decimated output %u Hz -> acquisition %u Hz\n",
@@ -185,7 +201,15 @@ void *processor_thread_func(void *arg) {
     decimated_output_rate_hz = global_config.nominal_rate_hz;
   }
 
-  decimator_init(&dec, global_config.nominal_rate_hz, decimated_output_rate_hz);
+  decimator_init_iec(&dec, global_config.nominal_rate_hz, ac_freq_hz,
+                     iec_cycles);
+  decimator_set_calibration(&dec, global_config.sensor.adc_vref,
+                            global_config.sensor.adc_bits,
+                            global_config.sensor.transformer_ratio);
+  decimated_output_rate_hz = dec.output_rate_hz;
+
+  vrms_rollup_t rollup;
+  vrms_rollup_init(&rollup, "data", 600);
 
   time_sync_t t_sync;
   time_sync_init(&t_sync, 0, 200000000U);
@@ -203,6 +227,7 @@ void *processor_thread_func(void *arg) {
   int16_t decimated_samples[128 * 8];
   uint32_t decimated_count = 0;
   uint64_t decimated_chunk_start_ns = 0;
+  const uint32_t decimated_vps = DECIMATED_VPS_IEC_VRMS;
 
   uint32_t pru_clock_hz = 200000000U;
   if (shm_reader.header && shm_reader.header->pru_clock_hz) {
@@ -300,16 +325,24 @@ void *processor_thread_func(void *arg) {
         if (dec.samples_in_bucket == 0)
           current_bucket_start_ns = sample_time_ns;
 
-        if (decimator_process(&dec, ch0_sample)) {
+        /* Keep decimator scale in sync with live auto-calibration. */
+        if (ad.sensor.transformer_ratio > 0.0f)
+          decimator_set_calibration(&dec, ad.sensor.adc_vref, ad.sensor.adc_bits,
+                                    ad.sensor.transformer_ratio);
+
+        decimated_interval_t interval;
+        if (decimator_process(&dec, ch0_sample, &interval)) {
           if (decimated_count == 0)
             decimated_chunk_start_ns = current_bucket_start_ns;
 
-          decimated_samples[decimated_count * 2] = dec.min_val;
-          decimated_samples[decimated_count * 2 + 1] = dec.max_val;
+          uint32_t base = decimated_count * decimated_vps;
+          decimated_samples[base + 0] = interval.vrms_centivolts;
+          decimated_samples[base + 1] = interval.min_centivolts;
+          decimated_samples[base + 2] = interval.max_centivolts;
           decimated_count++;
 
-          dec.min_val = INT16_MAX;
-          dec.max_val = INT16_MIN;
+          vrms_rollup_add(&rollup, interval.vrms_centivolts / 100.0f,
+                          current_bucket_start_ns);
 
           if (decimated_count >= 10) {
             decimated_chunk_header_t header = {
@@ -317,7 +350,7 @@ void *processor_thread_func(void *arg) {
                 .sample_rate = decimated_output_rate_hz,
                 .sample_count = decimated_count,
                 .channels = 1,
-                .values_per_sample = 2};
+                .values_per_sample = decimated_vps};
 
             writer_write_decimated(&disk_writer, &header, decimated_samples);
             decimated_count = 0;
@@ -340,10 +373,12 @@ void *processor_thread_func(void *arg) {
         .sample_rate = decimated_output_rate_hz,
         .sample_count = decimated_count,
         .channels = 1,
-        .values_per_sample = 2};
+        .values_per_sample = decimated_vps};
 
     writer_write_decimated(&disk_writer, &header, decimated_samples);
   }
+
+  vrms_rollup_flush(&rollup, get_realtime_ns());
 
   printf("[Processor] Stopped\n");
   free(ch0_scratch);

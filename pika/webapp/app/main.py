@@ -254,6 +254,13 @@ async def get_history_api():
     max_points = config_service.get_history_max_points()
     return history_service.get_decimated_data(max_points=max_points)
 
+
+@app.get("/api/v1/history/rollup-10min")
+async def get_history_rollup_api():
+    """Best-effort 10-minute Vrms min/avg/max for ANSI C84.1 context."""
+    from app.services.history_service import history_service
+    return {"rollup_10min": history_service.get_vrms_10min_rollup(limit=144)}
+
 @app.get("/api/v1/history/debug")
 async def get_history_debug():
     """Debug endpoint: returns raw samples without calibration"""

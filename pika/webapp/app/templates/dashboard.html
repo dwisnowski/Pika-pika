@@ -112,7 +112,7 @@
     <div class="card grid-wide card-trend">
         <div class="card-header">
             <span class="material-icons-outlined">show_chart</span>
-            <h2 class="card-title">Line Voltage Trend (Decimated)</h2>
+            <h2 class="card-title">Supply Voltage Trend (IEC Vrms)</h2>
             <button onclick="resetZoom()"
                 style="margin-left: auto; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Reset
                 Zoom</button>
@@ -795,8 +795,8 @@
                 console.log('[Dashboard] Trend data received:', {
                     samples_count: trendData.samples ? trendData.samples.length : 0,
                     rate: trendData.rate,
-                    raw_samples_count: trendData.samples_raw ? trendData.samples_raw.length : 0,
-                    first_5_samples: trendData.samples ? trendData.samples.slice(0, 5) : []
+                    format: trendData.format,
+                    rollup: trendData.rollup_10min ? trendData.rollup_10min.length : 0,
                 });
                 const stats = updateLiveStats(
                     trendData.samples,
@@ -806,9 +806,15 @@
                     false
                 );
                 if (stats) {
-                    console.log('[Dashboard] Stats calculated, rendering trend chart');
                     try {
-                        renderTrend(trendData.samples, stats, trendData.timestamps);
+                        renderTrend(
+                            trendData.samples,
+                            stats,
+                            trendData.timestamps,
+                            trendData.samples_min,
+                            trendData.samples_max,
+                            trendData.rollup_10min
+                        );
                     } catch (error) {
                         console.error('Failed to render trend chart:', error);
                     }
@@ -901,90 +907,100 @@
     }
 
     let trendChart = null;
-    function renderTrend(samples, stats, timestamps) {
-        console.log('[renderTrend] Called with:', {
-            samples_length: samples ? samples.length : 0,
-            stats: stats,
-            first_5_samples: samples ? samples.slice(0, 5) : []
-        });
-        
+    function renderTrend(samples, stats, timestamps, samplesMin, samplesMax, rollup10min) {
         const ctx = document.getElementById('trendChart').getContext('2d');
 
-        // If chart exists, just update data instead of destroying to preserve zoom state
         if (trendChart) {
-            console.log('[renderTrend] Updating existing chart with', samples.length, 'samples');
             try {
-                // Destroy and recreate to ensure proper update
                 trendChart.destroy();
-                trendChart = null;
-                console.log('[renderTrend] Chart destroyed, recreating...');
             } catch (e) {
                 console.error('[renderTrend] Error destroying chart:', e);
-                trendChart = null;
             }
+            trendChart = null;
         }
 
         if (!samples || samples.length === 0) {
-            console.warn('[renderTrend] No samples provided, skipping chart creation');
             return;
         }
-
-        console.log('[renderTrend] Creating new chart with', samples.length, 'samples');
 
         const hasTimestamps = timestamps && timestamps.length === samples.length;
         const points = hasTimestamps
             ? samples.map((y, i) => ({ x: timestamps[i] / 1e6, y }))
             : samples.map((y, i) => ({ x: i, y }));
-        const rmsPoints = points.map(point => ({ x: point.x, y: stats.rms }));
-        const avgPoints = points.map(point => ({ x: point.x, y: stats.avg }));
+        const hasEnvelope = samplesMin && samplesMax &&
+            samplesMin.length === samples.length && samplesMax.length === samples.length;
+        const maxPts = hasEnvelope
+            ? (hasTimestamps
+                ? samplesMax.map((y, i) => ({ x: timestamps[i] / 1e6, y }))
+                : samplesMax.map((y, i) => ({ x: i, y })))
+            : [];
+        const minPts = hasEnvelope
+            ? (hasTimestamps
+                ? samplesMin.map((y, i) => ({ x: timestamps[i] / 1e6, y }))
+                : samplesMin.map((y, i) => ({ x: i, y })))
+            : [];
+
+        const meanVrms = samples.reduce((a, b) => a + b, 0) / samples.length;
+        const meanPts = points.map(p => ({ x: p.x, y: meanVrms }));
+
+        const datasets = [];
+        if (hasEnvelope) {
+            datasets.push({
+                label: 'Peak max',
+                data: maxPts,
+                borderColor: 'rgba(255, 214, 0, 0.35)',
+                borderWidth: 1,
+                pointRadius: 0,
+                fill: '+1',
+                backgroundColor: 'rgba(255, 214, 0, 0.08)',
+                tension: 0,
+                order: 20,
+            });
+            datasets.push({
+                label: 'Peak min',
+                data: minPts,
+                borderColor: 'rgba(255, 214, 0, 0.35)',
+                borderWidth: 1,
+                pointRadius: 0,
+                fill: false,
+                tension: 0,
+                order: 19,
+            });
+        }
+        datasets.push({
+            label: 'Vrms (IEC interval)',
+            data: points,
+            borderColor: '#FFD600',
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: false,
+            tension: 0,
+            order: 10,
+        });
+        datasets.push({
+            label: 'Window avg Vrms',
+            data: meanPts,
+            borderColor: '#00BCD4',
+            borderWidth: 1,
+            borderDash: [5, 5],
+            pointRadius: 0,
+            fill: false,
+            order: 5,
+        });
 
         trendChart = new Chart(ctx, {
             type: 'line',
-            data: {
-                datasets: [
-                    {
-                        label: 'Line Voltage (VAC)',
-                        data: points,
-                        borderColor: '#FFD600',
-                        borderWidth: 1.5,
-                        pointRadius: 0,
-                        fill: true,
-                        backgroundColor: 'rgba(255, 214, 0, 0.1)',
-                        tension: 0,  /* No tension for min/max bucketed data - show exact values */
-                        order: 10
-                    },
-                    {
-                        label: 'RMS',
-                        data: rmsPoints,
-                        borderColor: '#00BCD4',
-                        borderWidth: 1,
-                        borderDash: [5, 5],
-                        pointRadius: 0,
-                        fill: false,
-                        order: 5
-                    },
-                    {
-                        label: 'Avg',
-                        data: avgPoints,
-                        borderColor: '#E91E63',
-                        borderWidth: 1,
-                        borderDash: [2, 4, 10, 4],
-                        pointRadius: 0,
-                        fill: false,
-                        order: 5
-                    }
-                ]
-            },
+            data: { datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: false,
                 plugins: {
-                    legend: { display: false },
+                    legend: { display: true, labels: { color: '#aaa', boxWidth: 12, font: { size: 10 } } },
                     decimation: {
                         enabled: true,
-                        algorithm: 'lttb',  /* Largest-Triangle-Three-Buckets algorithm */
-                        samples: 150  /* Target number of points to display */
+                        algorithm: 'lttb',
+                        samples: 400
                     },
                     zoom: {
                         zoom: {
@@ -1004,46 +1020,38 @@
                                 const value = typeof context.raw === 'object'
                                     ? context.raw.y
                                     : context.raw;
-                                if (context.dataset.label === 'Line Voltage (VAC)') {
-                                    return `${value !== null ? value.toFixed(2) : 'N/A'} VAC`;
-                                }
-                                return `${context.dataset.label}: ${value !== null ? value.toFixed(1) : 'N/A'} VAC`;
+                                return `${context.dataset.label}: ${value !== null ? value.toFixed(2) : 'N/A'} V`;
                             }
                         }
                     }
                 },
                 scales: {
                     x: {
-                        // A linear millisecond axis avoids requiring a separate
-                        // Chart.js date adapter on the offline BBB dashboard.
                         type: 'linear',
-                        display: hasTimestamps,
                         grid: { color: 'rgba(255,255,255,0.05)' },
                         ticks: {
                             color: '#888',
-                            font: { size: 10 },
                             maxTicksLimit: 8,
-                            callback: value => hasTimestamps
-                                ? new Date(value).toLocaleTimeString()
-                                : value
-                        }
+                            callback: (v) => {
+                                try { return new Date(v).toLocaleTimeString(); }
+                                catch (e) { return v; }
+                            }
+                        },
+                        title: { display: true, text: 'Time', color: '#888', font: { size: 10 } }
                     },
                     y: {
-                        grid: { color: 'rgba(255,255,255,0.05)' },
-                        ticks: {
-                            color: '#888',
-                            font: { size: 10 }
-                        },
-                        title: {
-                            display: true,
-                            text: 'Voltage (VAC)',
-                            color: '#888',
-                            font: { size: 11 }
-                        }
+                        grid: { color: 'rgba(255,255,255,0.08)' },
+                        ticks: { color: '#888' },
+                        title: { display: true, text: 'Volts RMS', color: '#888', font: { size: 10 } }
                     }
                 }
             }
         });
+
+        if (rollup10min && rollup10min.length) {
+            const last = rollup10min[rollup10min.length - 1];
+            console.log('[renderTrend] Latest 10-min Vrms rollup', last);
+        }
     }
 
     function resetZoom() {

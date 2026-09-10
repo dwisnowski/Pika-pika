@@ -95,7 +95,8 @@ def validate_decimated(path: str, verbose: bool = False) -> bool:
             if rate == 0 or rate > 10_000_000:
                 failures.append(f"Chunk {chunk_idx}: implausible sample_rate {rate}")
             elif rate > 500 and verbose:
-                print(f"  [{WARN}] Chunk {chunk_idx}: sample_rate {rate} Hz (expected decimated ~50 Hz)")
+                print(f"  [{WARN}] Chunk {chunk_idx}: sample_rate {rate} Hz "
+                      f"(expected IEC trend ~5 Hz or legacy ~50 Hz)")
             if ts < EPOCH_MIN_NS or ts > EPOCH_MAX_NS:
                 failures.append(f"Chunk {chunk_idx}: start_time_ns {ts} outside plausible Unix epoch range")
             if count == 0 or count > 100_000:
@@ -170,20 +171,36 @@ def validate_decimated(path: str, verbose: bool = False) -> bool:
         else:
             print(f"  [{WARN}] {delta_violations}/{len(deltas)} inter-chunk deltas outside ±{int(DELTA_TOLERANCE*100)}% tolerance")
 
-    # min ≤ max check (only when values_per_sample == 2)
+    # Envelope integrity: legacy vps==2 is [min,max]; IEC vps==3 is [vrms,min,max]
     minmax_errors = 0
+    checked = 0
     for ch in chunks:
-        if ch["vps"] != 2:
-            continue
-        n = ch["count"] * ch["channels"]
-        vals = struct.unpack_from(f"<{n * 2}h", ch["data"])
-        for j in range(0, len(vals), 2):
-            mn, mx = vals[j], vals[j + 1]
-            if mn > mx:
-                minmax_errors += 1
-                if verbose:
-                    print(f"  [{WARN}] Chunk {ch['idx']}, pair {j//2}: min {mn} > max {mx}")
-    if minmax_errors == 0:
+        if ch["vps"] == 2:
+            n = ch["count"] * ch["channels"]
+            vals = struct.unpack_from(f"<{n * 2}h", ch["data"])
+            for j in range(0, len(vals), 2):
+                checked += 1
+                mn, mx = vals[j], vals[j + 1]
+                if mn > mx:
+                    minmax_errors += 1
+                    if verbose:
+                        print(f"  [{WARN}] Chunk {ch['idx']}, pair {j // 2}: min {mn} > max {mx}")
+        elif ch["vps"] == 3:
+            n = ch["count"] * ch["channels"]
+            vals = struct.unpack_from(f"<{n * 3}h", ch["data"])
+            for j in range(0, len(vals), 3):
+                checked += 1
+                mn, mx = vals[j + 1], vals[j + 2]
+                if mn > mx:
+                    minmax_errors += 1
+                    if verbose:
+                        print(
+                            f"  [{WARN}] Chunk {ch['idx']}, sample {j // 3}: "
+                            f"envelope min {mn} > max {mx}"
+                        )
+    if checked == 0:
+        print(f"  [{WARN}] No min/max envelope checks (unsupported vps)")
+    elif minmax_errors == 0:
         print(f"  [{PASS}] All min ≤ max (min/max integrity ok)")
     else:
         failures.append(f"{minmax_errors} min > max violations in decimated data")

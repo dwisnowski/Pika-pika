@@ -8,7 +8,8 @@ sampling:
 # Storage Configuration
 storage:
   decimation:
-    target_output_rate_hz: 50  # Target decimated output rate (samples/sec) - 50 Hz gives ~1200 samples/min
+    target_output_rate_hz: 5   # IEC 61000-4-30 base ≈ 12 cycles @ 60 Hz (informational;
+                               # datalogger derives rate from detection.ac_freq_hz)
     max_mb: 20                 # Rotate decimated.bin when it exceeds this
   events:
     pre_sec: 0.5              # Seconds of data before event
@@ -88,4 +89,4 @@ logging:
 
 # Webapp Configuration
 webapp:
-  history_max_points: 1000    # Maximum number of decimated points to load for trend chart
+  history_max_points: 20000   # ~1.1 h of 5 Hz IEC Vrms intervals on the trend chart
