@@ -15,9 +15,27 @@
             <h2 class="card-title">System Health</h2>
         </div>
         <div id="health-info">
-            <p><span class="status-dot"></span> PRU: <strong id="pru-status">Connecting...</strong></p>
-            <p><span class="status-dot"></span> Datalogger: <strong id="datalogger-status">Connecting...</strong></p>
-            <p><span class="status-dot"></span> Webserver: <strong id="webserver-status">Connecting...</strong></p>
+            <p style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <span class="status-dot"></span> PRU: <strong id="pru-status">Connecting...</strong>
+                <button type="button" onclick="restartSystemComponent('pru')" title="Reload PRU firmware"
+                    style="background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 2px 4px; display: inline-flex; align-items: center; line-height: 1;">
+                    <span class="material-icons-outlined" style="font-size: 16px;">restart_alt</span>
+                </button>
+            </p>
+            <p style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <span class="status-dot"></span> Datalogger: <strong id="datalogger-status">Connecting...</strong>
+                <button type="button" onclick="restartSystemComponent('datalogger')" title="Restart datalogger"
+                    style="background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 2px 4px; display: inline-flex; align-items: center; line-height: 1;">
+                    <span class="material-icons-outlined" style="font-size: 16px;">restart_alt</span>
+                </button>
+            </p>
+            <p style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <span class="status-dot"></span> Webserver: <strong id="webserver-status">Connecting...</strong>
+                <button type="button" onclick="restartSystemComponent('webserver')" title="Restart webserver (full stack)"
+                    style="background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 2px 4px; display: inline-flex; align-items: center; line-height: 1;">
+                    <span class="material-icons-outlined" style="font-size: 16px;">restart_alt</span>
+                </button>
+            </p>
             <p style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 Configured Rate: <strong id="pru-samplerate">--</strong>
                 <button type="button" onclick="showSampleRateSettings(event)" title="Change sample rate"
@@ -28,6 +46,7 @@
             <p>Actual Rate: <strong id="pru-actual-samplerate">--</strong></p>
             <p style="margin-top: 12px;">Uptime: <strong id="uptime">--</strong></p>
             <p>Storage: <strong id="storage">Stable</strong></p>
+            <p id="system-restart-status" style="font-size: 11px; min-height: 14px; color: #888; margin: 4px 0 0;"></p>
         </div>
     </div>
     <!-- Sample-rate settings popover (System Health) -->
@@ -522,6 +541,49 @@
         }
         if (health.learned_transformer_ratio) {
             document.getElementById('stat-learned-transformer-ratio').innerText = health.learned_transformer_ratio.toFixed(2);
+        }
+    }
+
+    async function restartSystemComponent(component) {
+        const labels = {
+            pru: 'PRU firmware',
+            datalogger: 'datalogger',
+            webserver: 'webserver (full stack)',
+        };
+        const label = labels[component] || component;
+        const disconnects = component === 'webserver' || component === 'all';
+        const msg = disconnects
+            ? `Restart ${label}? The page will disconnect briefly while the stack comes back.`
+            : `Restart ${label}?`;
+        if (!confirm(msg)) return;
+
+        const status = document.getElementById('system-restart-status');
+        if (status) {
+            status.style.color = '#FFC107';
+            status.innerText = `Restarting ${label}…`;
+        }
+        try {
+            const res = await fetch('/api/v1/system/restart', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ component }),
+            });
+            const data = await res.json();
+            if (!data.success) {
+                throw new Error(data.error || 'Restart failed');
+            }
+            if (status) {
+                status.style.color = '#4CAF50';
+                status.innerText = data.note || `Restarting ${label}`;
+            }
+            if (disconnects) {
+                startWebserverHealthCheck();
+            }
+        } catch (e) {
+            if (status) {
+                status.style.color = '#F44336';
+                status.innerText = e.message || String(e);
+            }
         }
     }
 

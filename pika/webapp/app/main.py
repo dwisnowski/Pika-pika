@@ -121,17 +121,61 @@ def _persist_anomalies_config(config_path: Path, values: dict) -> None:
 
 async def _restart_acquisition_service():
     """Restart PRU+datalogger+webapp after the HTTP response has flushed."""
-    await asyncio.sleep(1.5)
+    await _restart_system_component("all")
+
+
+def _pika_root() -> Path:
+    """Return the `pika/` directory (parent of webapp/)."""
+    return Path(__file__).resolve().parents[2]
+
+
+async def _restart_system_component(component: str):
+    """Restart one runtime piece. `webserver`/`all` bounce the systemd unit."""
+    await asyncio.sleep(1.0)
+    root = _pika_root()
     try:
-        subprocess.Popen(
-            ["sudo", "-n", "systemctl", "restart", "pika-run-all.service"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        logger.info("Scheduled restart of pika-run-all.service for sample-rate change")
+        if component == "pru":
+            subprocess.Popen(
+                ["sudo", "-n", "make", "-C", str(root / "pru"), "load"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            logger.info("Scheduled PRU firmware reload")
+        elif component == "datalogger":
+            dl_bin = root / "datalogger" / "bin" / "datalogger"
+            subprocess.run(
+                ["sudo", "-n", "pkill", "-x", "datalogger"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            await asyncio.sleep(0.8)
+            if not dl_bin.is_file():
+                logger.error("Datalogger binary missing: %s", dl_bin)
+                return
+            subprocess.Popen(
+                ["sudo", "-n", str(dl_bin)],
+                cwd=str(root / "datalogger"),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            logger.info("Scheduled datalogger process restart")
+        elif component in ("webserver", "all"):
+            subprocess.Popen(
+                ["sudo", "-n", "systemctl", "restart", "pika-run-all.service"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            logger.info(
+                "Scheduled restart of pika-run-all.service (%s)", component
+            )
+        else:
+            logger.error("Unknown restart component: %s", component)
     except Exception as e:
-        logger.error(f"Failed to schedule acquisition restart: {e}")
+        logger.error("Failed to schedule %s restart: %s", component, e)
 
 
 def get_health_snapshot():
@@ -245,6 +289,38 @@ async def get_events_view(request: Request):
 @app.get("/health")
 async def health():
     return get_health_snapshot()
+
+
+@app.post("/api/v1/system/restart")
+async def restart_system_component(request: Request):
+    """Restart PRU, datalogger, or the full stack (webserver/all)."""
+    try:
+        body = await request.json()
+        component = str(body.get("component", "")).strip().lower()
+        allowed = {"pru", "datalogger", "webserver", "all"}
+        if component not in allowed:
+            return {
+                "success": False,
+                "error": f"component must be one of: {', '.join(sorted(allowed))}",
+            }
+
+        asyncio.create_task(_restart_system_component(component))
+
+        notes = {
+            "pru": "Reloading PRU firmware",
+            "datalogger": "Restarting datalogger process",
+            "webserver": "Restarting pika-run-all (brief UI disconnect)",
+            "all": "Restarting pika-run-all (brief UI disconnect)",
+        }
+        return {
+            "success": True,
+            "component": component,
+            "restarting": True,
+            "note": notes[component],
+        }
+    except Exception as e:
+        logger.exception("Failed to schedule system restart")
+        return {"success": False, "error": str(e)}
 
 # --- REST APIs ---
 
