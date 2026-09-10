@@ -112,9 +112,10 @@ int decimator_process(decimator_t *dec, int16_t sample,
     var = 0.0;
   float vrms = (float)sqrt(var);
 
+  /* Envelope relative to interval mean so residual DC/bias cannot saturate int16. */
   out->vrms_centivolts = clamp_centivolts(vrms);
-  out->min_centivolts = clamp_centivolts(dec->min_mains);
-  out->max_centivolts = clamp_centivolts(dec->max_mains);
+  out->min_centivolts = clamp_centivolts(dec->min_mains - (float)mean);
+  out->max_centivolts = clamp_centivolts(dec->max_mains - (float)mean);
 
   dec->samples_in_bucket = 0;
   return 1;
