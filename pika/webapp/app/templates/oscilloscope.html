@@ -109,6 +109,7 @@
             <div class="measure-overlay" id="measurements">
                 Vpp: -- V<br>
                 Vrms: -- V<br>
+                ADC: -- V<br>
                 Freq: -- Hz
             </div>
 
@@ -642,9 +643,18 @@
         let totalTime = data.time_window;
         let freq = crossings / totalTime;
 
+        // Raw ADC-input Vrms (ZMPT → AD7606), not mains-scaled
+        let adcStr = '-- V';
+        if (Number.isFinite(data.adc_vrms)) {
+            adcStr = data.adc_vrms >= 0.1
+                ? data.adc_vrms.toFixed(3) + ' V'
+                : (data.adc_vrms * 1000).toFixed(2) + ' mV';
+        }
+
         document.getElementById('measurements').innerHTML = `
             Vpp: ${vpp.toFixed(1)} V<br>
             Vrms: ${vrms.toFixed(1)} V<br>
+            ADC: ${adcStr}<br>
             Freq: ${freq > 0 ? freq.toFixed(1) : '--'} Hz
         `;
 
