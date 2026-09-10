@@ -72,20 +72,20 @@
             <div>RMS: <strong id="stat-rms">--</strong></div>
             <div style="display: flex; flex-direction: column; gap: 4px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <div style="flex: 1;">Min: <strong id="stat-min">--</strong></div>
+                    <div style="flex: 1;">Peak−: <strong id="stat-min">--</strong></div>
                 </div>
                 <div style="width: 100%; height: 24px; background: rgba(33, 150, 243, 0.1); border: 1px solid #2196F3; border-radius: 4px; position: relative; overflow: hidden; cursor: pointer;" 
-                     id="stat-min-bar" title="Min ADC value as % of 32767">
+                     id="stat-min-bar" title="Most negative AC-centered ADC count in the live window">
                     <div style="height: 100%; background: linear-gradient(90deg, #2196F3, #1976D2); width: 0%; transition: width 0.1s ease;" id="stat-min-bar-fill"></div>
                     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 11px; font-weight: 600; color: #2196F3; white-space: nowrap; pointer-events: none;" id="stat-min-bar-label">--</div>
                 </div>
             </div>
             <div style="display: flex; flex-direction: column; gap: 4px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <div style="flex: 1;">Max: <strong id="stat-max">--</strong></div>
+                    <div style="flex: 1;">Peak+: <strong id="stat-max">--</strong></div>
                 </div>
                 <div style="width: 100%; height: 24px; background: rgba(244, 67, 54, 0.1); border: 1px solid #F44336; border-radius: 4px; position: relative; overflow: hidden; cursor: pointer;" 
-                     id="stat-max-bar" title="Max ADC value as % of 32767">
+                     id="stat-max-bar" title="Most positive AC-centered ADC count in the live window">
                     <div style="height: 100%; background: linear-gradient(90deg, #F44336, #D32F2F); width: 0%; transition: width 0.1s ease;" id="stat-max-bar-fill"></div>
                     <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 11px; font-weight: 600; color: #F44336; white-space: nowrap; pointer-events: none;" id="stat-max-bar-label">--</div>
                 </div>
@@ -97,7 +97,12 @@
                 Window: <strong id="stat-window">--</strong>
             </div>
             <div style="grid-column: span 2; opacity: 0.7; font-size: 12px;">
-                Stability: <strong id="stat-p2p">--</strong> (P-P)
+                Crest factor: <strong id="stat-crest">--</strong>
+                <span style="opacity: 0.75;">(sine ≈ 1.41)</span>
+            </div>
+            <div style="grid-column: span 2; opacity: 0.7; font-size: 12px;">
+                Waveform P–P: <strong id="stat-p2p">--</strong>
+                <span style="opacity: 0.75;">· ideal sine ≈ <strong id="stat-p2p-ideal">--</strong></span>
             </div>
             <div style="grid-column: span 2; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px; opacity: 0.8; font-size: 12px;">
                 Learned ADC VRMS: <strong id="stat-learned-adc-vrms" style="color: var(--primary);">--</strong>
@@ -876,11 +881,13 @@
         if (windowSec > 60) windowStr = (windowSec / 60).toFixed(1) + 'm';
 
         if (updateDisplay) {
-            // Live WebSocket samples are AC-centered and calibrated to VAC.
+            // Live WebSocket samples are mean-centered ADC counts × RMS calibration →
+            // instantaneous waveform volts (not RMS). Peak± can look large when the
+            // ZMPT waveform is asymmetric even though Vrms is near nominal.
             document.getElementById('stat-avg').innerText = avg.toFixed(1) + ' VAC (rect)';
             document.getElementById('stat-rms').innerText = rms.toFixed(1) + ' VAC';
-            document.getElementById('stat-min').innerText = min.toFixed(1) + ' VAC';
-            document.getElementById('stat-max').innerText = max.toFixed(1) + ' VAC';
+            document.getElementById('stat-min').innerText = min.toFixed(1) + ' V';
+            document.getElementById('stat-max').innerText = max.toFixed(1) + ' V';
 
             const adc_max_raw = 32767;
             let min_raw = 0;
@@ -894,13 +901,18 @@
             const max_pct = (max_raw / adc_max_raw * 100);
             document.getElementById('stat-min-bar-fill').style.width = min_pct + '%';
             document.getElementById('stat-min-bar-label').innerText = min_raw + ' / ' + adc_max_raw;
-            document.getElementById('stat-min-bar').title = 'Min: ' + min_raw + ' / ' + adc_max_raw + ' (' + min_pct.toFixed(1) + '%)';
+            document.getElementById('stat-min-bar').title = 'Peak− ADC (AC-centered): ' + min_raw + ' / ' + adc_max_raw + ' (' + min_pct.toFixed(1) + '%)';
             document.getElementById('stat-max-bar-fill').style.width = max_pct + '%';
             document.getElementById('stat-max-bar-label').innerText = max_raw + ' / ' + adc_max_raw;
-            document.getElementById('stat-max-bar').title = 'Max: ' + max_raw + ' / ' + adc_max_raw + ' (' + max_pct.toFixed(1) + '%)';
+            document.getElementById('stat-max-bar').title = 'Peak+ ADC (AC-centered): ' + max_raw + ' / ' + adc_max_raw + ' (' + max_pct.toFixed(1) + '%)';
 
             document.getElementById('stat-window').innerText = windowStr;
-            document.getElementById('stat-p2p').innerText = p2p.toFixed(1) + ' VAC';
+            const peakAbs = Math.max(Math.abs(min), Math.abs(max));
+            const crest = rms > 1e-6 ? (peakAbs / rms) : 0;
+            const idealPp = rms * 2 * Math.SQRT2;
+            document.getElementById('stat-crest').innerText = crest.toFixed(2);
+            document.getElementById('stat-p2p').innerText = p2p.toFixed(1) + ' V';
+            document.getElementById('stat-p2p-ideal').innerText = idealPp.toFixed(1) + ' V';
         }
 
         return { avg, rms, min, max, rate };
