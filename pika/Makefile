@@ -120,8 +120,7 @@ daemon-disable:
 	@echo "Service disabled."
 
 daemon-status:
-	@echo "Checking pika-run-all service status..."
-	@sudo systemctl status pika-run-all.service --no-pager || echo "Service not found or not running"
+	@python3 scripts/pika_status.py
 
 daemon-start:
 	@echo "Starting pika-run-all service..."
@@ -247,7 +246,7 @@ help:
 	@echo "  daemon-start     - Start the service now"
 	@echo "  daemon-stop      - Stop the service"
 	@echo "  daemon-restart   - Restart the service"
-	@echo "  daemon-status    - Show service status"
+	@echo "  daemon-status    - Show PRU / datalogger / web / host dashboard"
 	@echo "  daemon-logs      - Follow service logs in real-time"
 	@echo "  daemon-uninstall - Uninstall and remove the service"
 	@echo ""

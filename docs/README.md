@@ -10,6 +10,7 @@ Notable recent decisions:
 - [ADR-0002](adrs/0002-oscilloscope-sample-rate-control.md) — Oscilloscope sample-rate control
 - [ADR-0003](adrs/0003-ieee-1159-sag-swell-detection.md) — IEEE 1159 sag/swell + professional review flags
 - [ADR-0004](adrs/0004-iec-aligned-trend-decimation.md) — IEC-aligned trend decimation (12-cycle Vrms)
+- [ADR-0005](adrs/0005-operator-status-dashboard.md) — Operator `daemon-status` dashboard
 
 ## Guides
 
