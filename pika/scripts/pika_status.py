@@ -264,8 +264,8 @@ def port_open(port):
 
 def collect_health():
     try:
-        req = urllib.request.Request(HEALTH_URL, method="GET")
-        with urllib.request.urlopen(req, timeout=1.2) as resp:
+        req = urllib.request.Request(HEALTH_URL)
+        with urllib.request.urlopen(req, timeout=5.0) as resp:
             body = resp.read().decode("utf-8", "replace")
             status = getattr(resp, "status", 200)
         return json.loads(body), status
