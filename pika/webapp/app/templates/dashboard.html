@@ -45,7 +45,13 @@
             </p>
             <p>Actual Rate: <strong id="pru-actual-samplerate">--</strong></p>
             <p style="margin-top: 12px;">Uptime: <strong id="uptime">--</strong></p>
-            <p>Storage: <strong id="storage">Stable</strong></p>
+            <p style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                Stored data: <strong id="storage-usage">--</strong>
+                <button type="button" onclick="showClearDataConfirm(event)" title="Delete stored trend and event files"
+                    style="background: rgba(244, 67, 54, 0.1); color: #F44336; border: 1px solid #F44336; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;">Clear</button>
+            </p>
+            <p id="storage-detail" style="font-size: 11px; opacity: 0.7; margin: 0;">Trend and event files on this board</p>
+            <p id="storage-disk" style="font-size: 11px; opacity: 0.7; margin: 0;"></p>
             <p id="system-restart-status" style="font-size: 11px; min-height: 14px; color: #888; margin: 4px 0 0;"></p>
         </div>
     </div>
@@ -332,6 +338,26 @@
                 style="background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 12px; font-weight: 600;">Save &amp; Restart</button>
         </div>
     </div>
+    <!-- Clear stored data confirmation (System Health) -->
+    <div id="clear-data-popover"
+        style="display: none; position: fixed; z-index: 1000; width: 320px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(244, 67, 54, 0.3); padding: 16px; pointer-events: auto;">
+        <div style="font-size: 14px; font-weight: 500; color: #F44336; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Clear stored data</div>
+        <div style="font-size: 12px; opacity: 0.85; margin-bottom: 12px; line-height: 1.5;">
+            Permanently delete trend and event files
+            (<code style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;">decimated.bin</code>,
+            <code style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;">events.bin</code>,
+            rotations, and rollups).
+            The datalogger restarts briefly so the space is actually freed.
+        </div>
+        <div id="clear-data-summary" style="font-size: 12px; margin-bottom: 16px; color: var(--primary);">Using --</div>
+        <div id="clear-data-status" style="font-size: 11px; min-height: 14px; color: #888; margin-bottom: 8px;"></div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+            <button type="button" onclick="hideClearDataConfirm()"
+                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 500;">Cancel</button>
+            <button type="button" onclick="confirmClearStoredData()"
+                style="background: #F44336; color: white; border: none; border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 12px; font-weight: 500;">Clear data</button>
+        </div>
+    </div>
     <!-- Delete Confirmation Popover -->
     <div id="delete-confirm-popover"
         style="display: none; position: fixed; z-index: 1000; width: 300px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(244, 67, 54, 0.3); padding: 16px; pointer-events: auto;">
@@ -388,6 +414,7 @@
         hideEventsHelp();
         hideEventsSettings();
         hideDeleteConfirm();
+        hideClearDataConfirm();
         hideTrendSettings();
         const popover = document.getElementById('sample-rate-popover');
         const status = document.getElementById('sample-rate-status');
@@ -452,6 +479,7 @@
         hideEventsHelp();
         hideEventsSettings();
         hideDeleteConfirm();
+        hideClearDataConfirm();
         hideSampleRateSettings();
         const popover = document.getElementById('trend-settings-popover');
         const status = document.getElementById('trend-settings-status');
@@ -667,6 +695,27 @@
         }
         if (health.learned_transformer_ratio) {
             document.getElementById('stat-learned-transformer-ratio').innerText = health.learned_transformer_ratio.toFixed(2);
+        }
+        if (health.storage) {
+            applyStorage(health.storage);
+        }
+    }
+
+    function applyStorage(storage) {
+        const usage = document.getElementById('storage-usage');
+        const detail = document.getElementById('storage-detail');
+        const disk = document.getElementById('storage-disk');
+        if (!usage || !storage) return;
+        usage.innerText = storage.human || '--';
+        if (detail) {
+            detail.innerText = `Trend ${storage.trend_human || '0 B'} · Events ${storage.events_human || '0 B'}`;
+        }
+        if (disk) {
+            if (storage.disk_total_bytes) {
+                disk.innerText = `Disk ${storage.disk_used_pct}% used, ${storage.disk_free_human} free`;
+            } else {
+                disk.innerText = '';
+            }
         }
     }
 
@@ -1427,6 +1476,7 @@
     let deletePopoverY = 0;
 
     function showDeleteConfirm(event) {
+        hideClearDataConfirm();
         const popover = document.getElementById('delete-confirm-popover');
         deletePopoverX = event.clientX;
         deletePopoverY = event.clientY;
@@ -1434,6 +1484,66 @@
         popover.style.display = 'block';
         popover.style.left = (event.clientX - 150) + 'px';
         popover.style.top = (event.clientY - 100) + 'px';
+    }
+
+    async function showClearDataConfirm(event) {
+        hideEventsHelp();
+        hideEventsSettings();
+        hideDeleteConfirm();
+        hideSampleRateSettings();
+        hideTrendSettings();
+        hideZmptTrimPopover();
+        const popover = document.getElementById('clear-data-popover');
+        const summary = document.getElementById('clear-data-summary');
+        const status = document.getElementById('clear-data-status');
+        if (status) status.innerText = '';
+        summary.innerText = 'Measuring stored data…';
+        positionCardPopover(popover, event);
+        try {
+            const res = await fetch('/api/v1/storage');
+            const storage = await res.json();
+            applyStorage(storage);
+            const fileCount = (storage.files || []).length;
+            summary.innerText = fileCount
+                ? `Using ${storage.human} in ${fileCount} file${fileCount === 1 ? '' : 's'}`
+                : 'No stored data files';
+            positionCardPopover(popover, event);
+        } catch (err) {
+            summary.innerText = 'Could not read storage: ' + err.message;
+        }
+    }
+
+    function hideClearDataConfirm() {
+        const el = document.getElementById('clear-data-popover');
+        if (el) el.style.display = 'none';
+    }
+
+    async function confirmClearStoredData() {
+        const status = document.getElementById('clear-data-status');
+        if (status) {
+            status.style.color = '#FFC107';
+            status.innerText = 'Clearing stored data…';
+        }
+        try {
+            const response = await fetch('/api/v1/storage/clear', { method: 'POST' });
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to clear stored data');
+            }
+            if (result.storage) {
+                applyStorage(result.storage);
+            }
+            if (status) {
+                status.style.color = '#66BB6A';
+                status.innerText = `Freed ${result.freed_human || '0 B'}. Reloading…`;
+            }
+            setTimeout(() => window.location.reload(), 1500);
+        } catch (err) {
+            if (status) {
+                status.style.color = '#F44336';
+                status.innerText = err.message;
+            }
+        }
     }
 
     function hideDeleteConfirm() {
@@ -1475,6 +1585,7 @@
         hideEventsHelp();
         hideEventsSettings();
         hideDeleteConfirm();
+        hideClearDataConfirm();
         hideSampleRateSettings();
         hideTrendSettings();
         const popover = document.getElementById('zmpt-trim-popover');
@@ -1531,6 +1642,7 @@
     async function showEventsHelp(event) {
         hideEventsSettings();
         hideDeleteConfirm();
+        hideClearDataConfirm();
         hideSampleRateSettings();
         hideTrendSettings();
         const popover = document.getElementById('events-help-popover');
@@ -1570,6 +1682,7 @@
     async function showEventsSettings(event) {
         hideEventsHelp();
         hideDeleteConfirm();
+        hideClearDataConfirm();
         hideSampleRateSettings();
         hideTrendSettings();
         const popover = document.getElementById('events-settings-popover');

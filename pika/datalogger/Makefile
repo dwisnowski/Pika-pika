@@ -38,7 +38,7 @@ clean-compiled:
 	@sudo rm -rf $(OBJ_DIR) $(BIN_DIR)
 
 clean-data:
-	@sudo rm -f data/*.bin data/*.old
+	@sudo rm -f data/*.bin data/*.old data/*.jsonl data/write_probe.txt data/calibration_status.txt
 
 clean: clean-compiled clean-data
 

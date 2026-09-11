@@ -16,7 +16,7 @@
 #   to maintain its own build logic while providing a unified interface
 #   at the top level.
 
-.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all stop help setup run-pru-datalogger daemon-install daemon-status daemon-stop daemon-uninstall daemon-enable daemon-disable startscreen shutdown
+.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all stop help setup run-pru-datalogger daemon-install daemon-status daemon-stop daemon-uninstall daemon-enable daemon-disable startscreen shutdown clean-data
 
 # Build all components
 all: pru datalogger web
@@ -155,6 +155,31 @@ clean:
 	$(MAKE) -C datalogger clean
 # 	$(MAKE) -C webapp clean  #  Not needed most of the time. <-----
 
+# Delete stored trend/event files. Stops the daemon first so open FDs
+# do not keep the old inodes allocated; restarts it if it was running.
+clean-data:
+	@DATA_DIR="$(CURDIR)/datalogger/data"; \
+	BEFORE=$$(du -sb "$$DATA_DIR" 2>/dev/null | awk '{print $$1}'); \
+	[ -z "$$BEFORE" ] && BEFORE=0; \
+	RESTART=0; \
+	if command -v systemctl >/dev/null 2>&1 && \
+	   systemctl is-active --quiet pika-run-all.service 2>/dev/null; then \
+		echo "Stopping pika-run-all so stored files can be removed..."; \
+		sudo systemctl stop pika-run-all.service; \
+		RESTART=1; \
+	fi; \
+	$(MAKE) -C datalogger clean-data; \
+	if [ "$$RESTART" = "1" ]; then \
+		echo "Restarting pika-run-all..."; \
+		sudo systemctl start pika-run-all.service; \
+	fi; \
+	AFTER=$$(du -sb "$$DATA_DIR" 2>/dev/null | awk '{print $$1}'); \
+	[ -z "$$AFTER" ] && AFTER=0; \
+	FREED=$$((BEFORE - AFTER)); \
+	if [ "$$FREED" -lt 0 ]; then FREED=0; fi; \
+	echo "Cleared Pika stored data ($$((FREED / 1024)) KB freed)."; \
+	df -h / | awk 'NR==2{printf "Disk / is now %s used, %s available.\n", $$5, $$4}'
+
 # Armbian-style start screen / MOTD (run on BBB)
 startscreen:
 	@echo ""
@@ -261,6 +286,7 @@ help:
 	@echo "  startscreen      - Print Armbian-style start screen (IP, CPU, mem, disk, PRUs, data size)"
 	@echo "  setup            - Install system dependencies (libyaml-dev)"
 	@echo "  clean            - Clean all build artifacts"
+	@echo "  clean-data       - Stop daemon, delete stored trend/event files, restart"
 	@echo "  help             - Show this help message"
 	@echo ""
 	@echo "See docs/getting-started.md for hardware setup instructions"

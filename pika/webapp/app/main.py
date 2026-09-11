@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 
+from app.core.config import settings
 from app.services.shared_memory import shm
 from app.services.config_service import config_service
 
@@ -192,6 +193,97 @@ def _pika_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _stored_data_dir() -> Path:
+    configured = Path(settings.data_dir)
+    if configured.is_dir():
+        return configured
+    return _pika_root() / "datalogger" / "data"
+
+
+def _format_bytes(n: int) -> str:
+    n = max(0, int(n))
+    if n < 1024:
+        return f"{n} B"
+    if n < 1024 * 1024:
+        val = n / 1024.0
+        return f"{val:.1f} KB" if val < 10 else f"{val:.0f} KB"
+    if n < 1024 * 1024 * 1024:
+        val = n / (1024.0 * 1024.0)
+        return f"{val:.1f} MB" if val < 10 else f"{val:.0f} MB"
+    val = n / (1024.0 * 1024.0 * 1024.0)
+    return f"{val:.2f} GB"
+
+
+def _is_stored_data_file(path: Path) -> bool:
+    name = path.name
+    return (
+        path.suffix in {".bin", ".old", ".jsonl"}
+        or name in {"write_probe.txt", "calibration_status.txt"}
+    )
+
+
+def get_storage_snapshot() -> dict:
+    """Report on-disk usage of Pika's stored trend/event files."""
+    data_dir = _stored_data_dir()
+    files = []
+    total = 0
+    trend = 0
+    events = 0
+    if data_dir.is_dir():
+        for path in sorted(data_dir.iterdir()):
+            if not path.is_file() or not _is_stored_data_file(path):
+                continue
+            size = path.stat().st_size
+            total += size
+            name = path.name
+            files.append({"name": name, "bytes": size, "human": _format_bytes(size)})
+            if name.startswith("decimated") or name.startswith("vrms_"):
+                trend += size
+            elif name.startswith("events") or name.startswith("index"):
+                events += size
+
+    disk_total = disk_free = 0
+    disk_used_pct = 0
+    try:
+        usage = os.statvfs(str(data_dir if data_dir.exists() else "/"))
+        disk_total = usage.f_frsize * usage.f_blocks
+        disk_free = usage.f_frsize * usage.f_bavail
+        if disk_total:
+            disk_used_pct = int(round(100.0 * (disk_total - disk_free) / disk_total))
+    except OSError:
+        pass
+
+    return {
+        "bytes": total,
+        "human": _format_bytes(total),
+        "trend_bytes": trend,
+        "trend_human": _format_bytes(trend),
+        "events_bytes": events,
+        "events_human": _format_bytes(events),
+        "files": files,
+        "path": str(data_dir),
+        "disk_total_bytes": disk_total,
+        "disk_free_bytes": disk_free,
+        "disk_used_pct": disk_used_pct,
+        "disk_free_human": _format_bytes(disk_free),
+    }
+
+
+def _start_datalogger() -> bool:
+    dl_bin = _pika_root() / "datalogger" / "bin" / "datalogger"
+    if not dl_bin.is_file():
+        logger.error("Datalogger binary missing: %s", dl_bin)
+        return False
+    subprocess.Popen(
+        ["sudo", "-n", str(dl_bin)],
+        cwd=str(_pika_root() / "datalogger"),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    return True
+
+
 async def _restart_system_component(component: str):
     """Restart one runtime piece. `webserver`/`all` bounce the systemd unit."""
     await asyncio.sleep(1.0)
@@ -206,7 +298,6 @@ async def _restart_system_component(component: str):
             )
             logger.info("Scheduled PRU firmware reload")
         elif component == "datalogger":
-            dl_bin = root / "datalogger" / "bin" / "datalogger"
             subprocess.run(
                 ["sudo", "-n", "pkill", "-x", "datalogger"],
                 stdout=subprocess.DEVNULL,
@@ -214,17 +305,8 @@ async def _restart_system_component(component: str):
                 check=False,
             )
             await asyncio.sleep(0.8)
-            if not dl_bin.is_file():
-                logger.error("Datalogger binary missing: %s", dl_bin)
-                return
-            subprocess.Popen(
-                ["sudo", "-n", str(dl_bin)],
-                cwd=str(root / "datalogger"),
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-            logger.info("Scheduled datalogger process restart")
+            if _start_datalogger():
+                logger.info("Scheduled datalogger process restart")
         elif component in ("webserver", "all"):
             subprocess.Popen(
                 ["sudo", "-n", "systemctl", "restart", "pika-run-all.service"],
@@ -318,6 +400,7 @@ def get_health_snapshot():
         "learned_voltage": learned_voltage,
         "learned_adc_vrms": learned_adc_vrms,
         "learned_transformer_ratio": learned_transformer_ratio,
+        "storage": get_storage_snapshot(),
     }
 
 
@@ -629,11 +712,60 @@ async def update_anomalies_config(request: Request):
         return {"success": False, "error": str(e)}
 
 
+@app.get("/api/v1/storage")
+async def get_storage_api():
+    """Return current Pika stored-data usage and host disk free space."""
+    return get_storage_snapshot()
+
+
+@app.post("/api/v1/storage/clear")
+async def clear_storage_api():
+    """Delete stored trend/event files. Restarts the datalogger so space is freed."""
+    data_dir = _stored_data_dir()
+    before = get_storage_snapshot()
+    try:
+        subprocess.run(
+            ["sudo", "-n", "pkill", "-x", "datalogger"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        await asyncio.sleep(0.8)
+
+        deleted = []
+        if data_dir.is_dir():
+            for path in list(data_dir.iterdir()):
+                if path.is_file() and _is_stored_data_file(path):
+                    path.unlink()
+                    deleted.append(path.name)
+
+        started = _start_datalogger()
+        after = get_storage_snapshot()
+        freed = max(0, before["bytes"] - after["bytes"])
+        return {
+            "success": True,
+            "message": (
+                f"Cleared {', '.join(deleted)}" if deleted else "No stored data files"
+            ),
+            "deleted_files": deleted,
+            "freed_bytes": freed,
+            "freed_human": _format_bytes(freed),
+            "datalogger_restarted": started,
+            "storage": after,
+        }
+    except Exception as e:
+        logger.exception("Failed to clear stored data")
+        try:
+            _start_datalogger()
+        except Exception:
+            logger.exception("Failed to restart datalogger after clear error")
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/api/v1/events/delete")
 async def delete_events_api():
     """Delete all event data from the datalogger storage."""
     from app.services.event_service import event_service
-    import os
     
     try:
         events_path = os.path.join(event_service.data_dir, "events.bin")
