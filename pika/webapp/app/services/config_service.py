@@ -78,6 +78,11 @@ class ConfigService:
             },
             'logging': {
                 'level': 'info'
+            },
+            'webapp': {
+                'history_window_minutes': 60,
+                'history_display_points': 800,
+                'history_max_points': 20000,
             }
         }
     
@@ -147,8 +152,22 @@ class ConfigService:
         return self.config.get('logging', {}).get('level', 'info')
 
     def get_history_max_points(self) -> int:
-        """Get maximum number of decimated points to load for trend chart"""
-        return self.config.get('webapp', {}).get('history_max_points', 20000)
+        """Fallback source-interval cap if history_window_minutes is unset."""
+        return int(self.config.get('webapp', {}).get('history_max_points', 20000))
+
+    def get_history_window_minutes(self) -> int:
+        """Lookback window shown on the trend pane (1–720)."""
+        web = self.config.get('webapp', {}) or {}
+        if web.get('history_window_minutes') is not None:
+            return max(1, min(720, int(web['history_window_minutes'])))
+        # Derive from the older point cap at the nominal 5 Hz IEC rate.
+        return max(1, min(720, round(self.get_history_max_points() / 5.0 / 60.0)))
+
+    def get_history_display_points(self) -> int:
+        """Max points sent to the trend chart (100–2000)."""
+        return max(100, min(2000, int(
+            (self.config.get('webapp', {}) or {}).get('history_display_points', 800)
+        )))
 
     def get_nominal_rate_hz(self) -> int:
         """Get ADC nominal sample rate from shared config."""

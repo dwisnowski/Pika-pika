@@ -119,6 +119,69 @@ def _persist_anomalies_config(config_path: Path, values: dict) -> None:
     config_path.write_text(text)
 
 
+TREND_WINDOW_MIN = 1
+TREND_WINDOW_MAX = 720
+TREND_DISPLAY_MIN = 100
+TREND_DISPLAY_MAX = 2000
+
+
+def _insert_webapp_key(text: str, key: str, value: int) -> str:
+    """Insert a webapp: key if the regex persist target is missing."""
+    if re.search(rf'(?m)^  {re.escape(key)}:', text):
+        return text
+    inserted, n = re.subn(
+        r'(?m)^(webapp:\s*\n)',
+        rf'\g<1>  {key}: {value}\n',
+        text,
+        count=1,
+    )
+    if n != 1:
+        raise FileNotFoundError(f"Could not insert {key} under webapp:")
+    return inserted
+
+
+def _persist_trend_config(config_path: Path, values: dict) -> None:
+    """Update trend-pane fields in pika.yaml without rewriting the whole file."""
+    text = config_path.read_text()
+    window = int(values["history_window_minutes"])
+    display = int(values["history_display_points"])
+    text = _insert_webapp_key(text, "history_window_minutes", window)
+    text = _insert_webapp_key(text, "history_display_points", display)
+    replacements = [
+        (
+            r'(?m)^(  history_window_minutes:\s*)\d+(\b.*)$',
+            rf'\g<1>{window}\2',
+        ),
+        (
+            r'(?m)^(  history_display_points:\s*)\d+(\b.*)$',
+            rf'\g<1>{display}\2',
+        ),
+    ]
+    for pattern, repl in replacements:
+        text, n = re.subn(pattern, repl, text, count=1)
+        if n != 1:
+            raise FileNotFoundError(
+                f"Could not update trend config in {config_path}"
+            )
+    config_path.write_text(text)
+
+
+def _trend_config_payload() -> dict:
+    from app.services.history_service import history_service
+
+    window_minutes = config_service.get_history_window_minutes()
+    display_points = config_service.get_history_display_points()
+    iec_rate = history_service.peek_decimated_rate()
+    source_points = window_minutes * 60 * iec_rate
+    return {
+        "history_window_minutes": window_minutes,
+        "history_display_points": display_points,
+        "iec_rate": iec_rate,
+        "source_points": source_points,
+        "window_seconds": window_minutes * 60,
+    }
+
+
 async def _restart_acquisition_service():
     """Restart PRU+datalogger+webapp after the HTTP response has flushed."""
     await _restart_system_component("all")
@@ -327,8 +390,11 @@ async def restart_system_component(request: Request):
 @app.get("/api/v1/history")
 async def get_history_api():
     from app.services.history_service import history_service
-    max_points = config_service.get_history_max_points()
-    return history_service.get_decimated_data(max_points=max_points)
+    return history_service.get_decimated_data(
+        max_points=config_service.get_history_max_points(),
+        window_minutes=config_service.get_history_window_minutes(),
+        max_display_points=config_service.get_history_display_points(),
+    )
 
 
 @app.get("/api/v1/history/rollup-10min")
@@ -448,6 +514,57 @@ async def update_sample_rate(request: Request):
 
     except Exception as e:
         logger.exception("Failed to update sample rate")
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/v1/config/trend")
+async def get_trend_config():
+    """Return user-editable trend-pane window and display-point settings."""
+    return _trend_config_payload()
+
+
+@app.post("/api/v1/config/trend")
+async def update_trend_config(request: Request):
+    """Persist trend-pane settings to pika.yaml. Webapp-only; no restart."""
+    try:
+        body = await request.json()
+        window = int(body.get(
+            "history_window_minutes",
+            config_service.get_history_window_minutes(),
+        ))
+        display = int(body.get(
+            "history_display_points",
+            config_service.get_history_display_points(),
+        ))
+        if not (TREND_WINDOW_MIN <= window <= TREND_WINDOW_MAX):
+            return {
+                "success": False,
+                "error": f"history_window_minutes must be {TREND_WINDOW_MIN}–{TREND_WINDOW_MAX}",
+            }
+        if not (TREND_DISPLAY_MIN <= display <= TREND_DISPLAY_MAX):
+            return {
+                "success": False,
+                "error": f"history_display_points must be {TREND_DISPLAY_MIN}–{TREND_DISPLAY_MAX}",
+            }
+
+        config_path = _pika_yaml_path()
+        if not config_path.exists():
+            return {"success": False, "error": "Config file not found"}
+
+        _persist_trend_config(config_path, {
+            "history_window_minutes": window,
+            "history_display_points": display,
+        })
+        config_service.load_config()
+        payload = _trend_config_payload()
+        payload.update({
+            "success": True,
+            "message": "Trend settings updated",
+            "restarting": False,
+        })
+        return payload
+    except Exception as e:
+        logger.exception("Failed to update trend config")
         return {"success": False, "error": str(e)}
 
 

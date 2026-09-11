@@ -171,12 +171,53 @@
         <div class="card-header">
             <span class="material-icons-outlined">show_chart</span>
             <h2 class="card-title">Supply Voltage Trend (IEC Vrms)</h2>
+            <span id="trend-status" class="trend-status">Loading…</span>
             <button onclick="resetZoom()"
                 style="margin-left: auto; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Reset
                 Zoom</button>
+            <button type="button" onclick="showTrendSettings(event)" title="Trend chart settings"
+                style="margin-left: 6px; background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 4px 6px; display: inline-flex; align-items: center;">
+                <span class="material-icons-outlined" style="font-size: 18px;">settings</span>
+            </button>
         </div>
-        <div style="height: 250px;">
+        <div class="trend-plot">
             <canvas id="trendChart"></canvas>
+            <div id="trend-overlay" class="trend-overlay">
+                <div id="trend-spinner" class="trend-spinner"></div>
+                <div id="trend-overlay-msg">Loading voltage trend…</div>
+            </div>
+        </div>
+        <div id="trend-settings-popover"
+            style="display: none; position: fixed; z-index: 1000; width: 380px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); padding: 16px; pointer-events: auto;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                <div style="font-size: 14px; font-weight: 500; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px;">Trend Display</div>
+                <button type="button" onclick="hideTrendSettings()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
+                    <span class="material-icons-outlined" style="font-size: 18px;">close</span>
+                </button>
+            </div>
+            <p style="font-size: 11px; opacity: 0.7; margin: 0 0 12px; line-height: 1.4;">
+                These control what the <b>browser chart</b> loads. Disk still stores full-rate IEC Vrms intervals.
+            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+                <label>Lookback (minutes)
+                    <input id="cfg-trend-window" type="number" min="1" max="720" step="1"
+                        oninput="updateTrendSettingsPreview()"
+                        style="width: 100%; margin-top: 4px; box-sizing: border-box;">
+                </label>
+                <label>Chart points
+                    <input id="cfg-trend-points" type="number" min="100" max="2000" step="1"
+                        oninput="updateTrendSettingsPreview()"
+                        style="width: 100%; margin-top: 4px; box-sizing: border-box;">
+                </label>
+            </div>
+            <div id="trend-settings-preview" style="font-size: 11px; opacity: 0.75; margin-top: 10px; line-height: 1.45;"></div>
+            <div id="trend-settings-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
+                <button type="button" onclick="hideTrendSettings()"
+                    style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px;">Cancel</button>
+                <button type="button" onclick="saveTrendSettings()"
+                    style="background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 12px; font-weight: 600;">Save</button>
+            </div>
         </div>
     </div>
 
@@ -347,6 +388,7 @@
         hideEventsHelp();
         hideEventsSettings();
         hideDeleteConfirm();
+        hideTrendSettings();
         const popover = document.getElementById('sample-rate-popover');
         const status = document.getElementById('sample-rate-status');
         const sel = document.getElementById('cfg-sample-rate');
@@ -379,7 +421,91 @@
     }
 
     function hideSampleRateSettings() {
-        document.getElementById('sample-rate-popover').style.display = 'none';
+        const el = document.getElementById('sample-rate-popover');
+        if (el) el.style.display = 'none';
+    }
+
+    let trendSettingsIecRate = 5;
+
+    function updateTrendSettingsPreview() {
+        const preview = document.getElementById('trend-settings-preview');
+        if (!preview) return;
+        const windowMin = parseInt(document.getElementById('cfg-trend-window').value, 10);
+        const displayPts = parseInt(document.getElementById('cfg-trend-points').value, 10);
+        const rate = trendSettingsIecRate || 5;
+        if (!Number.isFinite(windowMin) || !Number.isFinite(displayPts)) {
+            preview.innerText = '';
+            return;
+        }
+        const source = windowMin * 60 * rate;
+        const bucket = Math.max(1, Math.ceil(source / displayPts));
+        let hint = `≈ ${source.toLocaleString()} IEC intervals at ${rate} Hz · bucket ${bucket}`;
+        if (source > displayPts * 4) {
+            hint += ' · heavier decimation keeps the chart fast. Disk stays full rate.';
+        } else {
+            hint += ' · Heavier decimation if the window has more intervals than this. Disk stays full rate.';
+        }
+        preview.innerText = hint;
+    }
+
+    async function showTrendSettings(event) {
+        hideEventsHelp();
+        hideEventsSettings();
+        hideDeleteConfirm();
+        hideSampleRateSettings();
+        const popover = document.getElementById('trend-settings-popover');
+        const status = document.getElementById('trend-settings-status');
+        status.style.color = '#888';
+        status.innerText = '';
+        positionCardPopover(popover, event);
+        try {
+            const res = await fetch('/api/v1/config/trend');
+            const data = await res.json();
+            trendSettingsIecRate = data.iec_rate || trendIecRate || 5;
+            document.getElementById('cfg-trend-window').value = data.history_window_minutes;
+            document.getElementById('cfg-trend-points').value = data.history_display_points;
+            updateTrendSettingsPreview();
+            positionCardPopover(popover, event);
+        } catch (err) {
+            status.style.color = '#F44336';
+            status.innerText = 'Load failed: ' + err.message;
+        }
+    }
+
+    function hideTrendSettings() {
+        const el = document.getElementById('trend-settings-popover');
+        if (el) el.style.display = 'none';
+    }
+
+    async function saveTrendSettings() {
+        const status = document.getElementById('trend-settings-status');
+        const windowMin = parseInt(document.getElementById('cfg-trend-window').value, 10);
+        const displayPts = parseInt(document.getElementById('cfg-trend-points').value, 10);
+        status.style.color = '#888';
+        status.innerText = 'Saving…';
+        try {
+            const res = await fetch('/api/v1/config/trend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    history_window_minutes: windowMin,
+                    history_display_points: displayPts,
+                }),
+            });
+            const data = await res.json();
+            if (!data.success) {
+                status.style.color = '#F44336';
+                status.innerText = data.error || 'Save failed';
+                return;
+            }
+            status.style.color = '#66BB6A';
+            status.innerText = 'Saved — refreshing chart…';
+            hideTrendSettings();
+            await updateDashboard();
+        } catch (err) {
+            status.style.color = '#F44336';
+            status.innerText = err.message;
+        }
     }
 
     async function saveSampleRateSettings() {
@@ -893,38 +1019,34 @@
         };
 
         const updateTrend = async () => {
+            setTrendRefreshing();
             try {
                 const trendRes = await fetch('/api/v1/history');
                 if (!trendRes.ok) throw new Error(`History returned ${trendRes.status}`);
                 const trendData = await trendRes.json();
                 console.log('[Dashboard] Trend data received:', {
                     samples_count: trendData.samples ? trendData.samples.length : 0,
+                    source_points: trendData.source_points,
+                    display_points: trendData.display_points,
                     rate: trendData.rate,
                     format: trendData.format,
-                    rollup: trendData.rollup_10min ? trendData.rollup_10min.length : 0,
+                    window_seconds: trendData.window_seconds,
                 });
-                const stats = updateLiveStats(
-                    trendData.samples,
-                    trendData.rate,
-                    trendData.samples_raw,
-                    trendData.timestamps,
-                    false
-                );
-                if (stats) {
+                if (!trendData.samples || trendData.samples.length === 0) {
+                    setTrendEmpty();
+                } else {
                     try {
                         renderTrend(
                             trendData.samples,
-                            stats,
                             trendData.timestamps,
                             trendData.samples_min,
-                            trendData.samples_max,
-                            trendData.rollup_10min
+                            trendData.samples_max
                         );
+                        setTrendReady(trendData);
                     } catch (error) {
                         console.error('Failed to render trend chart:', error);
+                        setTrendError('Could not render trend');
                     }
-                } else {
-                    console.warn('[Dashboard] No stats returned, skipping chart render');
                 }
 
                 // Update FFT at the same cadence as the dashboard refresh.
@@ -939,6 +1061,7 @@
                 }
             } catch (error) {
                 console.error('Failed to update history:', error);
+                setTrendError('Could not load trend');
             }
         };
 
@@ -1019,22 +1142,72 @@
     }
 
     let trendChart = null;
-    function renderTrend(samples, stats, timestamps, samplesMin, samplesMax, rollup10min) {
-        const ctx = document.getElementById('trendChart').getContext('2d');
+    let trendHasRendered = false;
+    let trendIecRate = 5;
 
-        if (trendChart) {
-            try {
-                trendChart.destroy();
-            } catch (e) {
-                console.error('[renderTrend] Error destroying chart:', e);
-            }
-            trendChart = null;
+    function formatTrendWindow(windowSeconds, displayPoints) {
+        const secs = Number(windowSeconds) || 0;
+        let windowLabel = Math.round(secs) + 's';
+        if (secs >= 3600) windowLabel = (secs / 3600).toFixed(1) + ' h';
+        else if (secs >= 60) windowLabel = (secs / 60).toFixed(0) + ' min';
+        const pts = displayPoints != null ? ` · ${displayPoints} pts` : '';
+        return `Last ${windowLabel}${pts}`;
+    }
+
+    function setTrendOverlay(message, showSpinner) {
+        const overlay = document.getElementById('trend-overlay');
+        const spinner = document.getElementById('trend-spinner');
+        const msg = document.getElementById('trend-overlay-msg');
+        if (!overlay || !msg) return;
+        msg.innerText = message;
+        if (spinner) spinner.style.display = showSpinner ? '' : 'none';
+        overlay.classList.remove('hidden');
+    }
+
+    function hideTrendOverlay() {
+        const overlay = document.getElementById('trend-overlay');
+        if (overlay) overlay.classList.add('hidden');
+    }
+
+    function setTrendStatus(text, color) {
+        const el = document.getElementById('trend-status');
+        if (!el) return;
+        el.innerText = text;
+        el.style.color = color || '#888';
+    }
+
+    function setTrendRefreshing() {
+        if (trendHasRendered) {
+            setTrendStatus('Updating…');
+        } else {
+            setTrendStatus('Loading…');
+            setTrendOverlay('Loading voltage trend…', true);
         }
+    }
 
-        if (!samples || samples.length === 0) {
+    function setTrendReady(trendData) {
+        trendHasRendered = true;
+        hideTrendOverlay();
+        if (trendData && trendData.rate) trendIecRate = trendData.rate;
+        setTrendStatus(formatTrendWindow(trendData.window_seconds, trendData.display_points));
+    }
+
+    function setTrendEmpty() {
+        setTrendStatus('No data');
+        if (trendHasRendered) {
+            hideTrendOverlay();
             return;
         }
+        setTrendOverlay('No trend data yet', false);
+    }
 
+    function setTrendError(message) {
+        setTrendStatus(message || 'Could not load trend', '#F44336');
+        if (trendHasRendered) return;
+        setTrendOverlay(message || 'Could not load trend', false);
+    }
+
+    function buildTrendSeries(samples, timestamps, samplesMin, samplesMax) {
         const hasTimestamps = timestamps && timestamps.length === samples.length;
         const points = hasTimestamps
             ? samples.map((y, i) => ({ x: timestamps[i] / 1e6, y }))
@@ -1051,15 +1224,19 @@
                 ? samplesMin.map((y, i) => ({ x: timestamps[i] / 1e6, y }))
                 : samplesMin.map((y, i) => ({ x: i, y })))
             : [];
-
         const meanVrms = samples.reduce((a, b) => a + b, 0) / samples.length;
-        const meanPts = points.map(p => ({ x: p.x, y: meanVrms }));
+        const meanPts = points.length
+            ? [{ x: points[0].x, y: meanVrms }, { x: points[points.length - 1].x, y: meanVrms }]
+            : [];
+        return { points, minPts, maxPts, meanPts, hasEnvelope };
+    }
 
+    function trendDatasetDefs(series) {
         const datasets = [];
-        if (hasEnvelope) {
+        if (series.hasEnvelope) {
             datasets.push({
                 label: 'Peak max',
-                data: maxPts,
+                data: series.maxPts,
                 borderColor: 'rgba(255, 214, 0, 0.35)',
                 borderWidth: 1,
                 pointRadius: 0,
@@ -1070,7 +1247,7 @@
             });
             datasets.push({
                 label: 'Peak min',
-                data: minPts,
+                data: series.minPts,
                 borderColor: 'rgba(255, 214, 0, 0.35)',
                 borderWidth: 1,
                 pointRadius: 0,
@@ -1081,7 +1258,7 @@
         }
         datasets.push({
             label: 'Vrms (IEC interval)',
-            data: points,
+            data: series.points,
             borderColor: '#FFD600',
             borderWidth: 2,
             pointRadius: 0,
@@ -1091,7 +1268,7 @@
         });
         datasets.push({
             label: 'Window avg Vrms',
-            data: meanPts,
+            data: series.meanPts,
             borderColor: '#00BCD4',
             borderWidth: 1,
             borderDash: [5, 5],
@@ -1099,21 +1276,30 @@
             fill: false,
             order: 5,
         });
+        return datasets;
+    }
 
+    function renderTrend(samples, timestamps, samplesMin, samplesMax) {
+        if (!samples || samples.length === 0) {
+            return;
+        }
+        const series = buildTrendSeries(samples, timestamps, samplesMin, samplesMax);
+        if (trendChart) {
+            trendChart.data.datasets = trendDatasetDefs(series);
+            trendChart.update('none');
+            return;
+        }
+
+        const ctx = document.getElementById('trendChart').getContext('2d');
         trendChart = new Chart(ctx, {
             type: 'line',
-            data: { datasets },
+            data: { datasets: trendDatasetDefs(series) },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: false,
                 plugins: {
                     legend: { display: true, labels: { color: '#aaa', boxWidth: 12, font: { size: 10 } } },
-                    decimation: {
-                        enabled: true,
-                        algorithm: 'lttb',
-                        samples: 400
-                    },
                     zoom: {
                         zoom: {
                             wheel: { enabled: true },
@@ -1159,11 +1345,6 @@
                 }
             }
         });
-
-        if (rollup10min && rollup10min.length) {
-            const last = rollup10min[rollup10min.length - 1];
-            console.log('[renderTrend] Latest 10-min Vrms rollup', last);
-        }
     }
 
     function resetZoom() {
@@ -1295,6 +1476,7 @@
         hideEventsSettings();
         hideDeleteConfirm();
         hideSampleRateSettings();
+        hideTrendSettings();
         const popover = document.getElementById('zmpt-trim-popover');
         layoutZmptTunerBand();
         positionCardPopover(popover, event);
@@ -1350,6 +1532,7 @@
         hideEventsSettings();
         hideDeleteConfirm();
         hideSampleRateSettings();
+        hideTrendSettings();
         const popover = document.getElementById('events-help-popover');
         const body = document.getElementById('events-help-body');
         body.innerHTML = 'Loading…';
@@ -1388,6 +1571,7 @@
         hideEventsHelp();
         hideDeleteConfirm();
         hideSampleRateSettings();
+        hideTrendSettings();
         const popover = document.getElementById('events-settings-popover');
         document.getElementById('events-settings-status').innerText = '';
         positionCardPopover(popover, event);

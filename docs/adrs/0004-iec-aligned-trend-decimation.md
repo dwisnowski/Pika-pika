@@ -35,4 +35,5 @@ anti-alias before the envelope.
   event captures for **sags/swells**.
 - Old `vps==2` chunks remain readable (legacy max→approx Vrms).
 - After upgrade, rotate/clear `decimated.bin` for a clean v2 stream.
-- Related: [ADR-0001](0001-pru-timing-accuracy.md), [ADR-0003](0003-ieee-1159-sag-swell-detection.md).
+- Related: [ADR-0001](0001-pru-timing-accuracy.md), [ADR-0003](0003-ieee-1159-sag-swell-detection.md),
+  [ADR-0006](0006-trend-pane-display-decimation.md) (display-only buckets + settings).

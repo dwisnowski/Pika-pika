@@ -89,4 +89,6 @@ logging:
 
 # Webapp Configuration
 webapp:
-  history_max_points: 20000   # ~1.1 h of 5 Hz IEC Vrms intervals on the trend chart
+  history_window_minutes: 60   # lookback shown on the trend pane (editable in UI)
+  history_display_points: 800  # chart payload cap after display-only bucketing
+  history_max_points: 20000    # fallback source-interval cap if window minutes is unset
