@@ -404,17 +404,16 @@ def collect_host():
             host["disk"] = "%s of %s (%s used)" % (cols[4], cols[1], cols[2])
 
     ips = run_cmd(["hostname", "-I"]).strip()
-    if not ips:
+    v4 = [tok for tok in ips.split() if tok and ":" not in tok]
+    if not v4:
         ip_out = run_cmd(["ip", "-4", "-o", "addr", "show", "scope", "global"])
-        found = []
         for line in ip_out.splitlines():
             parts = line.split()
             if "inet" in parts:
                 idx = parts.index("inet")
                 if idx + 1 < len(parts):
-                    found.append(parts[idx + 1].split("/")[0])
-        ips = " ".join(found)
-    host["ips"] = ips or None
+                    v4.append(parts[idx + 1].split("/")[0])
+    host["ips"] = " ".join(v4) or None
 
     if DATA_DIR.is_dir():
         du = run_cmd(["du", "-sh", str(DATA_DIR)], timeout=8.0)
