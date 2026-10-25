@@ -16,7 +16,7 @@
 #   to maintain its own build logic while providing a unified interface
 #   at the top level.
 
-.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all stop help setup run-pru-datalogger daemon-install daemon-status daemon-stop daemon-uninstall daemon-enable daemon-disable startscreen shutdown clean-data
+.PHONY: all pru datalogger web clean test-pru pru-bringup pru-load pru-load-bringup pru-stop pru-overlay run-datalogger run-all stop help setup run-pru-datalogger daemon-install daemon-status daemon-stop daemon-uninstall daemon-enable daemon-disable startscreen shutdown clean-data tunnel-install tunnel-status tunnel-logs tunnel-uninstall
 
 # Build all components
 all: pru datalogger web
@@ -149,6 +149,41 @@ daemon-uninstall:
 	@sudo systemctl daemon-reload
 	@echo "Service uninstalled."
 
+# Cloudflare Tunnel (pika.wildideazone.com). Token comes from ../.cloudflared.env
+# (gitignored — copy it to the BBB, never commit it).
+TUNNEL_ENV := ../.cloudflared.env
+TUNNEL_TOKEN_FILE := /etc/cloudflared/pika.env
+
+tunnel-install:
+	@test -f $(TUNNEL_ENV) || { echo "error: missing $(TUNNEL_ENV) (TUNNEL_TOKEN=...)"; exit 1; }
+	@grep -q '^TUNNEL_TOKEN=.' $(TUNNEL_ENV) || { echo "error: TUNNEL_TOKEN not set in $(TUNNEL_ENV)"; exit 1; }
+	@if ! command -v cloudflared >/dev/null 2>&1; then \
+		echo "Adding Cloudflare apt repository + installing cloudflared..."; \
+		sudo mkdir -p --mode=0755 /usr/share/keyrings; \
+		curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null; \
+		echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null; \
+		sudo apt-get update && sudo apt-get install -y cloudflared; \
+	fi
+	@echo "Installing tunnel token → $(TUNNEL_TOKEN_FILE)..."
+	@sudo install -d -m 700 /etc/cloudflared
+	@sudo install -m 600 $(TUNNEL_ENV) $(TUNNEL_TOKEN_FILE)
+	@sudo cp ../etc/systemd/system/pika-cloudflared.service /etc/systemd/system/
+	@sudo systemctl daemon-reload
+	@sudo systemctl enable --now pika-cloudflared.service
+	@echo "✓ Tunnel installed and running: https://pika.wildideazone.com"
+
+tunnel-status:
+	@sudo systemctl --no-pager --full status pika-cloudflared.service
+
+tunnel-logs:
+	@sudo journalctl -u pika-cloudflared.service -n 100 --no-pager -f
+
+tunnel-uninstall:
+	@sudo systemctl disable --now pika-cloudflared.service || true
+	@sudo rm -f /etc/systemd/system/pika-cloudflared.service $(TUNNEL_TOKEN_FILE)
+	@sudo systemctl daemon-reload
+	@echo "Tunnel uninstalled."
+
 # Clean all build artifacts - delegates to all subproject Makefiles
 clean:
 	$(MAKE) -C pru clean
@@ -274,6 +309,12 @@ help:
 	@echo "  daemon-status    - Show PRU / datalogger / web / host dashboard"
 	@echo "  daemon-logs      - Follow service logs in real-time"
 	@echo "  daemon-uninstall - Uninstall and remove the service"
+	@echo ""
+	@echo "Cloudflare Tunnel Targets (run on BBB; needs ../.cloudflared.env):"
+	@echo "  tunnel-install   - Install cloudflared + pika-cloudflared service (pika.wildideazone.com)"
+	@echo "  tunnel-status    - Show tunnel service status"
+	@echo "  tunnel-logs      - Follow tunnel logs"
+	@echo "  tunnel-uninstall - Remove the tunnel service and token"
 	@echo ""
 	@echo "PRU Targets:"
 	@echo "  test-pru         - Run PRU firmware tests"

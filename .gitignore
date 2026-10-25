@@ -30,3 +30,6 @@ venv/
 *.x*
 *.dtbo
 .DS_Store
+
+# Cloudflare Tunnel token (copy to the device; never commit)
+.cloudflared.env

@@ -16,6 +16,7 @@ Notable recent decisions:
 ## Guides
 
 - [Getting Started](getting-started.md)
+- [Cloudflare Access](cloudflare-access.md)
 - [Architecture](architecture.md)
 - [PRU Development](pru-development.md)
 - [Memory Map](memory-map.md)

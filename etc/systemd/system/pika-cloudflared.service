@@ -1,0 +1,20 @@
+[Unit]
+Description=Pika Cloudflare Tunnel (pika.wildideazone.com -> webapp :8888)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Hostname and origin (http://127.0.0.1:8888) are managed in the Cloudflare dashboard.
+# TUNNEL_TOKEN lives in a root-only file so it never appears in this world-readable unit.
+EnvironmentFile=/etc/cloudflared/pika.env
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=45
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
