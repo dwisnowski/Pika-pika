@@ -19,3 +19,4 @@ Each ADR is a numbered Markdown file: `NNNN-short-title.md`.
 | [0004](0004-iec-aligned-trend-decimation.md) | IEC-aligned trend decimation (12-cycle Vrms) | Accepted |
 | [0005](0005-operator-status-dashboard.md) | Operator `daemon-status` dashboard | Accepted |
 | [0006](0006-trend-pane-display-decimation.md) | Trend-pane display decimation and settings | Accepted |
+| [0007](0007-flicker-observations.md) | Flicker notes searched against the existing trend | Accepted |

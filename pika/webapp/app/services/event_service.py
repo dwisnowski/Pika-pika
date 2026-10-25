@@ -166,6 +166,36 @@ class EventService:
             print(f"[EventService] Error reading events: {e}")
         return list(reversed(events))
 
+    def events_between(self, start_ns: int, end_ns: int) -> List[dict]:
+        """Every indexed sag/swell whose onset falls in [start_ns, end_ns]."""
+        path = os.path.join(self.data_dir, "index.bin")
+        if not os.path.exists(path) or end_ns < start_ns:
+            return []
+
+        found = []
+        scale = mains_volts_per_count()
+        try:
+            with open(path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                fmt, rec_size, has_extreme = _detect_index_format(size)
+                count = size // rec_size
+                for i in range(count):
+                    f.seek(i * rec_size)
+                    data = f.read(rec_size)
+                    if len(data) < rec_size:
+                        break
+                    event = self._unpack_record(data, fmt, has_extreme, scale)
+                    if not event:
+                        continue
+                    ts = int(event["timestamp"])
+                    if start_ns <= ts <= end_ns:
+                        found.append(event)
+        except Exception as e:
+            print(f"[EventService] Error scanning events: {e}")
+        found.sort(key=lambda event: event["timestamp"])
+        return found
+
     def get_event_data(self, event_id: int):
         index_path = os.path.join(self.data_dir, "index.bin")
         data_path = os.path.join(self.data_dir, "events.bin")

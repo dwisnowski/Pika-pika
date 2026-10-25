@@ -12,6 +12,7 @@ Notable recent decisions:
 - [ADR-0004](adrs/0004-iec-aligned-trend-decimation.md) — IEC-aligned trend decimation (12-cycle Vrms)
 - [ADR-0005](adrs/0005-operator-status-dashboard.md) — Operator `daemon-status` dashboard
 - [ADR-0006](adrs/0006-trend-pane-display-decimation.md) — Trend-pane display decimation and settings
+- [ADR-0007](adrs/0007-flicker-observations.md) — Flicker notes searched against the existing trend
 
 ## Guides
 

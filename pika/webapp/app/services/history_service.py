@@ -351,6 +351,121 @@ class HistoryService:
             out_ts.append(timestamps[end - 1])
         return out_v, out_mn, out_mx, out_ts
 
+    def intervals_between(self, start_ns: int, end_ns: int) -> Dict[str, Any]:
+        """Full-resolution intervals whose timestamps fall in [start_ns, end_ns].
+
+        Reads decimated.bin.old first, then decimated.bin, so a rotation during
+        the window still contributes. Min/max are the AC waveform envelope.
+        """
+        if end_ns < start_ns:
+            return self._interval_payload([], [], [], [])
+
+        merged: List[Tuple[float, float, float, int]] = []
+        for name in ("decimated.bin.old", "decimated.bin"):
+            path = os.path.join(self.data_dir, name)
+            merged.extend(self._intervals_in_file(path, start_ns, end_ns))
+        merged.sort(key=lambda row: row[3])
+
+        deduped: List[Tuple[float, float, float, int]] = []
+        seen = set()
+        for row in merged:
+            if row[3] in seen:
+                continue
+            seen.add(row[3])
+            deduped.append(row)
+        if not deduped:
+            return self._interval_payload([], [], [], [])
+        vrms, mins, maxs, timestamps = map(list, zip(*deduped))
+        return self._interval_payload(vrms, mins, maxs, timestamps)
+
+    @staticmethod
+    def _interval_payload(vrms, mins, maxs, timestamps) -> Dict[str, Any]:
+        return {
+            "samples": [round(float(v), 2) for v in vrms],
+            "samples_min": [round(float(v), 2) for v in mins],
+            "samples_max": [round(float(v), 2) for v in maxs],
+            "timestamps": [int(ts) for ts in timestamps],
+        }
+
+    def _intervals_in_file(
+        self, path: str, start_ns: int, end_ns: int
+    ) -> List[Tuple[float, float, float, int]]:
+        if not os.path.exists(path):
+            return []
+        rows: List[Tuple[float, float, float, int]] = []
+        scale = self._scale()
+        try:
+            with open(path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                file_size = f.tell()
+                if file_size < HEADER_SIZE:
+                    return []
+                offset = self._seek_chunk_at_or_before(f, file_size, start_ns)
+                f.seek(offset)
+                while f.tell() + HEADER_SIZE <= file_size:
+                    hdr_data = f.read(HEADER_SIZE)
+                    if len(hdr_data) < HEADER_SIZE:
+                        break
+                    ts, rate, count, channels, vps = struct.unpack(
+                        HEADER_FORMAT, hdr_data
+                    )
+                    if not self._valid_header(ts, rate, count, channels, vps):
+                        break
+                    nbytes = count * channels * vps * 2
+                    if f.tell() + nbytes > file_size:
+                        break
+                    bucket_ns = int(1_000_000_000 / rate) if rate else 0
+                    chunk_end = ts + max(count - 1, 0) * bucket_ns
+                    if chunk_end < start_ns:
+                        f.seek(nbytes, os.SEEK_CUR)
+                        continue
+                    if ts > end_ns:
+                        break
+                    raw = f.read(nbytes)
+                    if len(raw) < nbytes:
+                        break
+                    shorts = struct.unpack(f"<{count * channels * vps}h", raw)
+                    vrms: List[float] = []
+                    mins: List[float] = []
+                    maxs: List[float] = []
+                    timestamps: List[int] = []
+                    self._parse_chunk_payload(
+                        shorts, count, vps, ts, rate, scale,
+                        vrms, mins, maxs, timestamps,
+                    )
+                    for v, mn, mx, stamp in zip(vrms, mins, maxs, timestamps):
+                        if start_ns <= stamp <= end_ns:
+                            rows.append((v, mn, mx, stamp))
+        except Exception as e:
+            print(f"[HistoryService] Error reading {path}: {e}")
+        return rows
+
+    def _seek_chunk_at_or_before(self, f, file_size: int, start_ns: int) -> int:
+        """Binary-search an aligned IEC file for the chunk covering start_ns."""
+        chunk = TYPICAL_IEC_CHUNK_BYTES
+        if file_size < chunk or file_size % chunk != 0:
+            return 0
+        n = file_size // chunk
+        lo, hi = 0, n
+        while lo < hi:
+            mid = (lo + hi) // 2
+            f.seek(mid * chunk)
+            hdr = f.read(HEADER_SIZE)
+            if len(hdr) < HEADER_SIZE:
+                return 0
+            ts, rate, count, channels, vps = struct.unpack(HEADER_FORMAT, hdr)
+            if not self._valid_header(ts, rate, count, channels, vps):
+                return 0
+            if self._chunk_bytes(count, channels, vps) != chunk:
+                return 0
+            bucket_ns = int(1_000_000_000 / rate) if rate else 0
+            chunk_end = ts + max(count - 1, 0) * bucket_ns
+            if chunk_end < start_ns:
+                lo = mid + 1
+            else:
+                hi = mid
+        return max(0, lo - 1) * chunk
+
     def get_vrms_10min_rollup(self, limit: int = 24) -> List[Dict[str, Any]]:
         path = os.path.join(self.data_dir, "vrms_10min.jsonl")
         if not os.path.exists(path):

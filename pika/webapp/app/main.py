@@ -216,6 +216,9 @@ def _format_bytes(n: int) -> str:
 
 def _is_stored_data_file(path: Path) -> bool:
     name = path.name
+    # Flicker notes survive "clear stored data" and "delete event data".
+    if name == "observations.jsonl":
+        return False
     return (
         path.suffix in {".bin", ".old", ".jsonl"}
         or name in {"write_probe.txt", "calibration_status.txt"}
@@ -528,6 +531,42 @@ async def get_history_debug():
         "max": max(samples_raw) if samples_raw else 0,
         "mean": sum(samples_raw) / len(samples_raw) if samples_raw else 0
     }
+
+@app.get("/api/v1/time")
+async def get_time_api():
+    """Board clock, so the browser can warn when it disagrees by more than ~30 s."""
+    return {"unix_ms": int(time.time() * 1000)}
+
+
+@app.get("/api/v1/observations")
+async def list_observations_api():
+    from app.services.observation_service import observation_service
+    return observation_service.list_notes()
+
+
+@app.get("/api/v1/observations/{note_id}")
+async def get_observation_api(note_id: str):
+    from app.services.observation_service import observation_service
+    note = observation_service.get_note(note_id)
+    if note is None:
+        return {"success": False, "error": "Note not found"}
+    return note
+
+
+@app.post("/api/v1/observations")
+async def create_observation_api(request: Request):
+    from app.services.observation_service import observation_service
+    try:
+        body = await request.json()
+        note = observation_service.create_note(body)
+        note["success"] = True
+        return note
+    except ValueError as exc:
+        return {"success": False, "error": str(exc)}
+    except Exception as exc:
+        logger.exception("Failed to save flicker note")
+        return {"success": False, "error": str(exc)}
+
 
 @app.get("/api/v1/events")
 async def get_events_api():

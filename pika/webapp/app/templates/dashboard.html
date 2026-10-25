@@ -178,13 +178,18 @@
             <span class="material-icons-outlined">show_chart</span>
             <h2 class="card-title">Supply Voltage Trend (IEC Vrms)</h2>
             <span id="trend-status" class="trend-status">Loading…</span>
+            <div style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
+            <button id="trend-live-btn" type="button" onclick="clearTrendFocus()"
+                style="display: none; background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px; font-weight: 600;">Live
+                trend</button>
             <button onclick="resetZoom()"
-                style="margin-left: auto; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Reset
+                style="background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Reset
                 Zoom</button>
             <button type="button" onclick="showTrendSettings(event)" title="Trend chart settings"
-                style="margin-left: 6px; background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 4px 6px; display: inline-flex; align-items: center;">
+                style="background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 4px 6px; display: inline-flex; align-items: center;">
                 <span class="material-icons-outlined" style="font-size: 18px;">settings</span>
             </button>
+            </div>
         </div>
         <div class="trend-plot">
             <canvas id="trendChart"></canvas>
@@ -266,8 +271,10 @@
         <div class="card-header">
             <span class="material-icons-outlined">warning_amber</span>
             <h2 class="card-title">Recent Events</h2>
+            <button type="button" onclick="showFlickerForm(event)" title="Log a light or TV flicker"
+                style="margin-left: auto; background: rgba(255,214,0,0.12); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; font-weight: 600;">I saw a flicker</button>
             <button type="button" onclick="showEventsHelp(event)" title="How sag/swell detection works"
-                style="margin-left: auto; background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 4px 6px; display: inline-flex; align-items: center;">
+                style="margin-left: 8px; background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 4px 6px; display: inline-flex; align-items: center;">
                 <span class="material-icons-outlined" style="font-size: 18px;">help_outline</span>
             </button>
             <button type="button" onclick="showEventsSettings(event)" title="Log threshold settings"
@@ -293,6 +300,83 @@
                 </tr>
             </tbody>
         </table>
+        <div id="flicker-panel" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08);">
+            <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: var(--primary);">Flicker notes</span>
+                <span style="font-size: 11px; opacity: 0.6;">Searches ±2 minutes of the stored voltage. A note can be entered up to a day later.</span>
+            </div>
+            <div id="flicker-result" style="display: none; font-size: 13px; line-height: 1.5; margin-bottom: 10px; padding: 10px 12px; border-radius: 6px; background: rgba(255,214,0,0.06); border: 1px solid rgba(255,214,0,0.2);"></div>
+            <div id="flicker-list" style="font-size: 12px; opacity: 0.9;">
+                <div style="opacity: 0.55;">No flicker notes yet.</div>
+            </div>
+        </div>
+    </div>
+    <div id="flicker-form-popover"
+        style="display: none; position: fixed; z-index: 1000; width: 420px; max-height: 85vh; overflow-y: auto; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,214,0,0.25); padding: 16px; pointer-events: auto;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <div style="font-size: 14px; font-weight: 500; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Flicker note</div>
+            <button type="button" onclick="hideFlickerForm()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
+                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
+            </button>
+        </div>
+        <p style="font-size: 11px; opacity: 0.7; margin: 0 0 12px; line-height: 1.4;">
+            The search looks ±2 minutes around the time you enter. That covers a memory that is a couple of minutes off.
+        </p>
+        <div id="flicker-clock-warn" style="display: none; font-size: 12px; color: #FFB74D; margin-bottom: 10px; line-height: 1.4;"></div>
+        <div style="display: grid; gap: 10px; font-size: 12px;">
+            <label>What flickered
+                <select id="flicker-kind" onchange="toggleFlickerTvFields()" style="width: 100%; margin-top: 4px;">
+                    <option value="lights">Lights</option>
+                    <option value="tv" selected>TV</option>
+                    <option value="both">Lights and TV</option>
+                </select>
+            </label>
+            <label>Approximate time
+                <input id="flicker-when" type="datetime-local" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;">
+            </label>
+            <div id="flicker-tv-fields" style="display: grid; gap: 10px;">
+                <label>How many sets
+                    <select id="flicker-tv-count" onchange="toggleFlickerSameMoment()" style="width: 100%; margin-top: 4px;">
+                        <option value="one">One TV</option>
+                        <option value="several" selected>Several TVs</option>
+                        <option value="unsure">Not sure</option>
+                    </select>
+                </label>
+                <label id="flicker-same-wrap">Did they go dark together?
+                    <select id="flicker-same" style="width: 100%; margin-top: 4px;">
+                        <option value="unsure" selected>Not sure</option>
+                        <option value="together">Yes, the same moment</option>
+                    </select>
+                </label>
+                <label>What was playing
+                    <select id="flicker-source" style="width: 100%; margin-top: 4px;">
+                        <option value="internal" selected>Built-in app only</option>
+                        <option value="external">External device</option>
+                        <option value="mixed">Some of each</option>
+                        <option value="unsure">Not sure</option>
+                    </select>
+                </label>
+                <label>How long the picture was gone (seconds)
+                    <input id="flicker-blank" type="number" min="0.1" max="10" step="0.1" value="0.8" style="width: 100%; margin-top: 4px; box-sizing: border-box;">
+                </label>
+                <label>What came back
+                    <select id="flicker-recovery" style="width: 100%; margin-top: 4px;">
+                        <option value="av_continue" selected>Sound and picture dropped, show kept going</option>
+                        <option value="reboot">Set rebooted (logo or home screen)</option>
+                    </select>
+                </label>
+            </div>
+            <label>Note (optional)
+                <input id="flicker-note" type="text" maxlength="500" placeholder="Which room" style="width: 100%; margin-top: 4px; box-sizing: border-box;">
+            </label>
+        </div>
+        <div id="flicker-form-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
+            <button type="button" onclick="hideFlickerForm()"
+                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px;">Cancel</button>
+            <button type="button" onclick="saveFlickerNote()"
+                style="background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 12px; font-weight: 600;">Save and search</button>
+        </div>
     </div>
     <!-- Events help popover -->
     <div id="events-help-popover"
@@ -476,6 +560,7 @@
     }
 
     async function showTrendSettings(event) {
+        hideFlickerForm();
         hideEventsHelp();
         hideEventsSettings();
         hideDeleteConfirm();
@@ -1068,6 +1153,17 @@
         };
 
         const updateTrend = async () => {
+            if (trendFocus) {
+                applyTrendFocus();
+                try {
+                    if (latestSamples.length > 0) {
+                        updateFFT(latestSamples, latestEffectiveRate);
+                    }
+                } catch (error) {
+                    console.error('Failed to render FFT chart:', error);
+                }
+                return;
+            }
             setTrendRefreshing();
             try {
                 const trendRes = await fetch('/api/v1/history');
@@ -1114,7 +1210,7 @@
             }
         };
 
-        await Promise.all([updateEvents(), updateTrend()]);
+        await Promise.all([updateEvents(), updateTrend(), loadFlickerNotes()]);
     }
 
     function manualFFT() {
@@ -1397,7 +1493,237 @@
     }
 
     function resetZoom() {
+        if (trendFocus) {
+            clearTrendFocus();
+            return;
+        }
         if (trendChart) trendChart.resetZoom();
+    }
+
+    let trendFocus = null;
+
+    function applyTrendFocus() {
+        if (!trendFocus) return;
+        renderTrend(
+            trendFocus.samples,
+            trendFocus.timestamps,
+            trendFocus.samples_min,
+            trendFocus.samples_max
+        );
+        if (trendChart) {
+            trendChart.options.scales.x.min = trendFocus.startMs;
+            trendChart.options.scales.x.max = trendFocus.endMs;
+            trendChart.update('none');
+        }
+        const live = document.getElementById('trend-live-btn');
+        if (live) live.style.display = '';
+        setTrendStatus('Flicker note · ±2 min');
+        hideTrendOverlay();
+    }
+
+    function focusTrendWindow(correlation) {
+        const iv = correlation && correlation.intervals;
+        if (!iv || !iv.timestamps || !iv.timestamps.length) return false;
+        trendFocus = {
+            samples: iv.samples,
+            timestamps: iv.timestamps,
+            samples_min: iv.samples_min,
+            samples_max: iv.samples_max,
+            startMs: correlation.window_start_ns / 1e6,
+            endMs: correlation.window_end_ns / 1e6,
+        };
+        applyTrendFocus();
+        const canvas = document.getElementById('trendChart');
+        if (canvas) canvas.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return true;
+    }
+
+    function clearTrendFocus() {
+        trendFocus = null;
+        if (trendChart && trendChart.options.scales.x) {
+            delete trendChart.options.scales.x.min;
+            delete trendChart.options.scales.x.max;
+            trendChart.resetZoom();
+        }
+        const live = document.getElementById('trend-live-btn');
+        if (live) live.style.display = 'none';
+        updateDashboard();
+    }
+
+    function escapeFlickerText(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    function flickerKindLabel(kind) {
+        if (kind === 'lights') return 'Lights';
+        if (kind === 'both') return 'Lights and TV';
+        return 'TV';
+    }
+
+    function datetimeLocalValue(ms) {
+        const d = new Date(ms);
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+    function toggleFlickerTvFields() {
+        const kind = document.getElementById('flicker-kind').value;
+        document.getElementById('flicker-tv-fields').style.display = kind === 'lights' ? 'none' : 'grid';
+    }
+
+    function toggleFlickerSameMoment() {
+        const several = document.getElementById('flicker-tv-count').value === 'several';
+        document.getElementById('flicker-same-wrap').style.display = several ? '' : 'none';
+    }
+
+    function hideFlickerForm() {
+        document.getElementById('flicker-form-popover').style.display = 'none';
+    }
+
+    async function showFlickerForm(event) {
+        hideEventsHelp();
+        hideDeleteConfirm();
+        hideClearDataConfirm();
+        hideSampleRateSettings();
+        hideTrendSettings();
+        hideEventsSettings();
+        const popover = document.getElementById('flicker-form-popover');
+        const now = Date.now();
+        const when = document.getElementById('flicker-when');
+        when.value = datetimeLocalValue(now);
+        when.min = datetimeLocalValue(now - 7 * 24 * 3600 * 1000);
+        when.max = datetimeLocalValue(now + 5 * 60 * 1000);
+        document.getElementById('flicker-form-status').innerText = '';
+        toggleFlickerTvFields();
+        toggleFlickerSameMoment();
+        positionCardPopover(popover, event);
+        const warn = document.getElementById('flicker-clock-warn');
+        warn.style.display = 'none';
+        warn.innerText = '';
+        try {
+            const res = await fetch('/api/v1/time');
+            const body = await res.json();
+            const skewMs = Math.abs(Date.now() - Number(body.unix_ms));
+            if (skewMs > 30000) {
+                const skewS = Math.round(skewMs / 1000);
+                warn.style.display = 'block';
+                warn.innerText = `This browser and the board clock differ by about ${skewS} s. The ±2 minute search has to cover that as well as the time you remember.`;
+            }
+        } catch (err) {
+            warn.style.display = 'block';
+            warn.innerText = 'Could not read the board clock. The search still uses the time you enter.';
+        }
+        positionCardPopover(popover, event);
+    }
+
+    function renderFlickerResult(payload) {
+        const corr = payload.correlation || {};
+        const box = document.getElementById('flicker-result');
+        const events = (corr.events || []).map((item) => {
+            const rms = (typeof item.peak_rms_v === 'number') ? item.peak_rms_v.toFixed(1) + ' V' : '';
+            return `<button type="button" onclick="showEventModal(${Number(item.id)})" style="margin: 4px 6px 0 0; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 11px;">${escapeFlickerText(item.type)} ${rms}</button>`;
+        }).join('');
+        const jumped = focusTrendWindow(corr);
+        const jumpNote = jumped
+            ? ''
+            : '<div style="margin-top: 6px; opacity: 0.75;">The trend chart was left on the live window because this ±2 minutes has no stored intervals.</div>';
+        box.innerHTML = `<div>${escapeFlickerText(corr.summary || '')}</div>${events ? `<div style="margin-top: 8px;">${events}</div>` : ''}${jumpNote}`;
+        box.style.display = 'block';
+    }
+
+    async function loadFlickerNotes() {
+        const list = document.getElementById('flicker-list');
+        if (!list) return;
+        try {
+            const res = await fetch('/api/v1/observations');
+            if (!res.ok) return;
+            const notes = await res.json();
+            if (!Array.isArray(notes) || notes.length === 0) {
+                list.innerHTML = '<div style="opacity: 0.55;">No flicker notes yet.</div>';
+                return;
+            }
+            list.innerHTML = notes.map((note) => {
+                const when = note.observed_at_ns
+                    ? new Date(note.observed_at_ns / 1e6).toLocaleString()
+                    : '';
+                const raw = note.summary || '';
+                const clipped = raw.length > 180 ? raw.slice(0, 180) + '…' : raw;
+                const detail = clipped
+                    ? escapeFlickerText(clipped)
+                    : 'Open to search this time.';
+                return `<button type="button" onclick="openFlickerNote('${note.id}')" style="display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 8px 10px; background: rgba(0,0,0,0.2); color: inherit; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; cursor: pointer;">
+                    <div style="font-weight: 600; color: var(--primary);">${escapeFlickerText(flickerKindLabel(note.kind))} · ${escapeFlickerText(when)}</div>
+                    <div style="opacity: 0.8; margin-top: 2px;">${detail}</div>
+                </button>`;
+            }).join('');
+        } catch (err) {
+            console.error('Failed to load flicker notes:', err);
+        }
+    }
+
+    async function openFlickerNote(noteId) {
+        const box = document.getElementById('flicker-result');
+        box.style.display = 'block';
+        box.innerText = 'Searching the stored voltage…';
+        try {
+            const res = await fetch('/api/v1/observations/' + noteId);
+            const body = await res.json();
+            if (!res.ok || body.error) {
+                box.innerText = body.error || 'Could not open that note.';
+                return;
+            }
+            renderFlickerResult(body);
+        } catch (err) {
+            box.innerText = 'Could not open that note.';
+        }
+    }
+
+    async function saveFlickerNote() {
+        const status = document.getElementById('flicker-form-status');
+        status.style.color = '#888';
+        status.innerText = 'Saving…';
+        const whenValue = document.getElementById('flicker-when').value;
+        const observedMs = whenValue ? new Date(whenValue).getTime() : NaN;
+        if (!Number.isFinite(observedMs)) {
+            status.style.color = '#F44336';
+            status.innerText = 'Enter the approximate time.';
+            return;
+        }
+        const kind = document.getElementById('flicker-kind').value;
+        const payload = {
+            kind,
+            observed_at_ms: observedMs,
+            note: document.getElementById('flicker-note').value,
+        };
+        if (kind !== 'lights') {
+            payload.tv_count = document.getElementById('flicker-tv-count').value;
+            payload.same_moment = document.getElementById('flicker-same').value;
+            payload.tv_source = document.getElementById('flicker-source').value;
+            payload.blank_s = Number(document.getElementById('flicker-blank').value);
+            payload.recovery = document.getElementById('flicker-recovery').value;
+        }
+        try {
+            const res = await fetch('/api/v1/observations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const body = await res.json();
+            if (!res.ok || body.error || body.success === false) {
+                status.style.color = '#F44336';
+                status.innerText = body.error || 'Could not save the note.';
+                return;
+            }
+            hideFlickerForm();
+            renderFlickerResult(body);
+            loadFlickerNotes();
+        } catch (err) {
+            status.style.color = '#F44336';
+            status.innerText = 'Could not save the note.';
+        }
     }
 
     let popoverChart = null;
@@ -1476,6 +1802,7 @@
     let deletePopoverY = 0;
 
     function showDeleteConfirm(event) {
+        hideFlickerForm();
         hideClearDataConfirm();
         const popover = document.getElementById('delete-confirm-popover');
         deletePopoverX = event.clientX;
@@ -1640,6 +1967,7 @@
     }
 
     async function showEventsHelp(event) {
+        hideFlickerForm();
         hideEventsSettings();
         hideDeleteConfirm();
         hideClearDataConfirm();
@@ -1680,6 +2008,7 @@
     let lastAnomaliesReview = null;
 
     async function showEventsSettings(event) {
+        hideFlickerForm();
         hideEventsHelp();
         hideDeleteConfirm();
         hideClearDataConfirm();
