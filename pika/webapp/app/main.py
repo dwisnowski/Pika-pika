@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 from app.core.config import settings
 from app.services.shared_memory import shm
@@ -408,7 +408,14 @@ def get_health_snapshot():
 
 
 # Templates and Static files
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return FileResponse(_STATIC_DIR / "favicon.ico")
+
 templates = Jinja2Templates(directory="app/templates")
 
 @app.on_event("startup")
