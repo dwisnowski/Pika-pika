@@ -311,6 +311,23 @@
             </div>
         </div>
     </div>
+    <div id="flicker-detail-popover"
+        style="display: none; position: fixed; z-index: 1000; width: 440px; max-height: 85vh; overflow-y: auto; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,214,0,0.25); padding: 16px; pointer-events: auto;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <div style="font-size: 14px; font-weight: 500; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Flicker · ±2 min</div>
+            <button type="button" onclick="hideFlickerDetail()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
+                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
+            </button>
+        </div>
+        <div id="flicker-detail-meta" style="font-size: 12px; opacity: 0.85; margin-bottom: 10px; line-height: 1.4;"></div>
+        <div id="flicker-detail-stats"
+            style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; margin-bottom: 12px;"></div>
+        <div style="height: 160px; margin-bottom: 10px; position: relative;">
+            <canvas id="flickerDetailChart"></canvas>
+        </div>
+        <div id="flicker-detail-events" style="margin-bottom: 10px;"></div>
+        <div id="flicker-detail-summary" style="font-size: 12px; line-height: 1.5; opacity: 0.9;"></div>
+    </div>
     <div id="flicker-form-popover"
         style="display: none; position: fixed; z-index: 1000; width: 420px; max-height: 85vh; overflow-y: auto; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,214,0,0.25); padding: 16px; pointer-events: auto;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
@@ -561,6 +578,7 @@
 
     async function showTrendSettings(event) {
         hideFlickerForm();
+        hideFlickerDetail();
         hideEventsHelp();
         hideEventsSettings();
         hideDeleteConfirm();
@@ -1376,6 +1394,10 @@
         return { points, minPts, maxPts, meanPts, hasEnvelope };
     }
 
+    let flickerNotesCache = [];
+    let lastTrendSeries = null;
+    let flickerDetailChart = null;
+
     function trendDatasetDefs(series) {
         const datasets = [];
         if (series.hasEnvelope) {
@@ -1424,13 +1446,105 @@
         return datasets;
     }
 
+    function trendDataWindowMs(series) {
+        if (trendFocus) {
+            return { startMs: trendFocus.startMs, endMs: trendFocus.endMs };
+        }
+        const pts = series && series.points;
+        if (!pts || pts.length === 0) return null;
+        return { startMs: pts[0].x, endMs: pts[pts.length - 1].x };
+    }
+
+    function nearestVrmsAtMs(series, ms) {
+        const pts = series && series.points;
+        if (!pts || !pts.length) return null;
+        let best = pts[0];
+        let bestDist = Math.abs(pts[0].x - ms);
+        for (let i = 1; i < pts.length; i++) {
+            const dist = Math.abs(pts[i].x - ms);
+            if (dist < bestDist) {
+                best = pts[i];
+                bestDist = dist;
+            }
+        }
+        return best.y;
+    }
+
+    function flickerMarkerPoints(series) {
+        const win = trendDataWindowMs(series);
+        if (!win || !flickerNotesCache.length) return [];
+        const points = [];
+        for (const note of flickerNotesCache) {
+            const observedNs = Number(note.observed_at_ns);
+            if (!Number.isFinite(observedNs)) continue;
+            const ms = observedNs / 1e6;
+            if (ms < win.startMs || ms > win.endMs) continue;
+            let y = (typeof note.lowest_vrms_v === 'number') ? note.lowest_vrms_v : null;
+            if (y == null || !Number.isFinite(y)) {
+                y = nearestVrmsAtMs(series, ms);
+            }
+            if (y == null || !Number.isFinite(y)) continue;
+            points.push({
+                x: ms,
+                y,
+                noteId: note.id,
+                kind: note.kind,
+                summary: note.summary || '',
+            });
+        }
+        return points;
+    }
+
+    function flickerMarkerDataset(series) {
+        const data = flickerMarkerPoints(series);
+        return {
+            label: 'Flicker notes',
+            type: 'scatter',
+            data,
+            backgroundColor: '#FF7043',
+            borderColor: '#FFF',
+            borderWidth: 1.5,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            pointStyle: 'triangle',
+            order: 1,
+            parsing: false,
+        };
+    }
+
+    function applyFlickerMarkers() {
+        if (!trendChart || !lastTrendSeries) return;
+        const without = (trendChart.data.datasets || []).filter(
+            (ds) => ds.label !== 'Flicker notes'
+        );
+        without.push(flickerMarkerDataset(lastTrendSeries));
+        trendChart.data.datasets = without;
+        trendChart.update('none');
+    }
+
+    function onTrendChartClick(event, elements) {
+        if (!elements || !elements.length || !trendChart) return;
+        for (const el of elements) {
+            const ds = trendChart.data.datasets[el.datasetIndex];
+            if (!ds || ds.label !== 'Flicker notes') continue;
+            const point = ds.data[el.index];
+            if (point && point.noteId) {
+                openFlickerNote(point.noteId, event);
+                return;
+            }
+        }
+    }
+
     function renderTrend(samples, timestamps, samplesMin, samplesMax) {
         if (!samples || samples.length === 0) {
             return;
         }
         const series = buildTrendSeries(samples, timestamps, samplesMin, samplesMax);
+        lastTrendSeries = series;
+        const datasets = trendDatasetDefs(series);
+        datasets.push(flickerMarkerDataset(series));
         if (trendChart) {
-            trendChart.data.datasets = trendDatasetDefs(series);
+            trendChart.data.datasets = datasets;
             trendChart.update('none');
             return;
         }
@@ -1438,11 +1552,12 @@
         const ctx = document.getElementById('trendChart').getContext('2d');
         trendChart = new Chart(ctx, {
             type: 'line',
-            data: { datasets: trendDatasetDefs(series) },
+            data: { datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: false,
+                onClick: onTrendChartClick,
                 plugins: {
                     legend: { display: true, labels: { color: '#aaa', boxWidth: 12, font: { size: 10 } } },
                     zoom: {
@@ -1459,7 +1574,19 @@
                     tooltip: {
                         enabled: true,
                         callbacks: {
+                            title: (items) => {
+                                const item = items && items[0];
+                                if (!item || !item.raw || item.raw.x == null) return '';
+                                try { return new Date(item.raw.x).toLocaleString(); }
+                                catch (e) { return ''; }
+                            },
                             label: (context) => {
+                                if (context.dataset.label === 'Flicker notes') {
+                                    const raw = context.raw || {};
+                                    const kind = flickerKindLabel(raw.kind);
+                                    const y = (typeof raw.y === 'number') ? raw.y.toFixed(1) : '—';
+                                    return `${kind} note · ${y} V (click for ±2 min)`;
+                                }
                                 const value = typeof context.raw === 'object'
                                     ? context.raw.y
                                     : context.raw;
@@ -1583,7 +1710,29 @@
         document.getElementById('flicker-form-popover').style.display = 'none';
     }
 
+    function hideFlickerDetail() {
+        const popover = document.getElementById('flicker-detail-popover');
+        if (popover) popover.style.display = 'none';
+        if (flickerDetailChart) {
+            flickerDetailChart.destroy();
+            flickerDetailChart = null;
+        }
+    }
+
+    function centerFlickerPopover(popover) {
+        popover.style.display = 'block';
+        const rect = popover.getBoundingClientRect();
+        const left = Math.max(12, (window.innerWidth - rect.width) / 2);
+        const top = Math.max(12, Math.min(
+            (window.innerHeight - rect.height) / 2,
+            window.innerHeight - rect.height - 12
+        ));
+        popover.style.left = left + 'px';
+        popover.style.top = top + 'px';
+    }
+
     async function showFlickerForm(event) {
+        hideFlickerDetail();
         hideEventsHelp();
         hideDeleteConfirm();
         hideClearDataConfirm();
@@ -1619,19 +1768,177 @@
         positionCardPopover(popover, event);
     }
 
-    function renderFlickerResult(payload) {
+    function formatFlickerStat(label, value) {
+        return `<div style="padding: 8px; border-radius: 6px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.08);">
+            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; opacity: 0.6; margin-bottom: 4px;">${escapeFlickerText(label)}</div>
+            <div style="font-size: 16px; font-weight: 600; color: #FFF;">${value}</div>
+        </div>`;
+    }
+
+    function renderFlickerDetailMiniChart(payload) {
         const corr = payload.correlation || {};
-        const box = document.getElementById('flicker-result');
+        const iv = corr.intervals || {};
+        const canvas = document.getElementById('flickerDetailChart');
+        if (!canvas) return;
+        if (flickerDetailChart) {
+            flickerDetailChart.destroy();
+            flickerDetailChart = null;
+        }
+        const samples = iv.samples || [];
+        const timestamps = iv.timestamps || [];
+        if (!samples.length || samples.length !== timestamps.length) {
+            const ctxEmpty = canvas.getContext('2d');
+            ctxEmpty.clearRect(0, 0, canvas.width, canvas.height);
+            return;
+        }
+        const points = samples.map((y, i) => ({ x: timestamps[i] / 1e6, y }));
+        const median = (typeof corr.median_vrms_v === 'number') ? corr.median_vrms_v : null;
+        const observedMs = Number(payload.observed_at_ns) / 1e6;
+        const noteY = (typeof corr.lowest_vrms_v === 'number')
+            ? corr.lowest_vrms_v
+            : nearestVrmsAtMs({ points }, observedMs);
+        const datasets = [{
+            label: 'Vrms',
+            data: points,
+            borderColor: '#FFD600',
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: false,
+            tension: 0,
+            order: 10,
+        }];
+        if (median != null) {
+            datasets.push({
+                label: 'Median',
+                data: [
+                    { x: points[0].x, y: median },
+                    { x: points[points.length - 1].x, y: median },
+                ],
+                borderColor: '#00BCD4',
+                borderWidth: 1,
+                borderDash: [4, 4],
+                pointRadius: 0,
+                fill: false,
+                order: 5,
+            });
+        }
+        if (Number.isFinite(observedMs) && noteY != null) {
+            datasets.push({
+                label: 'Note',
+                type: 'scatter',
+                data: [{ x: observedMs, y: noteY }],
+                backgroundColor: '#FF7043',
+                borderColor: '#FFF',
+                borderWidth: 1.5,
+                pointRadius: 6,
+                pointStyle: 'triangle',
+                order: 1,
+            });
+        }
+        flickerDetailChart = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: { datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => {
+                                const value = typeof context.raw === 'object' ? context.raw.y : context.raw;
+                                return `${context.dataset.label}: ${value != null ? Number(value).toFixed(2) : 'N/A'} V`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        min: corr.window_start_ns / 1e6,
+                        max: corr.window_end_ns / 1e6,
+                        ticks: {
+                            color: '#888',
+                            maxTicksLimit: 5,
+                            callback: (v) => {
+                                try { return new Date(v).toLocaleTimeString(); }
+                                catch (e) { return v; }
+                            }
+                        },
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                    },
+                    y: {
+                        ticks: { color: '#888' },
+                        grid: { color: 'rgba(255,255,255,0.08)' },
+                        title: { display: true, text: 'Vrms', color: '#888', font: { size: 10 } },
+                    }
+                }
+            }
+        });
+    }
+
+    function showFlickerDetailPopover(payload, clickEvent) {
+        hideFlickerForm();
+        hideEventsHelp();
+        hideEventsSettings();
+        hideTrendSettings();
+        const corr = payload.correlation || {};
+        const popover = document.getElementById('flicker-detail-popover');
+        const when = payload.observed_at_ns
+            ? new Date(payload.observed_at_ns / 1e6).toLocaleString()
+            : '';
+        const noteText = payload.note ? ` · ${payload.note}` : '';
+        document.getElementById('flicker-detail-meta').innerHTML =
+            `<b style="color: var(--primary);">${escapeFlickerText(flickerKindLabel(payload.kind))}</b> · ${escapeFlickerText(when)}${escapeFlickerText(noteText)}`;
+
+        const low = (typeof corr.lowest_vrms_v === 'number') ? `${corr.lowest_vrms_v.toFixed(1)} V` : '—';
+        const vsMed = (typeof corr.lowest_vs_median_pct === 'number')
+            ? `${corr.lowest_vs_median_pct.toFixed(1)}%`
+            : '—';
+        const vsNom = (typeof corr.lowest_vs_nominal_pct === 'number')
+            ? `${corr.lowest_vs_nominal_pct.toFixed(1)}%`
+            : '—';
+        const run = (typeof corr.low_run_s === 'number') ? `${corr.low_run_s.toFixed(2)} s` : '—';
+        document.getElementById('flicker-detail-stats').innerHTML =
+            formatFlickerStat('Lowest Vrms', low) +
+            formatFlickerStat('Below median', vsMed) +
+            formatFlickerStat('Below nominal', vsNom) +
+            formatFlickerStat('Low run', run);
+
         const events = (corr.events || []).map((item) => {
             const rms = (typeof item.peak_rms_v === 'number') ? item.peak_rms_v.toFixed(1) + ' V' : '';
-            return `<button type="button" onclick="showEventModal(${Number(item.id)})" style="margin: 4px 6px 0 0; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 11px;">${escapeFlickerText(item.type)} ${rms}</button>`;
+            const dur = (typeof item.duration_ms === 'number') ? item.duration_ms.toFixed(1) + ' ms' : '';
+            return `<button type="button" onclick="showEventModal(${Number(item.id)})" style="margin: 0 6px 6px 0; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 11px;">${escapeFlickerText(item.type)} ${rms} ${dur}</button>`;
         }).join('');
+        document.getElementById('flicker-detail-events').innerHTML = events
+            || '<div style="font-size: 11px; opacity: 0.6;">No sag/swell logged in this ±2 minutes.</div>';
+        document.getElementById('flicker-detail-summary').innerText = corr.summary || '';
+
+        if (clickEvent && clickEvent.clientX != null) {
+            positionCardPopover(popover, clickEvent);
+        } else {
+            centerFlickerPopover(popover);
+        }
+        renderFlickerDetailMiniChart(payload);
+        if (clickEvent && clickEvent.clientX != null) {
+            positionCardPopover(popover, clickEvent);
+        } else {
+            centerFlickerPopover(popover);
+        }
+    }
+
+    function renderFlickerResult(payload, clickEvent) {
+        const corr = payload.correlation || {};
+        const box = document.getElementById('flicker-result');
         const jumped = focusTrendWindow(corr);
-        const jumpNote = jumped
-            ? ''
-            : '<div style="margin-top: 6px; opacity: 0.75;">The trend chart was left on the live window because this ±2 minutes has no stored intervals.</div>';
-        box.innerHTML = `<div>${escapeFlickerText(corr.summary || '')}</div>${events ? `<div style="margin-top: 8px;">${events}</div>` : ''}${jumpNote}`;
+        const low = (typeof corr.lowest_vrms_v === 'number') ? corr.lowest_vrms_v.toFixed(1) + ' V' : '—';
+        const run = (typeof corr.low_run_s === 'number') ? corr.low_run_s.toFixed(2) + ' s low' : '';
+        box.innerHTML = jumped
+            ? `<div>Opened ±2 min around this note · lowest ${escapeFlickerText(low)}${run ? ' · ' + escapeFlickerText(run) : ''}.</div>`
+            : '<div>No stored intervals in this ±2 minutes; trend stayed on the live window.</div>';
         box.style.display = 'block';
+        showFlickerDetailPopover(payload, clickEvent);
     }
 
     async function loadFlickerNotes() {
@@ -1641,20 +1948,29 @@
             const res = await fetch('/api/v1/observations');
             if (!res.ok) return;
             const notes = await res.json();
-            if (!Array.isArray(notes) || notes.length === 0) {
+            flickerNotesCache = Array.isArray(notes) ? notes : [];
+            applyFlickerMarkers();
+            if (!flickerNotesCache.length) {
                 list.innerHTML = '<div style="opacity: 0.55;">No flicker notes yet.</div>';
                 return;
             }
-            list.innerHTML = notes.map((note) => {
+            list.innerHTML = flickerNotesCache.map((note) => {
                 const when = note.observed_at_ns
                     ? new Date(note.observed_at_ns / 1e6).toLocaleString()
                     : '';
+                const low = (typeof note.lowest_vrms_v === 'number')
+                    ? `${note.lowest_vrms_v.toFixed(1)} V`
+                    : '';
+                const run = (typeof note.low_run_s === 'number' && note.low_run_s > 0)
+                    ? `${note.low_run_s.toFixed(2)} s`
+                    : '';
+                const bits = [low, run].filter(Boolean).join(' · ');
                 const raw = note.summary || '';
-                const clipped = raw.length > 180 ? raw.slice(0, 180) + '…' : raw;
-                const detail = clipped
-                    ? escapeFlickerText(clipped)
-                    : 'Open to search this time.';
-                return `<button type="button" onclick="openFlickerNote('${note.id}')" style="display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 8px 10px; background: rgba(0,0,0,0.2); color: inherit; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; cursor: pointer;">
+                const clipped = raw.length > 140 ? raw.slice(0, 140) + '…' : raw;
+                const detail = bits
+                    ? escapeFlickerText(bits) + (clipped ? ' — ' + escapeFlickerText(clipped) : '')
+                    : (clipped ? escapeFlickerText(clipped) : 'Open for ±2 min voltage.');
+                return `<button type="button" onclick="openFlickerNote('${note.id}', event)" style="display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 8px 10px; background: rgba(0,0,0,0.2); color: inherit; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; cursor: pointer;">
                     <div style="font-weight: 600; color: var(--primary);">${escapeFlickerText(flickerKindLabel(note.kind))} · ${escapeFlickerText(when)}</div>
                     <div style="opacity: 0.8; margin-top: 2px;">${detail}</div>
                 </button>`;
@@ -1664,7 +1980,7 @@
         }
     }
 
-    async function openFlickerNote(noteId) {
+    async function openFlickerNote(noteId, clickEvent) {
         const box = document.getElementById('flicker-result');
         box.style.display = 'block';
         box.innerText = 'Searching the stored voltage…';
@@ -1675,7 +1991,7 @@
                 box.innerText = body.error || 'Could not open that note.';
                 return;
             }
-            renderFlickerResult(body);
+            renderFlickerResult(body, clickEvent);
         } catch (err) {
             box.innerText = 'Could not open that note.';
         }
@@ -1803,6 +2119,7 @@
 
     function showDeleteConfirm(event) {
         hideFlickerForm();
+        hideFlickerDetail();
         hideClearDataConfirm();
         const popover = document.getElementById('delete-confirm-popover');
         deletePopoverX = event.clientX;
@@ -1968,6 +2285,7 @@
 
     async function showEventsHelp(event) {
         hideFlickerForm();
+        hideFlickerDetail();
         hideEventsSettings();
         hideDeleteConfirm();
         hideClearDataConfirm();
@@ -2009,6 +2327,7 @@
 
     async function showEventsSettings(event) {
         hideFlickerForm();
+        hideFlickerDetail();
         hideEventsHelp();
         hideDeleteConfirm();
         hideClearDataConfirm();

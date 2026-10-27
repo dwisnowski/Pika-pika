@@ -52,6 +52,11 @@ log.
   the television blank. A single short bucket means the set may have held the
   mute after a briefer dip. A flat window means the stored line did not move
   for the length of the blackout.
+- Notes whose approximate time falls inside the loaded trend lookback (or the
+  focused ±2 minute window) appear as scatter markers on the supply voltage
+  chart. Notes outside that span stay off the chart. Selecting a marker or
+  list row opens a detail popover with disruption numbers (lowest Vrms,
+  percent below median/nominal, low-run duration) and a ±2 minute mini-chart.
 - Revisit a model only if notes show a repeating waveform shape this search
   cannot describe, and only on waveform samples or a future current channel.
 
