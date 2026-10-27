@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 
 from app.core.config import settings
 from app.services.shared_memory import shm
@@ -549,6 +549,24 @@ async def get_time_api():
 async def list_observations_api():
     from app.services.observation_service import observation_service
     return observation_service.list_notes()
+
+
+@app.get("/api/v1/observations/export")
+async def export_observations_api():
+    """Zip of notes.csv, windows.csv, and chart.html for offline correlation."""
+    from app.services.observation_service import observation_service
+    try:
+        payload = observation_service.export_zip()
+    except Exception as exc:
+        logger.exception("Failed to export flicker notes")
+        return {"success": False, "error": str(exc)}
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="flicker-export.zip"',
+        },
+    )
 
 
 @app.get("/api/v1/observations/{note_id}")

@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import math
 import os
 import time
 import uuid
+import zipfile
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 try:
@@ -18,6 +23,8 @@ from app.core.config import settings
 from app.services.config_service import config_service
 from app.services.event_service import event_service
 from app.services.history_service import history_service
+
+_CHART_TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "flicker_export_chart.html"
 
 WINDOW_S = 120
 AWAY_FRACTION = 0.01
@@ -118,6 +125,31 @@ def _median(values: List[float]) -> float:
     if n % 2:
         return float(ordered[mid])
     return (ordered[mid - 1] + ordered[mid]) / 2.0
+
+
+def _ns_to_iso(ns: Optional[int]) -> str:
+    if ns is None:
+        return ""
+    try:
+        seconds = int(ns) / 1_000_000_000
+        return (
+            datetime.fromtimestamp(seconds, tz=timezone.utc)
+            .isoformat(timespec="milliseconds")
+            .replace("+00:00", "Z")
+        )
+    except (OverflowError, OSError, ValueError):
+        return ""
+
+
+def _full_intervals(
+    vrms: List[float], mins: List[float], maxs: List[float], timestamps: List[int]
+) -> Dict[str, Any]:
+    return {
+        "samples": [round(float(v), 2) for v in vrms],
+        "samples_min": [round(float(v), 2) for v in mins],
+        "samples_max": [round(float(v), 2) for v in maxs],
+        "timestamps": [int(ts) for ts in timestamps],
+    }
 
 
 def _notch(vrms: List[float], mins: List[float], maxs: List[float], timestamps: List[int]) -> Optional[Dict[str, Any]]:
@@ -344,7 +376,7 @@ class ObservationService:
         self._append(stored)
         return correlated
 
-    def correlate(self, note: dict) -> dict:
+    def correlate(self, note: dict, *, full_intervals: bool = False) -> dict:
         observed = int(note["observed_at_ns"])
         half = WINDOW_S * 1_000_000_000
         start_ns = observed - half
@@ -424,9 +456,166 @@ class ObservationService:
             "high_run_s": round((high_run["duration_ns"] / 1e9), 2) if high_run else 0.0,
             "notch": notch,
         })
-        stats["intervals"] = _chart_intervals(vrms, mins, maxs, timestamps)
+        if full_intervals:
+            stats["intervals"] = _full_intervals(vrms, mins, maxs, timestamps)
+        else:
+            stats["intervals"] = _chart_intervals(vrms, mins, maxs, timestamps)
         stats["summary"] = build_summary(note, stats)
         return stats
+
+    def export_zip(self) -> bytes:
+        """Build notes.csv, windows.csv, and chart.html for all stored notes."""
+        notes = list(reversed(self._read_all()))
+        note_rows: List[Dict[str, Any]] = []
+        window_rows: List[Dict[str, Any]] = []
+        chart_notes: List[Dict[str, Any]] = []
+
+        for note in notes:
+            stats = self.correlate(note, full_intervals=True)
+            note_rows.append(self._export_note_row(note, stats))
+            window_rows.extend(self._export_window_rows(note, stats))
+            chart_notes.append(self._export_chart_note(note, stats))
+
+        notes_csv = self._csv_bytes(
+            note_rows,
+            [
+                "id", "kind", "note", "tv_count", "same_moment", "tv_source", "blank_s", "recovery",
+                "created_at_iso", "observed_at_iso", "observed_at_ns",
+                "window_start_iso", "window_end_iso",
+                "nominal_v", "median_vrms_v",
+                "lowest_vrms_v", "lowest_vrms_iso", "lowest_vs_nominal_pct", "lowest_vs_median_pct",
+                "highest_vrms_v", "highest_vrms_iso",
+                "low_run_s", "high_run_s", "event_count", "event_types", "coverage", "summary",
+            ],
+        )
+        windows_csv = self._csv_bytes(
+            window_rows,
+            [
+                "note_id", "kind", "observed_at_iso",
+                "timestamp_iso", "timestamp_ns", "vrms_v", "vmin_v", "vmax_v",
+            ],
+        )
+        chart_html = self._render_chart_html(chart_notes)
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("notes.csv", notes_csv)
+            zf.writestr("windows.csv", windows_csv)
+            zf.writestr("chart.html", chart_html)
+        return buf.getvalue()
+
+    @staticmethod
+    def _csv_bytes(rows: List[Dict[str, Any]], fieldnames: List[str]) -> bytes:
+        out = io.StringIO()
+        writer = csv.DictWriter(out, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key: row.get(key, "") for key in fieldnames})
+        return out.getvalue().encode("utf-8")
+
+    @staticmethod
+    def _export_note_row(note: dict, stats: dict) -> Dict[str, Any]:
+        events = stats.get("events") or []
+        types = [str(e.get("type") or "") for e in events if e.get("type")]
+        return {
+            "id": note.get("id") or "",
+            "kind": note.get("kind") or "",
+            "note": note.get("note") or "",
+            "tv_count": note.get("tv_count") if note.get("tv_count") is not None else "",
+            "same_moment": note.get("same_moment") if note.get("same_moment") is not None else "",
+            "tv_source": note.get("tv_source") if note.get("tv_source") is not None else "",
+            "blank_s": note.get("blank_s") if note.get("blank_s") is not None else "",
+            "recovery": note.get("recovery") if note.get("recovery") is not None else "",
+            "created_at_iso": _ns_to_iso(note.get("created_at_ns")),
+            "observed_at_iso": _ns_to_iso(note.get("observed_at_ns")),
+            "observed_at_ns": note.get("observed_at_ns") or "",
+            "window_start_iso": _ns_to_iso(stats.get("window_start_ns")),
+            "window_end_iso": _ns_to_iso(stats.get("window_end_ns")),
+            "nominal_v": stats.get("nominal_v", ""),
+            "median_vrms_v": stats.get("median_vrms_v", ""),
+            "lowest_vrms_v": stats.get("lowest_vrms_v", ""),
+            "lowest_vrms_iso": _ns_to_iso(stats.get("lowest_vrms_ns")),
+            "lowest_vs_nominal_pct": stats.get("lowest_vs_nominal_pct", ""),
+            "lowest_vs_median_pct": stats.get("lowest_vs_median_pct", ""),
+            "highest_vrms_v": stats.get("highest_vrms_v", ""),
+            "highest_vrms_iso": _ns_to_iso(stats.get("highest_vrms_ns")),
+            "low_run_s": stats.get("low_run_s", ""),
+            "high_run_s": stats.get("high_run_s", ""),
+            "event_count": len(events),
+            "event_types": "|".join(types),
+            "coverage": stats.get("coverage") or "",
+            "summary": stats.get("summary") or note.get("summary") or "",
+        }
+
+    @staticmethod
+    def _export_window_rows(note: dict, stats: dict) -> List[Dict[str, Any]]:
+        intervals = stats.get("intervals") or {}
+        samples = intervals.get("samples") or []
+        mins = intervals.get("samples_min") or []
+        maxs = intervals.get("samples_max") or []
+        stamps = intervals.get("timestamps") or []
+        observed_iso = _ns_to_iso(note.get("observed_at_ns"))
+        note_id = note.get("id") or ""
+        kind = note.get("kind") or ""
+        rows = []
+        for i, ts in enumerate(stamps):
+            rows.append({
+                "note_id": note_id,
+                "kind": kind,
+                "observed_at_iso": observed_iso,
+                "timestamp_iso": _ns_to_iso(ts),
+                "timestamp_ns": ts,
+                "vrms_v": samples[i] if i < len(samples) else "",
+                "vmin_v": mins[i] if i < len(mins) else "",
+                "vmax_v": maxs[i] if i < len(maxs) else "",
+            })
+        return rows
+
+    @staticmethod
+    def _export_chart_note(note: dict, stats: dict) -> Dict[str, Any]:
+        intervals = stats.get("intervals") or {}
+        samples = intervals.get("samples") or []
+        stamps = intervals.get("timestamps") or []
+        observed_ns = int(note.get("observed_at_ns") or 0)
+        events = []
+        for event in stats.get("events") or []:
+            ts = event.get("timestamp")
+            if ts is None:
+                continue
+            events.append({
+                "t_ms": int(ts) / 1_000_000.0,
+                "type": event.get("type") or "event",
+                "peak_rms_v": event.get("peak_rms_v"),
+            })
+        marker_y = stats.get("lowest_vrms_v")
+        if marker_y is None and samples:
+            # Nearest sample to observed time
+            best_i = min(range(len(stamps)), key=lambda i: abs(stamps[i] - observed_ns))
+            marker_y = samples[best_i]
+        return {
+            "id": note.get("id") or "",
+            "kind": note.get("kind") or "",
+            "note": note.get("note") or "",
+            "observed_at_ms": observed_ns / 1_000_000.0,
+            "observed_at_iso": _ns_to_iso(observed_ns),
+            "summary": stats.get("summary") or note.get("summary") or "",
+            "nominal_v": stats.get("nominal_v"),
+            "lowest_vrms_v": stats.get("lowest_vrms_v"),
+            "marker_y": marker_y,
+            "series": {
+                "t_ms": [int(ts) / 1_000_000.0 for ts in stamps],
+                "vrms": [float(v) for v in samples],
+            },
+            "events": events,
+        }
+
+    @staticmethod
+    def _render_chart_html(chart_notes: List[Dict[str, Any]]) -> str:
+        template = _CHART_TEMPLATE_PATH.read_text(encoding="utf-8")
+        payload = json.dumps({"notes": chart_notes}, separators=(",", ":"))
+        # Escape </script> so inlined JSON cannot break out of the script tag.
+        safe_payload = payload.replace("<", "\\u003c")
+        return template.replace("__PAYLOAD__", safe_payload)
 
     def _with_correlation(self, note: dict) -> dict:
         public = self._public_note(note, include_match=True)

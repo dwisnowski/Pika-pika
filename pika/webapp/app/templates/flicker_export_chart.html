@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pika flicker export</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0"></script>
+  <style>
+    :root {
+      --bg: #12141a;
+      --surface: #1c1f28;
+      --text: #e8eaed;
+      --muted: #9aa0a6;
+      --accent: #ffd600;
+      --marker: #ff7043;
+      --line: #4fc3f7;
+      --event: #ce93d8;
+      --nominal: #81c784;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 20px 24px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    h1 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+    .sub {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    main {
+      padding: 16px 24px 32px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 16px;
+    }
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    select {
+      min-width: 280px;
+      max-width: 100%;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 214, 0, 0.35);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 14px;
+    }
+    .meta {
+      margin-bottom: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+    .meta strong { color: var(--text); font-weight: 600; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .stat {
+      background: var(--surface);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+    .stat .v { margin-top: 4px; font-size: 16px; color: var(--accent); font-variant-numeric: tabular-nums; }
+    .chart-wrap {
+      height: 360px;
+      background: var(--surface);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 12px;
+    }
+    .summary {
+      margin-top: 14px;
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--text);
+      opacity: 0.9;
+    }
+    .empty {
+      padding: 40px 12px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Flicker notes · voltage windows</h1>
+    <div class="sub">Bundled with notes.csv and windows.csv. Each note shows ±2 minutes of stored Vrms with the flicker marker at the noted time.</div>
+  </header>
+  <main>
+    <div id="empty" class="empty" style="display:none;">No flicker notes in this export.</div>
+    <div id="content">
+      <div class="controls">
+        <label>Note
+          <select id="note-select"></select>
+        </label>
+      </div>
+      <div id="meta" class="meta"></div>
+      <div id="stats" class="stats"></div>
+      <div class="chart-wrap">
+        <canvas id="chart"></canvas>
+      </div>
+      <div id="summary" class="summary"></div>
+    </div>
+  </main>
+  <script id="payload" type="application/json">__PAYLOAD__</script>
+  <script>
+    const payload = JSON.parse(document.getElementById('payload').textContent);
+    const notes = Array.isArray(payload.notes) ? payload.notes : [];
+    const select = document.getElementById('note-select');
+    const empty = document.getElementById('empty');
+    const content = document.getElementById('content');
+    let chart = null;
+
+    function fmtTime(ms) {
+      if (!Number.isFinite(ms)) return '—';
+      try {
+        return new Date(ms).toISOString().replace('T', ' ').replace('Z', ' UTC');
+      } catch (e) {
+        return '—';
+      }
+    }
+
+    function kindLabel(kind) {
+      if (kind === 'lights') return 'Lights';
+      if (kind === 'tv') return 'TV';
+      if (kind === 'both') return 'Lights + TV';
+      return kind || 'Note';
+    }
+
+    function nearestY(series, tMs) {
+      const ts = series.t_ms || [];
+      const vs = series.vrms || [];
+      if (!ts.length) return null;
+      let best = 0;
+      let bestD = Math.abs(ts[0] - tMs);
+      for (let i = 1; i < ts.length; i++) {
+        const d = Math.abs(ts[i] - tMs);
+        if (d < bestD) { best = i; bestD = d; }
+      }
+      return vs[best];
+    }
+
+    function populateSelect() {
+      select.innerHTML = '';
+      notes.forEach((note, idx) => {
+        const opt = document.createElement('option');
+        opt.value = String(idx);
+        const noteText = (note.note || '').trim();
+        const tail = noteText ? ' · ' + noteText.slice(0, 40) : '';
+        opt.textContent = kindLabel(note.kind) + ' · ' + fmtTime(note.observed_at_ms) + tail;
+        select.appendChild(opt);
+      });
+    }
+
+    function renderNote(idx) {
+      const note = notes[idx];
+      if (!note) return;
+      const series = note.series || { t_ms: [], vrms: [] };
+      const t = series.t_ms || [];
+      const v = series.vrms || [];
+      const observed = note.observed_at_ms;
+      let markerY = note.marker_y;
+      if (markerY == null || !Number.isFinite(markerY)) {
+        markerY = nearestY(series, observed);
+      }
+
+      document.getElementById('meta').innerHTML =
+        '<strong>' + kindLabel(note.kind) + '</strong> · noted at ' +
+        fmtTime(observed) +
+        (note.note ? ' · ' + String(note.note).replace(/</g, '&lt;') : '');
+
+      const stats = [];
+      if (note.nominal_v != null) stats.push(['Nominal', note.nominal_v.toFixed(1) + ' V']);
+      if (note.lowest_vrms_v != null) stats.push(['Lowest Vrms', note.lowest_vrms_v.toFixed(2) + ' V']);
+      stats.push(['Intervals', String(t.length)]);
+      stats.push(['Events', String((note.events || []).length)]);
+      document.getElementById('stats').innerHTML = stats.map(function (pair) {
+        return '<div class="stat"><div class="k">' + pair[0] + '</div><div class="v">' + pair[1] + '</div></div>';
+      }).join('');
+      document.getElementById('summary').textContent = note.summary || '';
+
+      const vrmsPoints = t.map(function (x, i) { return { x: x, y: v[i] }; });
+      const markerPoints = (markerY != null && Number.isFinite(markerY))
+        ? [{ x: observed, y: markerY }]
+        : [];
+      const eventPoints = (note.events || []).map(function (ev) {
+        const y = nearestY(series, ev.t_ms);
+        return {
+          x: ev.t_ms,
+          y: (y != null ? y : (note.nominal_v || 120)),
+          label: (ev.type || 'event') + (ev.peak_rms_v != null ? ' ' + ev.peak_rms_v + ' V' : ''),
+        };
+      });
+
+      const datasets = [
+        {
+          label: 'Vrms',
+          type: 'line',
+          data: vrmsPoints,
+          borderColor: '#4fc3f7',
+          backgroundColor: 'rgba(79,195,247,0.12)',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.05,
+          order: 3,
+          parsing: false,
+        },
+        {
+          label: 'Flicker note',
+          type: 'scatter',
+          data: markerPoints,
+          backgroundColor: '#ff7043',
+          borderColor: '#fff',
+          borderWidth: 1.5,
+          pointRadius: 7,
+          pointHoverRadius: 9,
+          pointStyle: 'triangle',
+          order: 1,
+          parsing: false,
+        },
+      ];
+
+      if (note.nominal_v != null && t.length) {
+        datasets.push({
+          label: 'Nominal',
+          type: 'line',
+          data: [
+            { x: t[0], y: note.nominal_v },
+            { x: t[t.length - 1], y: note.nominal_v },
+          ],
+          borderColor: 'rgba(129,199,132,0.7)',
+          borderWidth: 1,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          order: 4,
+          parsing: false,
+        });
+      }
+
+      if (eventPoints.length) {
+        datasets.push({
+          label: 'Sag / swell',
+          type: 'scatter',
+          data: eventPoints,
+          backgroundColor: '#ce93d8',
+          borderColor: '#fff',
+          borderWidth: 1,
+          pointRadius: 5,
+          pointStyle: 'rectRot',
+          order: 2,
+          parsing: false,
+        });
+      }
+
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById('chart').getContext('2d'), {
+        data: { datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'nearest', intersect: false },
+          plugins: {
+            legend: {
+              labels: { color: '#9aa0a6', boxWidth: 12 },
+            },
+            tooltip: {
+              callbacks: {
+                title: function (items) {
+                  if (!items.length) return '';
+                  return fmtTime(items[0].parsed.x);
+                },
+                label: function (ctx) {
+                  const raw = ctx.raw || {};
+                  if (raw.label) return raw.label;
+                  const y = ctx.parsed.y;
+                  return ctx.dataset.label + ': ' + (Number.isFinite(y) ? y.toFixed(2) + ' V' : '—');
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              type: 'linear',
+              ticks: {
+                color: '#9aa0a6',
+                maxTicksLimit: 8,
+                callback: function (value) {
+                  const d = new Date(value);
+                  return d.toISOString().slice(11, 19);
+                },
+              },
+              grid: { color: 'rgba(255,255,255,0.06)' },
+            },
+            y: {
+              title: { display: true, text: 'Vrms (V)', color: '#9aa0a6' },
+              ticks: { color: '#9aa0a6' },
+              grid: { color: 'rgba(255,255,255,0.06)' },
+            },
+          },
+        },
+      });
+    }
+
+    if (!notes.length) {
+      empty.style.display = '';
+      content.style.display = 'none';
+    } else {
+      populateSelect();
+      select.addEventListener('change', function () {
+        renderNote(Number(select.value) || 0);
+      });
+      renderNote(0);
+    }
+  </script>
+</body>
+</html>

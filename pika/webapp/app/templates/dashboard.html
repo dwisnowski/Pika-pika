@@ -301,9 +301,12 @@
             </tbody>
         </table>
         <div id="flicker-panel" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08);">
-            <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px;">
+            <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
                 <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: var(--primary);">Flicker notes</span>
                 <span style="font-size: 11px; opacity: 0.6;">Searches ±2 minutes of the stored voltage. A note can be entered up to a day later.</span>
+                <a href="/api/v1/observations/export" download="flicker-export.zip"
+                    title="Download notes.csv, windows.csv, and chart.html"
+                    style="margin-left: auto; font-size: 11px; font-weight: 600; color: var(--primary); text-decoration: none; border: 1px solid rgba(255,214,0,0.35); border-radius: 4px; padding: 3px 8px; background: rgba(255,214,0,0.08);">Export</a>
             </div>
             <div id="flicker-result" style="display: none; font-size: 13px; line-height: 1.5; margin-bottom: 10px; padding: 10px 12px; border-radius: 6px; background: rgba(255,214,0,0.06); border: 1px solid rgba(255,214,0,0.2);"></div>
             <div id="flicker-list" style="font-size: 12px; opacity: 0.9;">
