@@ -10,6 +10,7 @@
 #include "anomaly_detector.h"
 #include "decimator.h"
 #include "event_window.h"
+#include "log.h"
 #include "vrms_rollup.h"
 #include "logger_config.h"
 #include "ring_buffer.h"
@@ -93,8 +94,8 @@ void *reader_thread_func(void *arg) {
       } else {
         blocks_pushed++;
         if (blocks_pushed % 5000 == 0) {
-          printf("[Reader] Blocks pushed to ring buffer: %llu\n",
-                 (unsigned long long)blocks_pushed);
+          PIKA_DBG("[Reader] Blocks pushed to ring buffer: %llu\n",
+                   (unsigned long long)blocks_pushed);
         }
       }
     }
@@ -103,13 +104,13 @@ void *reader_thread_func(void *arg) {
       null_polls++;
       if (null_polls % 10000 == 0) {
         volatile pru_shared_memory_t *h = shm_reader.header;
-        printf("[Reader] Polling (no new blocks): null_polls=%llu  "
-               "write_block_idx=%u  heartbeat=%u  magic=0x%08X  "
-               "blocks_pushed_ever=%llu\n",
-               (unsigned long long)null_polls,
-               h ? (uint32_t)h->write_block_idx : 0u,
-               h ? (uint32_t)h->heartbeat : 0u, h ? (uint32_t)h->magic : 0u,
-               (unsigned long long)blocks_pushed);
+        PIKA_DBG("[Reader] Polling (no new blocks): null_polls=%llu  "
+                 "write_block_idx=%u  heartbeat=%u  magic=0x%08X  "
+                 "blocks_pushed_ever=%llu\n",
+                 (unsigned long long)null_polls,
+                 h ? (uint32_t)h->write_block_idx : 0u,
+                 h ? (uint32_t)h->heartbeat : 0u, h ? (uint32_t)h->magic : 0u,
+                 (unsigned long long)blocks_pushed);
       }
       usleep(100); /* 100 µs idle poll — faster drain at high SPS */
     }

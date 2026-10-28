@@ -27,10 +27,13 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-# Configure uvicorn loggers
+# Configure uvicorn loggers. Access logs stay quiet at default info so
+# dashboard polling does not fill the journal; set logging.level: debug
+# to re-enable them (see ADR-0008).
 logging.getLogger("uvicorn").setLevel(log_level_enum)
-logging.getLogger("uvicorn.access").setLevel(log_level_enum)
 logging.getLogger("uvicorn.error").setLevel(log_level_enum)
+access_level = log_level_enum if log_level_enum <= logging.DEBUG else logging.WARNING
+logging.getLogger("uvicorn.access").setLevel(access_level)
 
 logger = logging.getLogger(__name__)
 

@@ -13,6 +13,7 @@ Notable recent decisions:
 - [ADR-0005](adrs/0005-operator-status-dashboard.md) — Operator `daemon-status` dashboard
 - [ADR-0006](adrs/0006-trend-pane-display-decimation.md) — Trend-pane display decimation and settings
 - [ADR-0007](adrs/0007-flicker-observations.md) — Flicker notes searched against the existing trend
+- [ADR-0008](adrs/0008-production-log-verbosity.md) — Production log verbosity (quiet by default)
 
 ## Guides
 

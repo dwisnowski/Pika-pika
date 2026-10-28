@@ -1,4 +1,5 @@
 #include "writer.h"
+#include "log.h"
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -195,12 +196,12 @@ void writer_write_decimated(writer_t *w, decimated_chunk_header_t *header,
       header->sample_count * header->channels * header->values_per_sample;
 
   long before = ftell(w->decimated_file);
-  printf("[Writer] Decimated write attempt: start_time_ns=%llu sample_rate=%u "
-         "sample_count=%u channels=%u values_per_sample=%u total_values=%u "
-         "file_pos_before=%ld\n",
-         (unsigned long long)header->start_time_ns, header->sample_rate,
-         header->sample_count, header->channels, header->values_per_sample,
-         total_values, before);
+  PIKA_DBG("[Writer] Decimated write attempt: start_time_ns=%llu sample_rate=%u "
+           "sample_count=%u channels=%u values_per_sample=%u total_values=%u "
+           "file_pos_before=%ld\n",
+           (unsigned long long)header->start_time_ns, header->sample_rate,
+           header->sample_count, header->channels, header->values_per_sample,
+           total_values, before);
 
   size_t header_written =
       fwrite(header, sizeof(decimated_chunk_header_t), 1, w->decimated_file);
@@ -225,8 +226,8 @@ void writer_write_decimated(writer_t *w, decimated_chunk_header_t *header,
   }
 
   long after = ftell(w->decimated_file);
-  printf("[Writer] Decimated write OK: file_pos_after=%ld bytes_written=%ld\n",
-         after, (after >= before && before >= 0) ? (after - before) : -1L);
+  PIKA_DBG("[Writer] Decimated write OK: file_pos_after=%ld bytes_written=%ld\n",
+           after, (after >= before && before >= 0) ? (after - before) : -1L);
 
   /* Check rotation after write */
   char path[300];

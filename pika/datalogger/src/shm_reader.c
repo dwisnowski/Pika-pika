@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "shm_reader.h"
+#include "log.h"
 #include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
@@ -280,9 +281,9 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
 
   if (reader->header->magic != SHM_MAGIC) {
     if (poll_count % 1000 == 0) {
-      printf("[SHM Reader] Waiting for magic (found 0x%08X)... heartbeat=%u\n",
-             (uint32_t)reader->header->magic,
-             (uint32_t)reader->header->heartbeat);
+      PIKA_DBG("[SHM Reader] Waiting for magic (found 0x%08X)... heartbeat=%u\n",
+               (uint32_t)reader->header->magic,
+               (uint32_t)reader->header->heartbeat);
     }
     return NULL;
   }
@@ -291,10 +292,10 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
       reader->header->ddr_phys_addr == 0) {
     if (shm_reader_publish_carveout_pa(reader) != 0) {
       if (poll_count % 1000 == 0) {
-        printf("[SHM Reader] Waiting to publish DDR PA (err=0x%08X "
-               "ddr=0x%08X)\n",
-               (uint32_t)reader->header->error_flags,
-               (uint32_t)reader->header->ddr_phys_addr);
+        PIKA_DBG("[SHM Reader] Waiting to publish DDR PA (err=0x%08X "
+                 "ddr=0x%08X)\n",
+                 (uint32_t)reader->header->error_flags,
+                 (uint32_t)reader->header->ddr_phys_addr);
       }
       return NULL;
     }
@@ -311,7 +312,7 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   if (reader->ddr_mmap_base == NULL || reader->ddr_mmap_base == MAP_FAILED) {
     if (shm_reader_map_ddr(reader) != 0) {
       if (poll_count % 1000 == 0) {
-        printf("[SHM Reader] Waiting to map DDR ring...\n");
+        PIKA_DBG("[SHM Reader] Waiting to map DDR ring...\n");
       }
       return NULL;
     }
@@ -320,8 +321,8 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   uint32_t num_blocks = reader->header->num_blocks;
   if (num_blocks == 0 || num_blocks > 1024) {
     if (poll_count % 5000 == 0) {
-      printf("[SHM Reader] Waiting for valid num_blocks (got %u)\n",
-             num_blocks);
+      PIKA_DBG("[SHM Reader] Waiting for valid num_blocks (got %u)\n",
+               num_blocks);
     }
     return NULL;
   }
@@ -329,8 +330,8 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   uint32_t block_size = reader->header->block_size;
   if (block_size == 0 || block_size > 1024) {
     if (poll_count % 5000 == 0) {
-      printf("[SHM Reader] Waiting for valid block_size (got %u)\n",
-             block_size);
+      PIKA_DBG("[SHM Reader] Waiting for valid block_size (got %u)\n",
+               block_size);
     }
     return NULL;
   }
@@ -340,8 +341,8 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   if (current_blk_a != current_blk_b) {
     unstable_idx_count++;
     if (unstable_idx_count % 1000 == 0) {
-      printf("[SHM Reader] Unstable write_idx read: a=%u b=%u (count=%u)\n",
-             current_blk_a, current_blk_b, unstable_idx_count);
+      PIKA_DBG("[SHM Reader] Unstable write_idx read: a=%u b=%u (count=%u)\n",
+               current_blk_a, current_blk_b, unstable_idx_count);
     }
   }
 
@@ -349,8 +350,8 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   if (raw_write_idx >= num_blocks) {
     invalid_idx_count++;
     if (invalid_idx_count % 1000 == 0) {
-      printf("[SHM Reader] Invalid raw write_idx=%u (num_blocks=%u, count=%u)\n",
-             raw_write_idx, num_blocks, invalid_idx_count);
+      PIKA_DBG("[SHM Reader] Invalid raw write_idx=%u (num_blocks=%u, count=%u)\n",
+               raw_write_idx, num_blocks, invalid_idx_count);
     }
   }
 
@@ -358,20 +359,20 @@ volatile block_descriptor_t *shm_reader_poll(shm_reader_t *reader,
   uint32_t sample_count_b = reader->header->sample_count;
   uint32_t sample_count = sample_count_b;
   if (sample_count_a != sample_count_b && poll_count % 5000 == 0) {
-    printf("[SHM Reader] sample_count moved during read: a=%u b=%u\n",
-           sample_count_a, sample_count_b);
+    PIKA_DBG("[SHM Reader] sample_count moved during read: a=%u b=%u\n",
+             sample_count_a, sample_count_b);
   }
   uint32_t completed_blocks = sample_count / block_size;
   uint32_t derived_write_idx = completed_blocks % num_blocks;
 
   if (poll_count % 5000 == 0) {
-    printf("[SHM Reader] Tick: write_idx(raw=%u, derived=%u), "
-           "last_idx=%u, num_blocks=%u, block_size=%u, sample_count=%u, "
-           "completed_blocks=%u, heartbeat=%u, err=0x%08X, ring=0x%08X\n",
-           raw_write_idx, derived_write_idx, reader->last_read_block_idx,
-           num_blocks, block_size, sample_count, completed_blocks,
-           (uint32_t)reader->header->heartbeat,
-           (uint32_t)reader->header->error_flags, reader->ddr_phys_addr);
+    PIKA_DBG("[SHM Reader] Tick: write_idx(raw=%u, derived=%u), "
+             "last_idx=%u, num_blocks=%u, block_size=%u, sample_count=%u, "
+             "completed_blocks=%u, heartbeat=%u, err=0x%08X, ring=0x%08X\n",
+             raw_write_idx, derived_write_idx, reader->last_read_block_idx,
+             num_blocks, block_size, sample_count, completed_blocks,
+             (uint32_t)reader->header->heartbeat,
+             (uint32_t)reader->header->error_flags, reader->ddr_phys_addr);
   }
 
   if (reader->last_completed_blocks == UINT32_MAX) {

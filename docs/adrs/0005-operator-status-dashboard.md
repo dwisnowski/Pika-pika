@@ -36,3 +36,6 @@ were never composed into one read-only view.
   still report independently.
 - Piped or `NO_COLOR` output is uncolored so scripts can scrape it.
 - Related: [ADR-0002](0002-oscilloscope-sample-rate-control.md).
+- Journal flood from datalogger ticks/writer lines is quieted in production by
+  [ADR-0008](0008-production-log-verbosity.md); this dashboard remains useful
+  for composed status without reading the live journal.

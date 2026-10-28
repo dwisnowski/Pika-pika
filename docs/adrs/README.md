@@ -20,3 +20,4 @@ Each ADR is a numbered Markdown file: `NNNN-short-title.md`.
 | [0005](0005-operator-status-dashboard.md) | Operator `daemon-status` dashboard | Accepted |
 | [0006](0006-trend-pane-display-decimation.md) | Trend-pane display decimation and settings | Accepted |
 | [0007](0007-flicker-observations.md) | Flicker notes searched against the existing trend | Accepted |
+| [0008](0008-production-log-verbosity.md) | Production log verbosity (quiet by default) | Accepted |
