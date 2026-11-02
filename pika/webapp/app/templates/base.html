@@ -35,13 +35,19 @@
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            min-height: 100dvh;
         }
 
         header {
             background-color: var(--surface);
             padding: 16px;
+            padding-left: max(16px, env(safe-area-inset-left));
+            padding-right: max(16px, env(safe-area-inset-right));
+            padding-top: max(16px, env(safe-area-inset-top));
             display: flex;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 8px 16px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
             z-index: 100;
         }
@@ -68,6 +74,10 @@
             letter-spacing: 1px;
             opacity: 0.7;
             transition: 0.3s;
+            display: inline-flex;
+            align-items: center;
+            min-height: 44px;
+            padding: 0 4px;
         }
 
         .nav a:hover,
@@ -78,6 +88,8 @@
 
         main {
             padding: 16px;
+            padding-left: max(16px, env(safe-area-inset-left));
+            padding-right: max(16px, env(safe-area-inset-right));
             flex: 1;
             max-width: 1200px;
             align-self: center;
@@ -98,6 +110,15 @@
             display: flex;
             align-items: center;
             margin-bottom: 16px;
+            gap: 8px;
+        }
+
+        .card-header-actions {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
         }
 
         .card-header span {
@@ -192,9 +213,212 @@
 
         footer {
             padding: 16px;
+            padding-bottom: max(16px, env(safe-area-inset-bottom));
             text-align: center;
             font-size: 12px;
             opacity: 0.5;
+        }
+
+        /* Shared fixed popovers — preferred width via --popover-width */
+        .popover {
+            display: none;
+            position: fixed;
+            z-index: 1100;
+            box-sizing: border-box;
+            width: min(var(--popover-width, 360px), calc(100vw - 24px));
+            max-height: min(85dvh, calc(100dvh - 24px));
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            background: var(--surface);
+            border-radius: 8px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 16px;
+            pointer-events: auto;
+        }
+
+        .popover.popover-accent {
+            border-color: rgba(255, 214, 0, 0.25);
+        }
+
+        .popover.popover-danger {
+            border-color: rgba(244, 67, 54, 0.3);
+        }
+
+        .popover.popover-preview {
+            pointer-events: none;
+        }
+
+        .popover-close {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            padding: 8px;
+            margin: -8px -8px -8px 0;
+            min-width: 44px;
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #overlay-root {
+            position: relative;
+            z-index: 1100;
+        }
+
+        .table-scroll {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .icon-btn {
+            background: none;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 4px;
+            color: #aaa;
+            cursor: pointer;
+            padding: 2px 4px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .event-modal-scrim {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 1200;
+            justify-content: center;
+            align-items: center;
+            padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+            box-sizing: border-box;
+        }
+
+        .event-modal-panel {
+            background: var(--surface);
+            border-radius: 12px;
+            width: 100%;
+            height: 100%;
+            max-width: 90vw;
+            max-height: 90vh;
+            max-height: 90dvh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+            overflow: hidden;
+        }
+
+        .event-modal-header {
+            padding: 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .event-modal-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            font-size: 13px;
+        }
+
+        .event-modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .event-modal-chart {
+            flex: 1;
+            min-height: 300px;
+            position: relative;
+        }
+
+        @media (max-width: 1023px) {
+            .card-header {
+                flex-wrap: wrap;
+                align-items: flex-start;
+            }
+
+            .card-header-actions {
+                width: 100%;
+                margin-left: 0;
+                justify-content: flex-start;
+            }
+
+            .card-header .trend-status {
+                white-space: normal;
+                width: 100%;
+                margin-left: 0;
+            }
+
+            .icon-btn {
+                min-width: 44px;
+                min-height: 44px;
+                padding: 8px;
+            }
+
+            .popover.popover-sheet {
+                left: max(12px, env(safe-area-inset-left)) !important;
+                right: max(12px, env(safe-area-inset-right)) !important;
+                bottom: max(12px, env(safe-area-inset-bottom)) !important;
+                top: auto !important;
+                width: auto;
+                max-width: none;
+                max-height: min(85dvh, calc(100dvh - 24px - env(safe-area-inset-top, 0px)));
+                border-radius: 16px 16px 12px 12px;
+                padding-bottom: max(16px, env(safe-area-inset-bottom));
+            }
+
+            .popover.popover-sheet .popover-actions {
+                position: sticky;
+                bottom: 0;
+                background: var(--surface);
+                padding-top: 12px;
+                margin-top: 8px;
+                z-index: 1;
+            }
+
+            .event-modal-panel {
+                max-width: 100%;
+                max-height: 100%;
+                border-radius: 12px;
+            }
+
+            .event-modal-header {
+                padding: 16px;
+            }
+
+            .event-modal-header h2 {
+                font-size: 18px !important;
+            }
+
+            .event-modal-stats {
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                gap: 10px;
+            }
+
+            .event-modal-body {
+                padding: 16px;
+                gap: 16px;
+            }
+
+            .event-modal-chart {
+                min-height: 220px;
+            }
         }
 
         .card-header .trend-status {
@@ -260,6 +484,8 @@
     <main>
         {% block content %}{% endblock %}
     </main>
+
+    {% block overlays %}{% endblock %}
 
     <footer>
         BeagleBone Black Powered &bull; PRU 180kHz Streaming Engine

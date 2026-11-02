@@ -15,6 +15,43 @@
         gap: 16px;
     }
 
+    .scope-screen {
+        padding: 12px;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .scope-well {
+        flex-grow: 1;
+        background: #000;
+        border-radius: 8px;
+        position: relative;
+        min-height: 400px;
+    }
+
+    @media (max-width: 1023px) {
+        .scope-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .scope-well {
+            min-height: min(50dvh, 320px);
+        }
+
+        .control-btn {
+            min-height: 44px;
+            padding: 8px 12px;
+            font-size: 13px;
+        }
+
+        .control-row {
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+    }
+
     .knob-group {
         margin-bottom: 16px;
         padding: 12px;
@@ -81,12 +118,11 @@
 
 <div class="scope-grid">
     <!-- Main Screen -->
-    <div class="card"
-        style="padding: 12px; position: relative; overflow: hidden; display: flex; flex-direction: column;">
+    <div class="card scope-screen">
         <div class="card-header" style="margin-bottom: 8px;">
             <span class="material-icons-outlined">visibility</span>
             <h2 class="card-title">Live Oscilloscope</h2>
-            <div style="margin-left: auto; display: flex; gap: 8px;">
+            <div class="card-header-actions">
                 <button onclick="autoset()" class="control-btn"
                     style="background:#2196F3; color:#fff; border:none;">AUTOSET</button>
                 <button onclick="toggleRun()" id="run-btn" class="control-btn"
@@ -94,7 +130,7 @@
             </div>
         </div>
 
-        <div style="flex-grow: 1; background: #000; border-radius: 8px; position: relative; min-height: 400px;">
+        <div class="scope-well">
             <canvas id="scopeCanvas" style="width: 100%; height: 100%;"></canvas>
 
             <div

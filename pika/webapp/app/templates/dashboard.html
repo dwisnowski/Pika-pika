@@ -17,29 +17,25 @@
         <div id="health-info">
             <p style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 <span class="status-dot"></span> PRU: <strong id="pru-status">Connecting...</strong>
-                <button type="button" onclick="restartSystemComponent('pru')" title="Reload PRU firmware"
-                    style="background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 2px 4px; display: inline-flex; align-items: center; line-height: 1;">
+                <button type="button" class="icon-btn" onclick="restartSystemComponent('pru')" title="Reload PRU firmware">
                     <span class="material-icons-outlined" style="font-size: 16px;">restart_alt</span>
                 </button>
             </p>
             <p style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 <span class="status-dot"></span> Datalogger: <strong id="datalogger-status">Connecting...</strong>
-                <button type="button" onclick="restartSystemComponent('datalogger')" title="Restart datalogger"
-                    style="background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 2px 4px; display: inline-flex; align-items: center; line-height: 1;">
+                <button type="button" class="icon-btn" onclick="restartSystemComponent('datalogger')" title="Restart datalogger">
                     <span class="material-icons-outlined" style="font-size: 16px;">restart_alt</span>
                 </button>
             </p>
             <p style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 <span class="status-dot"></span> Webserver: <strong id="webserver-status">Connecting...</strong>
-                <button type="button" onclick="restartSystemComponent('webserver')" title="Restart webserver (full stack)"
-                    style="background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 2px 4px; display: inline-flex; align-items: center; line-height: 1;">
+                <button type="button" class="icon-btn" onclick="restartSystemComponent('webserver')" title="Restart webserver (full stack)">
                     <span class="material-icons-outlined" style="font-size: 16px;">restart_alt</span>
                 </button>
             </p>
             <p style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 Configured Rate: <strong id="pru-samplerate">--</strong>
-                <button type="button" onclick="showSampleRateSettings(event)" title="Change sample rate"
-                    style="background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 2px 4px; display: inline-flex; align-items: center; line-height: 1;">
+                <button type="button" class="icon-btn" onclick="showSampleRateSettings(event)" title="Change sample rate">
                     <span class="material-icons-outlined" style="font-size: 16px;">settings</span>
                 </button>
             </p>
@@ -48,41 +44,11 @@
             <p style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 Stored data: <strong id="storage-usage">--</strong>
                 <button type="button" onclick="showClearDataConfirm(event)" title="Delete stored trend and event files"
-                    style="background: rgba(244, 67, 54, 0.1); color: #F44336; border: 1px solid #F44336; border-radius: 4px; padding: 2px 8px; cursor: pointer; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;">Clear</button>
+                    style="background: rgba(244, 67, 54, 0.1); color: #F44336; border: 1px solid #F44336; border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; min-height: 44px;">Clear</button>
             </p>
             <p id="storage-detail" style="font-size: 11px; opacity: 0.7; margin: 0;">Trend and event files on this board</p>
             <p id="storage-disk" style="font-size: 11px; opacity: 0.7; margin: 0;"></p>
             <p id="system-restart-status" style="font-size: 11px; min-height: 14px; color: #888; margin: 4px 0 0;"></p>
-        </div>
-    </div>
-    <!-- Sample-rate settings popover (System Health) -->
-    <div id="sample-rate-popover"
-        style="display: none; position: fixed; z-index: 1000; width: 340px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); padding: 16px; pointer-events: auto;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-            <div style="font-size: 14px; font-weight: 500; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px;">Sample Rate</div>
-            <button type="button" onclick="hideSampleRateSettings()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
-                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
-            </button>
-        </div>
-        <p style="font-size: 11px; opacity: 0.75; margin: 0 0 12px; line-height: 1.45;">
-            IEEE 1159 does not mandate a sample rate. IEC 61000-4-30 Class A practice is
-            <b>≥256 samples/cycle (~15.4 kHz @ 60 Hz)</b>. For Pika’s 1-cycle RMS sag/swell
-            logging, <b>~2–4 kHz</b> is a practical floor; <b>10 kHz+</b> is recommended.
-        </p>
-        <label style="font-size: 12px; display: block;">
-            Acquisition rate
-            <select id="cfg-sample-rate" style="width: 100%; margin-top: 6px; box-sizing: border-box; padding: 6px;"></select>
-        </label>
-        <div id="sample-rate-alias-warn"
-            style="display: none; margin-top: 10px; padding: 8px; border-radius: 4px; background: rgba(255,193,7,0.12); border: 1px solid rgba(255,193,7,0.4); color: #FFC107; font-size: 11px; line-height: 1.4;">
-            Rates below 120 S/s cannot faithfully represent 60 Hz mains (aliasing).
-        </div>
-        <div id="sample-rate-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
-        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
-            <button type="button" onclick="hideSampleRateSettings()"
-                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px;">Cancel</button>
-            <button type="button" onclick="saveSampleRateSettings()"
-                style="background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 12px; font-weight: 600;">Save &amp; Restart</button>
         </div>
     </div>
 
@@ -91,8 +57,10 @@
         <div class="card-header">
             <span class="material-icons-outlined">insights</span>
             <h2 class="card-title">Live Stats</h2>
+            <div class="card-header-actions">
             <button type="button" onclick="showZmptTrimPopover(event)" title="Trim ZMPT pot using live ADC Vrms"
-                style="margin-left: auto; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Trim ZMPT</button>
+                style="background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 12px; min-height: 44px;">Trim ZMPT</button>
+            </div>
         </div>
         <div id="live-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
             <div>Avg: <strong id="stat-avg">--</strong></div>
@@ -140,53 +108,20 @@
         </div>
     </div>
 
-    <!-- ZMPT pot trim popover (Live Stats) -->
-    <div id="zmpt-trim-popover"
-        style="display: none; position: fixed; z-index: 1000; width: 360px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); padding: 16px; pointer-events: auto;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-            <div style="font-size: 14px; font-weight: 500; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px;">ZMPT pot trim</div>
-            <button type="button" onclick="hideZmptTrimPopover()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
-                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
-            </button>
-        </div>
-        <p style="font-size: 11px; opacity: 0.75; margin: 0 0 12px; line-height: 1.45;">
-            Live <b>ADC-input Vrms</b> (ZMPT → AD7606), not mains volts.
-            Target <b>1.0–1.2 VAC</b>. Turn the pot clockwise to raise, then fine-trim into the green band.
-            Stay well below AD7606 ±5&nbsp;V clipping. After trimming, restart the datalogger so auto-cal re-learns the ratio.
-        </p>
-        <div style="text-align: center; margin-bottom: 14px;">
-            <div style="font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.4px;">ADC Vrms</div>
-            <div id="zmpt-trim-vrms" style="font-size: 32px; font-weight: 600; color: var(--primary); line-height: 1.2; font-variant-numeric: tabular-nums;">--</div>
-            <div id="zmpt-trim-vpp" style="font-size: 11px; opacity: 0.65; margin-top: 2px;">P–P: --</div>
-        </div>
-        <div id="zmpt-tuner" style="position: relative; height: 56px; margin: 8px 0 4px;">
-            <div style="position: absolute; left: 0; right: 0; top: 22px; height: 12px; border-radius: 6px; overflow: hidden; background: linear-gradient(90deg, #f44336 0%, #ff9800 28%, #4caf50 40%, #4caf50 48%, #ff9800 55%, #f44336 100%); opacity: 0.85;"></div>
-            <div id="zmpt-tuner-band" title="1.0–1.2 V target"
-                style="position: absolute; top: 18px; height: 20px; border: 1px solid rgba(255,255,255,0.55); border-radius: 4px; background: rgba(76,175,80,0.25); pointer-events: none;"></div>
-            <div id="zmpt-tuner-needle"
-                style="position: absolute; top: 8px; width: 3px; height: 40px; margin-left: -1.5px; background: #fff; border-radius: 2px; box-shadow: 0 0 6px rgba(0,0,0,0.6); transition: left 0.08s linear;"></div>
-            <div style="position: absolute; left: 0; right: 0; top: 42px; display: flex; justify-content: space-between; font-size: 10px; opacity: 0.55;">
-                <span>0</span><span>1.0</span><span>1.2</span><span>2.5 V</span>
-            </div>
-        </div>
-        <div id="zmpt-trim-status" style="text-align: center; font-size: 14px; font-weight: 600; margin-top: 10px; color: #aaa;">Waiting for live data…</div>
-    </div>
-
     <!-- Trend Chart -->
     <div class="card grid-wide card-trend">
         <div class="card-header">
             <span class="material-icons-outlined">show_chart</span>
             <h2 class="card-title">Supply Voltage Trend (IEC Vrms)</h2>
             <span id="trend-status" class="trend-status">Loading…</span>
-            <div style="margin-left: auto; display: flex; align-items: center; gap: 6px;">
+            <div class="card-header-actions">
             <button id="trend-live-btn" type="button" onclick="clearTrendFocus()"
-                style="display: none; background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px; font-weight: 600;">Live
+                style="display: none; background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 12px; font-weight: 600; min-height: 44px;">Live
                 trend</button>
             <button onclick="resetZoom()"
-                style="background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 12px;">Reset
+                style="background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 12px; min-height: 44px;">Reset
                 Zoom</button>
-            <button type="button" onclick="showTrendSettings(event)" title="Trend chart settings"
-                style="background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 4px 6px; display: inline-flex; align-items: center;">
+            <button type="button" class="icon-btn" onclick="showTrendSettings(event)" title="Trend chart settings">
                 <span class="material-icons-outlined" style="font-size: 18px;">settings</span>
             </button>
             </div>
@@ -198,38 +133,6 @@
                 <div id="trend-overlay-msg">Loading voltage trend…</div>
             </div>
         </div>
-        <div id="trend-settings-popover"
-            style="display: none; position: fixed; z-index: 1000; width: 380px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); padding: 16px; pointer-events: auto;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                <div style="font-size: 14px; font-weight: 500; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px;">Trend Display</div>
-                <button type="button" onclick="hideTrendSettings()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
-                    <span class="material-icons-outlined" style="font-size: 18px;">close</span>
-                </button>
-            </div>
-            <p style="font-size: 11px; opacity: 0.7; margin: 0 0 12px; line-height: 1.4;">
-                These control what the <b>browser chart</b> loads. Disk still stores full-rate IEC Vrms intervals.
-            </p>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
-                <label>Lookback (minutes)
-                    <input id="cfg-trend-window" type="number" min="1" max="720" step="1"
-                        oninput="updateTrendSettingsPreview()"
-                        style="width: 100%; margin-top: 4px; box-sizing: border-box;">
-                </label>
-                <label>Chart points
-                    <input id="cfg-trend-points" type="number" min="100" max="2000" step="1"
-                        oninput="updateTrendSettingsPreview()"
-                        style="width: 100%; margin-top: 4px; box-sizing: border-box;">
-                </label>
-            </div>
-            <div id="trend-settings-preview" style="font-size: 11px; opacity: 0.75; margin-top: 10px; line-height: 1.45;"></div>
-            <div id="trend-settings-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
-            <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
-                <button type="button" onclick="hideTrendSettings()"
-                    style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px;">Cancel</button>
-                <button type="button" onclick="saveTrendSettings()"
-                    style="background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 12px; font-weight: 600;">Save</button>
-            </div>
-        </div>
     </div>
 
     <!-- FFT Analysis Chart -->
@@ -237,29 +140,31 @@
         <div class="card-header">
             <span class="material-icons-outlined">analytics</span>
             <h2 class="card-title">Frequency Spectrum (FFT)</h2>
+            <div class="card-header-actions">
             <div id="ws-status"
-                style="margin-left: auto; font-size: 10px; color: #f44336; display: flex; align-items: center; gap: 4px;">
+                style="font-size: 10px; color: #f44336; display: flex; align-items: center; gap: 4px;">
                 <span class="material-icons-outlined" style="font-size: 14px;">cloud_off</span>
                 LIVE STREAM OFF
             </div>
             <div
-                style="display: flex; align-items: center; gap: 4px; margin-left: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 8px; background: rgba(0,0,0,0.2);">
+                style="display: flex; align-items: center; gap: 4px; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 2px 8px; background: rgba(0,0,0,0.2); min-height: 44px;">
                 <span
                     style="font-size: 10px; color: #888; margin-right: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Scale</span>
                 <button onclick="adjustFFTYScale(-5)"
-                    style="background: none; border: none; color: var(--primary); cursor: pointer; padding: 0 8px; font-size: 16px; font-weight: bold;">-</button>
+                    style="background: none; border: none; color: var(--primary); cursor: pointer; padding: 0 10px; font-size: 16px; font-weight: bold; min-width: 44px; min-height: 40px;">-</button>
                 <span id="fft-ymax-display"
                     style="font-size: 12px; min-width: 30px; text-align: center; color: #FFF; font-weight: 500;">150</span>
                 <button onclick="adjustFFTYScale(5)"
-                    style="background: none; border: none; color: var(--primary); cursor: pointer; padding: 0 8px; font-size: 16px; font-weight: bold;">+</button>
+                    style="background: none; border: none; color: var(--primary); cursor: pointer; padding: 0 10px; font-size: 16px; font-weight: bold; min-width: 44px; min-height: 40px;">+</button>
             </div>
             <button onclick="resetFFTYScale()"
-                style="margin-left: 8px; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; font-weight: 500; text-transform: uppercase;">Reset</button>
+                style="background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 11px; font-weight: 500; text-transform: uppercase; min-height: 44px;">Reset</button>
             <button onclick="zoomToHarmonics()"
-                style="margin-left: 8px; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 11px; font-weight: 500; text-transform: uppercase;">Harmonics</button>
+                style="background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 11px; font-weight: 500; text-transform: uppercase; min-height: 44px;">Harmonics</button>
             <button onclick="manualFFT()"
-                style="margin-left: 12px; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 12px; cursor: pointer; font-size: 12px; font-weight: 500; text-transform: uppercase;">Capture
+                style="background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 12px; font-weight: 500; text-transform: uppercase; min-height: 44px;">Capture
                 Now</button>
+            </div>
         </div>
         <div style="height: 200px;">
             <canvas id="fftChart"></canvas>
@@ -271,20 +176,21 @@
         <div class="card-header">
             <span class="material-icons-outlined">warning_amber</span>
             <h2 class="card-title">Recent Events</h2>
+            <div class="card-header-actions">
             <button type="button" onclick="showFlickerForm(event)" title="Log a light or TV flicker"
-                style="margin-left: auto; background: rgba(255,214,0,0.12); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; font-weight: 600;">I saw a flicker</button>
-            <button type="button" onclick="showEventsHelp(event)" title="How sag/swell detection works"
-                style="margin-left: 8px; background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 4px 6px; display: inline-flex; align-items: center;">
+                style="background: rgba(255,214,0,0.12); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 12px; font-weight: 600; min-height: 44px;">I saw a flicker</button>
+            <button type="button" class="icon-btn" onclick="showEventsHelp(event)" title="How sag/swell detection works">
                 <span class="material-icons-outlined" style="font-size: 18px;">help_outline</span>
             </button>
-            <button type="button" onclick="showEventsSettings(event)" title="Log threshold settings"
-                style="margin-left: 6px; background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #aaa; cursor: pointer; padding: 4px 6px; display: inline-flex; align-items: center;">
+            <button type="button" class="icon-btn" onclick="showEventsSettings(event)" title="Log threshold settings">
                 <span class="material-icons-outlined" style="font-size: 18px;">settings</span>
             </button>
             <button onclick="showDeleteConfirm(event)"
-                style="margin-left: 8px; background: rgba(244, 67, 54, 0.1); color: #F44336; border: 1px solid #F44336; border-radius: 4px; padding: 4px 12px; cursor: pointer; font-size: 12px; font-weight: 500; text-transform: uppercase;">Delete Event Data</button>
+                style="background: rgba(244, 67, 54, 0.1); color: #F44336; border: 1px solid #F44336; border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 12px; font-weight: 500; text-transform: uppercase; min-height: 44px;">Delete Event Data</button>
+            </div>
         </div>
-        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+        <div class="table-scroll">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; min-width: 480px;">
             <thead>
                 <tr style="opacity: 0.6; font-size: 12px;">
                     <th style="padding: 8px; width: 36px;" title="Professional review"> </th>
@@ -300,13 +206,14 @@
                 </tr>
             </tbody>
         </table>
+        </div>
         <div id="flicker-panel" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08);">
             <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
                 <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: var(--primary);">Flicker notes</span>
                 <span style="font-size: 11px; opacity: 0.6;">Searches ±2 minutes of the stored voltage. A note can be entered up to a day later.</span>
                 <a href="/api/v1/observations/export" download="flicker-export.zip"
                     title="Download notes.csv, windows.csv, and chart.html"
-                    style="margin-left: auto; font-size: 11px; font-weight: 600; color: var(--primary); text-decoration: none; border: 1px solid rgba(255,214,0,0.35); border-radius: 4px; padding: 3px 8px; background: rgba(255,214,0,0.08);">Export</a>
+                    style="margin-left: auto; font-size: 11px; font-weight: 600; color: var(--primary); text-decoration: none; border: 1px solid rgba(255,214,0,0.35); border-radius: 4px; padding: 8px 12px; background: rgba(255,214,0,0.08); min-height: 44px; display: inline-flex; align-items: center; box-sizing: border-box;">Export</a>
             </div>
             <div id="flicker-result" style="display: none; font-size: 13px; line-height: 1.5; margin-bottom: 10px; padding: 10px 12px; border-radius: 6px; background: rgba(255,214,0,0.06); border: 1px solid rgba(255,214,0,0.2);"></div>
             <div id="flicker-list" style="font-size: 12px; opacity: 0.9;">
@@ -314,192 +221,93 @@
             </div>
         </div>
     </div>
-    <div id="flicker-detail-popover"
-        style="display: none; position: fixed; z-index: 1000; width: 440px; max-height: 85vh; overflow-y: auto; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,214,0,0.25); padding: 16px; pointer-events: auto;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <div style="font-size: 14px; font-weight: 500; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Flicker · ±2 min</div>
-            <button type="button" onclick="hideFlickerDetail()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
-                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
-            </button>
-        </div>
-        <div id="flicker-detail-meta" style="font-size: 12px; opacity: 0.85; margin-bottom: 10px; line-height: 1.4;"></div>
-        <div id="flicker-detail-stats"
-            style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; margin-bottom: 12px;"></div>
-        <div style="height: 160px; margin-bottom: 10px; position: relative;">
-            <canvas id="flickerDetailChart"></canvas>
-        </div>
-        <div id="flicker-detail-events" style="margin-bottom: 10px;"></div>
-        <div id="flicker-detail-summary" style="font-size: 12px; line-height: 1.5; opacity: 0.9;"></div>
-    </div>
-    <div id="flicker-form-popover"
-        style="display: none; position: fixed; z-index: 1000; width: 420px; max-height: 85vh; overflow-y: auto; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,214,0,0.25); padding: 16px; pointer-events: auto;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <div style="font-size: 14px; font-weight: 500; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Flicker note</div>
-            <button type="button" onclick="hideFlickerForm()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
-                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
-            </button>
-        </div>
-        <p style="font-size: 11px; opacity: 0.7; margin: 0 0 12px; line-height: 1.4;">
-            The search looks ±2 minutes around the time you enter. That covers a memory that is a couple of minutes off.
-        </p>
-        <div id="flicker-clock-warn" style="display: none; font-size: 12px; color: #FFB74D; margin-bottom: 10px; line-height: 1.4;"></div>
-        <div style="display: grid; gap: 10px; font-size: 12px;">
-            <label>What flickered
-                <select id="flicker-kind" onchange="toggleFlickerTvFields()" style="width: 100%; margin-top: 4px;">
-                    <option value="lights">Lights</option>
-                    <option value="tv" selected>TV</option>
-                    <option value="both">Lights and TV</option>
-                </select>
-            </label>
-            <label>Approximate time
-                <input id="flicker-when" type="datetime-local" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;">
-            </label>
-            <div id="flicker-tv-fields" style="display: grid; gap: 10px;">
-                <label>How many sets
-                    <select id="flicker-tv-count" onchange="toggleFlickerSameMoment()" style="width: 100%; margin-top: 4px;">
-                        <option value="one">One TV</option>
-                        <option value="several" selected>Several TVs</option>
-                        <option value="unsure">Not sure</option>
-                    </select>
-                </label>
-                <label id="flicker-same-wrap">Did they go dark together?
-                    <select id="flicker-same" style="width: 100%; margin-top: 4px;">
-                        <option value="unsure" selected>Not sure</option>
-                        <option value="together">Yes, the same moment</option>
-                    </select>
-                </label>
-                <label>What was playing
-                    <select id="flicker-source" style="width: 100%; margin-top: 4px;">
-                        <option value="internal" selected>Built-in app only</option>
-                        <option value="external">External device</option>
-                        <option value="mixed">Some of each</option>
-                        <option value="unsure">Not sure</option>
-                    </select>
-                </label>
-                <label>How long the picture was gone (seconds)
-                    <input id="flicker-blank" type="number" min="0.1" max="10" step="0.1" value="0.8" style="width: 100%; margin-top: 4px; box-sizing: border-box;">
-                </label>
-                <label>What came back
-                    <select id="flicker-recovery" style="width: 100%; margin-top: 4px;">
-                        <option value="av_continue" selected>Sound and picture dropped, show kept going</option>
-                        <option value="reboot">Set rebooted (logo or home screen)</option>
-                    </select>
-                </label>
-            </div>
-            <label>Note (optional)
-                <input id="flicker-note" type="text" maxlength="500" placeholder="Which room" style="width: 100%; margin-top: 4px; box-sizing: border-box;">
-            </label>
-        </div>
-        <div id="flicker-form-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
-        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
-            <button type="button" onclick="hideFlickerForm()"
-                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px;">Cancel</button>
-            <button type="button" onclick="saveFlickerNote()"
-                style="background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 12px; font-weight: 600;">Save and search</button>
-        </div>
-    </div>
-    <!-- Events help popover -->
-    <div id="events-help-popover"
-        style="display: none; position: fixed; z-index: 1000; width: 360px; max-height: 80vh; overflow-y: auto; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,214,0,0.25); padding: 16px; pointer-events: auto;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-            <div style="font-size: 14px; font-weight: 500; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Sag / Swell Guide</div>
-            <button type="button" onclick="hideEventsHelp()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
-                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
-            </button>
-        </div>
-        <div id="events-help-body" style="font-size: 12px; opacity: 0.9; line-height: 1.55;">
-            Loading…
-        </div>
-    </div>
-    <!-- Events settings popover (log thresholds only) -->
-    <div id="events-settings-popover"
-        style="display: none; position: fixed; z-index: 1000; width: 400px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); padding: 16px; pointer-events: auto;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-            <div style="font-size: 14px; font-weight: 500; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px;">Log Thresholds</div>
-            <button type="button" onclick="hideEventsSettings()" style="background: none; border: none; color: #888; cursor: pointer; padding: 0;">
-                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
-            </button>
-        </div>
-        <p style="font-size: 11px; opacity: 0.7; margin: 0 0 12px; line-height: 1.4;">
-            These control what gets <b>logged</b>. Values in parentheses are the fixed professional-review references (not editable here).
-        </p>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
-            <label>Sag % <span id="ref-sag-pct" style="opacity: 0.55; font-weight: 400;">(review ≤70% / ≤10%)</span><input id="cfg-sag-pct" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
-            <label>Swell % <span id="ref-swell-pct" style="opacity: 0.55; font-weight: 400;">(review ≥120%)</span><input id="cfg-swell-pct" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
-            <label>Sag min ms <span id="ref-sag-ms" style="opacity: 0.55; font-weight: 400;">(review ≥60000 ms)</span><input id="cfg-sag-ms" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
-            <label>Swell min ms <span id="ref-swell-ms" style="opacity: 0.55; font-weight: 400;">(review ≥60000 ms)</span><input id="cfg-swell-ms" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
-            <label>Nominal V <span id="ref-nominal-v" style="opacity: 0.55; font-weight: 400;">(Range B −13.3%…+5.8%)</span><input id="cfg-nominal-v" type="number" step="0.1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
-            <label>Sag cooldown ms <span id="ref-sag-cd" style="opacity: 0.55; font-weight: 400;">(logging only)</span><input id="cfg-sag-cd" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
-            <label style="grid-column: 1 / -1;">Swell cooldown ms <span id="ref-swell-cd" style="opacity: 0.55; font-weight: 400;">(logging only)</span><input id="cfg-swell-cd" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box;"></label>
-        </div>
-        <div id="events-settings-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
-        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap;">
-            <button type="button" onclick="resetEventsSettingsToReview()" title="Fill fields from professional-review references"
-                style="margin-right: auto; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 500;">Reset to review</button>
-            <button type="button" onclick="hideEventsSettings()"
-                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px;">Cancel</button>
-            <button type="button" onclick="saveEventsSettings()"
-                style="background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 12px; font-weight: 600;">Save &amp; Restart</button>
-        </div>
-    </div>
-    <!-- Clear stored data confirmation (System Health) -->
-    <div id="clear-data-popover"
-        style="display: none; position: fixed; z-index: 1000; width: 320px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(244, 67, 54, 0.3); padding: 16px; pointer-events: auto;">
-        <div style="font-size: 14px; font-weight: 500; color: #F44336; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Clear stored data</div>
-        <div style="font-size: 12px; opacity: 0.85; margin-bottom: 12px; line-height: 1.5;">
-            Permanently delete trend and event files
-            (<code style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;">decimated.bin</code>,
-            <code style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;">events.bin</code>,
-            rotations, and rollups).
-            The datalogger restarts briefly so the space is actually freed.
-        </div>
-        <div id="clear-data-summary" style="font-size: 12px; margin-bottom: 16px; color: var(--primary);">Using --</div>
-        <div id="clear-data-status" style="font-size: 11px; min-height: 14px; color: #888; margin-bottom: 8px;"></div>
-        <div style="display: flex; gap: 8px; justify-content: flex-end;">
-            <button type="button" onclick="hideClearDataConfirm()"
-                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 500;">Cancel</button>
-            <button type="button" onclick="confirmClearStoredData()"
-                style="background: #F44336; color: white; border: none; border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 12px; font-weight: 500;">Clear data</button>
-        </div>
-    </div>
-    <!-- Delete Confirmation Popover -->
-    <div id="delete-confirm-popover"
-        style="display: none; position: fixed; z-index: 1000; width: 300px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(244, 67, 54, 0.3); padding: 16px; pointer-events: auto;">
-        <div style="font-size: 14px; font-weight: 500; color: #F44336; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;"
-            id="delete-confirm-title">Confirm Deletion</div>
-        <div style="font-size: 12px; opacity: 0.8; margin-bottom: 16px; line-height: 1.5;">
-            This will permanently delete all event data from <code style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;">pika/datalogger/data/events.bin</code>.
-            <br><br>
-            Are you sure you want to proceed?
-        </div>
-        <div style="display: flex; gap: 8px; justify-content: flex-end;">
-            <button onclick="hideDeleteConfirm()"
-                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 500;">Cancel</button>
-            <button onclick="confirmDeleteEvents()"
-                style="background: #F44336; color: white; border: none; border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 12px; font-weight: 500;">Delete</button>
-        </div>
-    </div>
-    <!-- Popover for Event Previews -->
-    <div id="event-popover"
-        style="display: none; position: fixed; z-index: 1000; width: 220px; background: var(--surface); border-radius: 8px; box-shadow: 0 8px 16px rgba(0,0,0,0.5); border: 1px solid rgba(255,214,0,0.2); padding: 12px; pointer-events: none;">
-        <div style="font-size: 12px; font-weight: 500; color: var(--primary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;"
-            id="popover-title">Event Preview</div>
-        <div style="height: 100px;">
-            <canvas id="popoverChart"></canvas>
-        </div>
-        <div style="font-size: 11px; opacity: 0.6; margin-top: 8px; line-height: 1.4;" id="popover-desc">
-            Visual representation of this anomaly type.
-        </div>
-    </div>
 </div>
 
 <script>
+
     let latestSampleRate = 180000;
     let latestEffectiveRate = 10000;
     let latestSamples = [];
     let currentFrequency = 0;
     let fftYMax = 150;
     let sampleRateAliasWarnBelow = 120;
+
+    function isNarrowViewport() {
+        return window.matchMedia('(max-width: 1023px)').matches;
+    }
+
+    function isSheetPopover(popover) {
+        return !!(popover && popover.classList && popover.classList.contains('popover-sheet'));
+    }
+
+    function getViewportBox() {
+        const vv = window.visualViewport;
+        if (vv) {
+            return {
+                width: vv.width,
+                height: vv.height,
+                offsetLeft: vv.offsetLeft || 0,
+                offsetTop: vv.offsetTop || 0
+            };
+        }
+        return {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            offsetLeft: 0,
+            offsetTop: 0
+        };
+    }
+
+    let _trackedPopover = null;
+    let _trackedAnchorEvent = null;
+    let _vvListenersAttached = false;
+
+    function trackOpenPopover(popover, event) {
+        _trackedPopover = popover;
+        if (event && event.clientX != null) {
+            _trackedAnchorEvent = { clientX: event.clientX, clientY: event.clientY };
+        }
+        ensurePopoverViewportListeners();
+    }
+
+    function clearTrackedPopover(popover) {
+        if (!popover || _trackedPopover === popover) {
+            _trackedPopover = null;
+            _trackedAnchorEvent = null;
+        }
+    }
+
+    function applySheetLayout(popover) {
+        const vv = getViewportBox();
+        popover.style.left = '';
+        popover.style.top = '';
+        popover.style.right = '';
+        popover.style.bottom = '';
+        popover.style.maxHeight = Math.min(vv.height * 0.85, vv.height - 24) + 'px';
+    }
+
+    function ensurePopoverViewportListeners() {
+        if (_vvListenersAttached) return;
+        _vvListenersAttached = true;
+        const reflow = () => {
+            if (!_trackedPopover || _trackedPopover.style.display === 'none') return;
+            if (isNarrowViewport() && isSheetPopover(_trackedPopover)) {
+                applySheetLayout(_trackedPopover);
+                return;
+            }
+            positionCardPopover(_trackedPopover, _trackedAnchorEvent, true);
+        };
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', reflow);
+            window.visualViewport.addEventListener('scroll', reflow);
+        }
+        window.addEventListener('resize', reflow);
+        document.addEventListener('focusin', (e) => {
+            if (_trackedPopover && _trackedPopover.contains(e.target)) {
+                setTimeout(reflow, 50);
+            }
+        });
+    }
 
     function formatSampleRateLabel(hz) {
         if (hz >= 1000) return (hz / 1000).toFixed(hz % 1000 === 0 ? 0 : 1) + ' kHz';
@@ -554,6 +362,7 @@
     function hideSampleRateSettings() {
         const el = document.getElementById('sample-rate-popover');
         if (el) el.style.display = 'none';
+        clearTrackedPopover(el);
     }
 
     let trendSettingsIecRate = 5;
@@ -609,6 +418,7 @@
     function hideTrendSettings() {
         const el = document.getElementById('trend-settings-popover');
         if (el) el.style.display = 'none';
+        clearTrackedPopover(el);
     }
 
     async function saveTrendSettings() {
@@ -1696,26 +1506,38 @@
     function datetimeLocalValue(ms) {
         const d = new Date(ms);
         const pad = (n) => String(n).padStart(2, '0');
-        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        // Minute precision — friendlier for iOS datetime-local; search still ±2 minutes.
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
     function toggleFlickerTvFields() {
         const kind = document.getElementById('flicker-kind').value;
         document.getElementById('flicker-tv-fields').style.display = kind === 'lights' ? 'none' : 'grid';
+        const form = document.getElementById('flicker-form-popover');
+        if (form && form.style.display === 'block') {
+            positionCardPopover(form, _trackedAnchorEvent);
+        }
     }
 
     function toggleFlickerSameMoment() {
         const several = document.getElementById('flicker-tv-count').value === 'several';
         document.getElementById('flicker-same-wrap').style.display = several ? '' : 'none';
+        const form = document.getElementById('flicker-form-popover');
+        if (form && form.style.display === 'block') {
+            positionCardPopover(form, _trackedAnchorEvent);
+        }
     }
 
     function hideFlickerForm() {
-        document.getElementById('flicker-form-popover').style.display = 'none';
+        const popover = document.getElementById('flicker-form-popover');
+        if (popover) popover.style.display = 'none';
+        clearTrackedPopover(popover);
     }
 
     function hideFlickerDetail() {
         const popover = document.getElementById('flicker-detail-popover');
         if (popover) popover.style.display = 'none';
+        clearTrackedPopover(popover);
         if (flickerDetailChart) {
             flickerDetailChart.destroy();
             flickerDetailChart = null;
@@ -1723,15 +1545,69 @@
     }
 
     function centerFlickerPopover(popover) {
-        popover.style.display = 'block';
-        const rect = popover.getBoundingClientRect();
-        const left = Math.max(12, (window.innerWidth - rect.width) / 2);
-        const top = Math.max(12, Math.min(
-            (window.innerHeight - rect.height) / 2,
-            window.innerHeight - rect.height - 12
-        ));
-        popover.style.left = left + 'px';
-        popover.style.top = top + 'px';
+        positionCardPopover(popover, null);
+    }
+
+    const FLICKER_QUICK_FILLS = {
+        office: {
+            kind: 'tv',
+            tv_count: 'one',
+            tv_source: 'external',
+            note: 'Office · monitor + laptop',
+        },
+        basement: {
+            kind: 'tv',
+            tv_count: 'one',
+            tv_source: 'external',
+            note: 'Basement · gaming PC',
+        },
+        living: {
+            kind: 'tv',
+            tv_count: 'one',
+            tv_source: 'internal',
+            note: 'Living room · built-in apps',
+        },
+        master: {
+            kind: 'tv',
+            tv_count: 'one',
+            tv_source: 'internal',
+            note: 'Master bedroom · built-in apps',
+        },
+    };
+
+    function setFlickerQuickFillActive(scenario) {
+        document.querySelectorAll('.flicker-quick-btn').forEach((btn) => {
+            const on = btn.dataset.scenario === scenario;
+            btn.style.background = on ? 'var(--primary)' : 'rgba(255,214,0,0.08)';
+            btn.style.color = on ? '#000' : 'var(--primary)';
+            btn.style.borderColor = on ? 'var(--primary)' : 'rgba(255,214,0,0.35)';
+        });
+    }
+
+    function applyFlickerQuickFill(scenario) {
+        const preset = FLICKER_QUICK_FILLS[scenario];
+        if (!preset) return;
+        document.getElementById('flicker-kind').value = preset.kind;
+        document.getElementById('flicker-tv-count').value = preset.tv_count;
+        document.getElementById('flicker-source').value = preset.tv_source;
+        document.getElementById('flicker-same').value = 'unsure';
+        document.getElementById('flicker-recovery').value = 'av_continue';
+        // Leave duration for the operator — it changes every time.
+        document.getElementById('flicker-blank').value = '';
+        // Prefill a short location/device hint; keep the field editable for extra notes.
+        document.getElementById('flicker-note').value = preset.note;
+        toggleFlickerTvFields();
+        toggleFlickerSameMoment();
+        setFlickerQuickFillActive(scenario);
+        const status = document.getElementById('flicker-form-status');
+        status.style.color = '#888';
+        status.innerText = 'Enter how long the picture was gone, then Save.';
+        const blank = document.getElementById('flicker-blank');
+        blank.focus();
+        const form = document.getElementById('flicker-form-popover');
+        if (form && form.style.display === 'block') {
+            positionCardPopover(form, _trackedAnchorEvent);
+        }
     }
 
     async function showFlickerForm(event) {
@@ -1749,6 +1625,9 @@
         when.min = datetimeLocalValue(now - 7 * 24 * 3600 * 1000);
         when.max = datetimeLocalValue(now + 5 * 60 * 1000);
         document.getElementById('flicker-form-status').innerText = '';
+        document.getElementById('flicker-note').value = '';
+        document.getElementById('flicker-blank').value = '0.8';
+        setFlickerQuickFillActive(null);
         toggleFlickerTvFields();
         toggleFlickerSameMoment();
         positionCardPopover(popover, event);
@@ -2018,10 +1897,18 @@
             note: document.getElementById('flicker-note').value,
         };
         if (kind !== 'lights') {
+            const blankRaw = document.getElementById('flicker-blank').value;
+            const blankS = Number(blankRaw);
+            if (blankRaw === '' || !Number.isFinite(blankS) || blankS <= 0) {
+                status.style.color = '#F44336';
+                status.innerText = 'Enter how long the picture was gone (seconds).';
+                document.getElementById('flicker-blank').focus();
+                return;
+            }
             payload.tv_count = document.getElementById('flicker-tv-count').value;
             payload.same_moment = document.getElementById('flicker-same').value;
             payload.tv_source = document.getElementById('flicker-source').value;
-            payload.blank_s = Number(document.getElementById('flicker-blank').value);
+            payload.blank_s = blankS;
             payload.recovery = document.getElementById('flicker-recovery').value;
         }
         try {
@@ -2076,9 +1963,10 @@
         title.innerText = type + " PREVIEW";
         desc.innerText = eventDescriptions[type] || 'Anomaly detection trigger.';
 
-        popover.style.display = 'block';
-        popover.style.left = (event.clientX + 20) + 'px';
-        popover.style.top = (event.clientY - 50) + 'px';
+        positionCardPopover(popover, {
+            clientX: event.clientX + 20,
+            clientY: event.clientY - 62
+        });
 
         if (popoverChart) popoverChart.destroy();
 
@@ -2113,7 +2001,9 @@
     }
 
     function hideEventPreview() {
-        document.getElementById('event-popover').style.display = 'none';
+        const el = document.getElementById('event-popover');
+        if (el) el.style.display = 'none';
+        clearTrackedPopover(el);
     }
 
     // Delete Event Data Functions
@@ -2127,10 +2017,7 @@
         const popover = document.getElementById('delete-confirm-popover');
         deletePopoverX = event.clientX;
         deletePopoverY = event.clientY;
-        
-        popover.style.display = 'block';
-        popover.style.left = (event.clientX - 150) + 'px';
-        popover.style.top = (event.clientY - 100) + 'px';
+        positionCardPopover(popover, event);
     }
 
     async function showClearDataConfirm(event) {
@@ -2163,6 +2050,7 @@
     function hideClearDataConfirm() {
         const el = document.getElementById('clear-data-popover');
         if (el) el.style.display = 'none';
+        clearTrackedPopover(el);
     }
 
     async function confirmClearStoredData() {
@@ -2194,19 +2082,52 @@
     }
 
     function hideDeleteConfirm() {
-        document.getElementById('delete-confirm-popover').style.display = 'none';
+        const popover = document.getElementById('delete-confirm-popover');
+        if (popover) popover.style.display = 'none';
+        clearTrackedPopover(popover);
     }
 
-    function positionCardPopover(popover, event) {
+    function positionCardPopover(popover, event, fromReflow) {
+        if (!popover) return;
         const pad = 12;
         popover.style.display = 'block';
+
+        if (isNarrowViewport() && isSheetPopover(popover)) {
+            applySheetLayout(popover);
+            if (!fromReflow) trackOpenPopover(popover, event);
+            return;
+        }
+
+        popover.style.right = '';
+        popover.style.bottom = '';
+        popover.style.maxHeight = '';
+
+        const vv = getViewportBox();
+        // Force layout so width reflects CSS min(preferred, 100vw-24px)
         const rect = popover.getBoundingClientRect();
-        let left = event.clientX - Math.min(160, rect.width / 2);
-        let top = event.clientY + 12;
-        left = Math.max(pad, Math.min(left, window.innerWidth - rect.width - pad));
-        top = Math.max(pad, Math.min(top, window.innerHeight - rect.height - pad));
+        const width = Math.min(rect.width, vv.width - 2 * pad);
+        const height = Math.min(rect.height, vv.height - 2 * pad);
+
+        let left;
+        let top;
+        if (event && event.clientX != null) {
+            left = event.clientX - Math.min(160, width / 2);
+            top = event.clientY + 12;
+        } else {
+            left = vv.offsetLeft + (vv.width - width) / 2;
+            top = vv.offsetTop + (vv.height - height) / 2;
+        }
+
+        const minLeft = vv.offsetLeft + pad;
+        const maxLeft = vv.offsetLeft + vv.width - width - pad;
+        const minTop = vv.offsetTop + pad;
+        const maxTop = vv.offsetTop + vv.height - height - pad;
+        left = maxLeft < minLeft ? minLeft : Math.max(minLeft, Math.min(left, maxLeft));
+        top = maxTop < minTop ? minTop : Math.max(minTop, Math.min(top, maxTop));
+
         popover.style.left = left + 'px';
         popover.style.top = top + 'px';
+        if (!fromReflow) trackOpenPopover(popover, event);
     }
 
     const ZMPT_TRIM_LO = 1.0;
@@ -2243,7 +2164,9 @@
     }
 
     function hideZmptTrimPopover() {
-        document.getElementById('zmpt-trim-popover').style.display = 'none';
+        const el = document.getElementById('zmpt-trim-popover');
+        if (el) el.style.display = 'none';
+        clearTrackedPopover(el);
     }
 
     function updateZmptTrimTuner(adcVrms, adcVpp) {
@@ -2323,7 +2246,9 @@
     }
 
     function hideEventsHelp() {
-        document.getElementById('events-help-popover').style.display = 'none';
+        const el = document.getElementById('events-help-popover');
+        if (el) el.style.display = 'none';
+        clearTrackedPopover(el);
     }
 
     let lastAnomaliesReview = null;
@@ -2400,7 +2325,9 @@
     }
 
     function hideEventsSettings() {
-        document.getElementById('events-settings-popover').style.display = 'none';
+        const el = document.getElementById('events-settings-popover');
+        if (el) el.style.display = 'none';
+        clearTrackedPopover(el);
     }
 
     async function saveEventsSettings() {
@@ -2612,35 +2539,308 @@
     setupWebSocket();
 </script>
 
-<!-- Event Detail Modal - Full Screen Scrim -->
-<div id="event-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); z-index: 1000; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box;" onclick="if(event.target === this) closeEventModal()">
-    <div style="background: var(--surface); border-radius: 12px; width: 100%; height: 100%; max-width: 90vw; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8); overflow: hidden;">
-        <!-- Header -->
-        <div style="padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: flex-start;">
-            <div style="flex: 1;">
-                <h2 id="modal-title" style="margin: 0 0 12px 0; font-size: 24px; color: var(--primary); font-weight: 500;">Event Details</h2>
-                <div id="modal-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; font-size: 13px;"></div>
-            </div>
-            <button onclick="closeEventModal()" style="background: none; border: none; color: var(--primary); cursor: pointer; padding: 8px; font-size: 28px; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; transition: background 0.2s; hover: background rgba(255,214,0,0.1);">
-                <span class="material-icons-outlined">close</span>
+{% endblock %}
+
+{% block overlays %}
+<div id="overlay-root">
+    <div id="sample-rate-popover" class="popover" style="--popover-width: 340px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div style="font-size: 14px; font-weight: 500; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px;">Sample Rate</div>
+            <button type="button" class="popover-close" onclick="hideSampleRateSettings()">
+                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
             </button>
         </div>
-        
-        <!-- Content -->
-        <div style="flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 24px;">
-            <!-- Waveform Chart -->
-            <div style="flex: 1; min-height: 300px; position: relative;">
-                <div style="font-size: 12px; color: #888; text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.5px;">Waveform</div>
-                <canvas id="eventDetailChart" style="width: 100%; height: 100%;"></canvas>
+        <p style="font-size: 11px; opacity: 0.75; margin: 0 0 12px; line-height: 1.45;">
+            IEEE 1159 does not mandate a sample rate. IEC 61000-4-30 Class A practice is
+            <b>≥256 samples/cycle (~15.4 kHz @ 60 Hz)</b>. For Pika’s 1-cycle RMS sag/swell
+            logging, <b>~2–4 kHz</b> is a practical floor; <b>10 kHz+</b> is recommended.
+        </p>
+        <label style="font-size: 12px; display: block;">
+            Acquisition rate
+            <select id="cfg-sample-rate" style="width: 100%; margin-top: 6px; box-sizing: border-box; padding: 6px;"></select>
+        </label>
+        <div id="sample-rate-alias-warn"
+            style="display: none; margin-top: 10px; padding: 8px; border-radius: 4px; background: rgba(255,193,7,0.12); border: 1px solid rgba(255,193,7,0.4); color: #FFC107; font-size: 11px; line-height: 1.4;">
+            Rates below 120 S/s cannot faithfully represent 60 Hz mains (aliasing).
+        </div>
+        <div id="sample-rate-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
+        <div class="popover-actions" style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
+            <button type="button" onclick="hideSampleRateSettings()"
+                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 10px 14px; cursor: pointer; font-size: 12px; min-height: 44px;">Cancel</button>
+            <button type="button" onclick="saveSampleRateSettings()"
+                style="background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 10px 16px; cursor: pointer; font-size: 12px; font-weight: 600; min-height: 44px;">Save &amp; Restart</button>
+        </div>
+    </div>
+
+    <div id="zmpt-trim-popover" class="popover" style="--popover-width: 360px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div style="font-size: 14px; font-weight: 500; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px;">ZMPT pot trim</div>
+            <button type="button" class="popover-close" onclick="hideZmptTrimPopover()">
+                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
+            </button>
+        </div>
+        <p style="font-size: 11px; opacity: 0.75; margin: 0 0 12px; line-height: 1.45;">
+            Live <b>ADC-input Vrms</b> (ZMPT → AD7606), not mains volts.
+            Target <b>1.0–1.2 VAC</b>. Turn the pot clockwise to raise, then fine-trim into the green band.
+            Stay well below AD7606 ±5&nbsp;V clipping. After trimming, restart the datalogger so auto-cal re-learns the ratio.
+        </p>
+        <div style="text-align: center; margin-bottom: 14px;">
+            <div style="font-size: 11px; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.4px;">ADC Vrms</div>
+            <div id="zmpt-trim-vrms" style="font-size: 32px; font-weight: 600; color: var(--primary); line-height: 1.2; font-variant-numeric: tabular-nums;">--</div>
+            <div id="zmpt-trim-vpp" style="font-size: 11px; opacity: 0.65; margin-top: 2px;">P–P: --</div>
+        </div>
+        <div id="zmpt-tuner" style="position: relative; height: 56px; margin: 8px 0 4px;">
+            <div style="position: absolute; left: 0; right: 0; top: 22px; height: 12px; border-radius: 6px; overflow: hidden; background: linear-gradient(90deg, #f44336 0%, #ff9800 28%, #4caf50 40%, #4caf50 48%, #ff9800 55%, #f44336 100%); opacity: 0.85;"></div>
+            <div id="zmpt-tuner-band" title="1.0–1.2 V target"
+                style="position: absolute; top: 18px; height: 20px; border: 1px solid rgba(255,255,255,0.55); border-radius: 4px; background: rgba(76,175,80,0.25); pointer-events: none;"></div>
+            <div id="zmpt-tuner-needle"
+                style="position: absolute; top: 8px; width: 3px; height: 40px; margin-left: -1.5px; background: #fff; border-radius: 2px; box-shadow: 0 0 6px rgba(0,0,0,0.6); transition: left 0.08s linear;"></div>
+            <div style="position: absolute; left: 0; right: 0; top: 42px; display: flex; justify-content: space-between; font-size: 10px; opacity: 0.55;">
+                <span>0</span><span>1.0</span><span>1.2</span><span>2.5 V</span>
             </div>
-            
-            <!-- FFT Chart -->
-            <div style="flex: 1; min-height: 300px; position: relative;">
-                <div style="font-size: 12px; color: #888; text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.5px;">Frequency Spectrum (FFT)</div>
-                <canvas id="eventFftChart" style="width: 100%; height: 100%;"></canvas>
+        </div>
+        <div id="zmpt-trim-status" style="text-align: center; font-size: 14px; font-weight: 600; margin-top: 10px; color: #aaa;">Waiting for live data…</div>
+    </div>
+
+    <div id="trend-settings-popover" class="popover" style="--popover-width: 380px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div style="font-size: 14px; font-weight: 500; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px;">Trend Display</div>
+            <button type="button" class="popover-close" onclick="hideTrendSettings()">
+                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
+            </button>
+        </div>
+        <p style="font-size: 11px; opacity: 0.7; margin: 0 0 12px; line-height: 1.4;">
+            These control what the <b>browser chart</b> loads. Disk still stores full-rate IEC Vrms intervals.
+        </p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+            <label>Lookback (minutes)
+                <input id="cfg-trend-window" type="number" min="1" max="720" step="1"
+                    oninput="updateTrendSettingsPreview()"
+                    style="width: 100%; margin-top: 4px; box-sizing: border-box;">
+            </label>
+            <label>Chart points
+                <input id="cfg-trend-points" type="number" min="100" max="2000" step="1"
+                    oninput="updateTrendSettingsPreview()"
+                    style="width: 100%; margin-top: 4px; box-sizing: border-box;">
+            </label>
+        </div>
+        <div id="trend-settings-preview" style="font-size: 11px; opacity: 0.75; margin-top: 10px; line-height: 1.45;"></div>
+        <div id="trend-settings-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
+        <div class="popover-actions" style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
+            <button type="button" onclick="hideTrendSettings()"
+                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 10px 14px; cursor: pointer; font-size: 12px; min-height: 44px;">Cancel</button>
+            <button type="button" onclick="saveTrendSettings()"
+                style="background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 10px 16px; cursor: pointer; font-size: 12px; font-weight: 600; min-height: 44px;">Save</button>
+        </div>
+    </div>
+
+    <div id="flicker-detail-popover" class="popover popover-accent popover-sheet" style="--popover-width: 440px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <div style="font-size: 14px; font-weight: 500; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Flicker · ±2 min</div>
+            <button type="button" class="popover-close" onclick="hideFlickerDetail()">
+                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
+            </button>
+        </div>
+        <div id="flicker-detail-meta" style="font-size: 12px; opacity: 0.85; margin-bottom: 10px; line-height: 1.4;"></div>
+        <div id="flicker-detail-stats"
+            style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; margin-bottom: 12px;"></div>
+        <div style="height: 160px; margin-bottom: 10px; position: relative;">
+            <canvas id="flickerDetailChart"></canvas>
+        </div>
+        <div id="flicker-detail-events" style="margin-bottom: 10px;"></div>
+        <div id="flicker-detail-summary" style="font-size: 12px; line-height: 1.5; opacity: 0.9;"></div>
+    </div>
+
+    <div id="flicker-form-popover" class="popover popover-accent popover-sheet" style="--popover-width: 420px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <div style="font-size: 14px; font-weight: 500; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Flicker note</div>
+            <button type="button" class="popover-close" onclick="hideFlickerForm()">
+                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
+            </button>
+        </div>
+        <p style="font-size: 11px; opacity: 0.7; margin: 0 0 12px; line-height: 1.4;">
+            The search looks ±2 minutes around the time you enter. That covers a memory that is a couple of minutes off.
+        </p>
+        <div id="flicker-clock-warn" style="display: none; font-size: 12px; color: #FFB74D; margin-bottom: 10px; line-height: 1.4;"></div>
+        <div style="margin-bottom: 12px;">
+            <div style="font-size: 11px; opacity: 0.7; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.4px;">Quick fill</div>
+            <div id="flicker-quick-fills" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <button type="button" class="flicker-quick-btn" data-scenario="office" onclick="applyFlickerQuickFill('office')"
+                    style="background: rgba(255,214,0,0.08); color: var(--primary); border: 1px solid rgba(255,214,0,0.35); border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 12px; font-weight: 600; min-height: 44px;">Office</button>
+                <button type="button" class="flicker-quick-btn" data-scenario="basement" onclick="applyFlickerQuickFill('basement')"
+                    style="background: rgba(255,214,0,0.08); color: var(--primary); border: 1px solid rgba(255,214,0,0.35); border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 12px; font-weight: 600; min-height: 44px;">Basement</button>
+                <button type="button" class="flicker-quick-btn" data-scenario="living" onclick="applyFlickerQuickFill('living')"
+                    style="background: rgba(255,214,0,0.08); color: var(--primary); border: 1px solid rgba(255,214,0,0.35); border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 12px; font-weight: 600; min-height: 44px;">Living room</button>
+                <button type="button" class="flicker-quick-btn" data-scenario="master" onclick="applyFlickerQuickFill('master')"
+                    style="background: rgba(255,214,0,0.08); color: var(--primary); border: 1px solid rgba(255,214,0,0.35); border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 12px; font-weight: 600; min-height: 44px;">Master bedroom</button>
+            </div>
+        </div>
+        <div style="display: grid; gap: 10px; font-size: 12px;">
+            <label>What flickered
+                <select id="flicker-kind" onchange="toggleFlickerTvFields()" style="width: 100%; margin-top: 4px; min-height: 44px;">
+                    <option value="lights">Lights</option>
+                    <option value="tv" selected>TV</option>
+                    <option value="both">Lights and TV</option>
+                </select>
+            </label>
+            <label>Approximate time
+                <input id="flicker-when" type="datetime-local" step="60" style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;">
+            </label>
+            <div id="flicker-tv-fields" style="display: grid; gap: 10px;">
+                <label>How many sets
+                    <select id="flicker-tv-count" onchange="toggleFlickerSameMoment()" style="width: 100%; margin-top: 4px; min-height: 44px;">
+                        <option value="one">One TV</option>
+                        <option value="several" selected>Several TVs</option>
+                        <option value="unsure">Not sure</option>
+                    </select>
+                </label>
+                <label id="flicker-same-wrap">Did they go dark together?
+                    <select id="flicker-same" style="width: 100%; margin-top: 4px; min-height: 44px;">
+                        <option value="unsure" selected>Not sure</option>
+                        <option value="together">Yes, the same moment</option>
+                    </select>
+                </label>
+                <label>What was playing
+                    <select id="flicker-source" style="width: 100%; margin-top: 4px; min-height: 44px;">
+                        <option value="internal" selected>Built-in app only</option>
+                        <option value="external">External device</option>
+                        <option value="mixed">Some of each</option>
+                        <option value="unsure">Not sure</option>
+                    </select>
+                </label>
+                <label>How long the picture was gone (seconds)
+                    <input id="flicker-blank" type="number" min="0.1" max="10" step="0.1" value="0.8" style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;">
+                </label>
+                <label>What came back
+                    <select id="flicker-recovery" style="width: 100%; margin-top: 4px; min-height: 44px;">
+                        <option value="av_continue" selected>Sound and picture dropped, show kept going</option>
+                        <option value="reboot">Set rebooted (logo or home screen)</option>
+                    </select>
+                </label>
+            </div>
+            <label>Note (optional)
+                <input id="flicker-note" type="text" maxlength="500" placeholder="Which room" style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;">
+            </label>
+        </div>
+        <div id="flicker-form-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
+        <div class="popover-actions" style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;">
+            <button type="button" onclick="hideFlickerForm()"
+                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 10px 14px; cursor: pointer; font-size: 12px; min-height: 44px;">Cancel</button>
+            <button type="button" onclick="saveFlickerNote()"
+                style="background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 10px 16px; cursor: pointer; font-size: 12px; font-weight: 600; min-height: 44px;">Save and search</button>
+        </div>
+    </div>
+
+    <div id="events-help-popover" class="popover popover-accent popover-sheet" style="--popover-width: 360px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div style="font-size: 14px; font-weight: 500; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Sag / Swell Guide</div>
+            <button type="button" class="popover-close" onclick="hideEventsHelp()">
+                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
+            </button>
+        </div>
+        <div id="events-help-body" style="font-size: 12px; opacity: 0.9; line-height: 1.55;">
+            Loading…
+        </div>
+    </div>
+
+    <div id="events-settings-popover" class="popover popover-sheet" style="--popover-width: 400px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div style="font-size: 14px; font-weight: 500; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px;">Log Thresholds</div>
+            <button type="button" class="popover-close" onclick="hideEventsSettings()">
+                <span class="material-icons-outlined" style="font-size: 18px;">close</span>
+            </button>
+        </div>
+        <p style="font-size: 11px; opacity: 0.7; margin: 0 0 12px; line-height: 1.4;">
+            These control what gets <b>logged</b>. Values in parentheses are the fixed professional-review references (not editable here).
+        </p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+            <label>Sag % <span id="ref-sag-pct" style="opacity: 0.55; font-weight: 400;">(review ≤70% / ≤10%)</span><input id="cfg-sag-pct" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;"></label>
+            <label>Swell % <span id="ref-swell-pct" style="opacity: 0.55; font-weight: 400;">(review ≥120%)</span><input id="cfg-swell-pct" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;"></label>
+            <label>Sag min ms <span id="ref-sag-ms" style="opacity: 0.55; font-weight: 400;">(review ≥60000 ms)</span><input id="cfg-sag-ms" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;"></label>
+            <label>Swell min ms <span id="ref-swell-ms" style="opacity: 0.55; font-weight: 400;">(review ≥60000 ms)</span><input id="cfg-swell-ms" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;"></label>
+            <label>Nominal V <span id="ref-nominal-v" style="opacity: 0.55; font-weight: 400;">(Range B −13.3%…+5.8%)</span><input id="cfg-nominal-v" type="number" step="0.1" style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;"></label>
+            <label>Sag cooldown ms <span id="ref-sag-cd" style="opacity: 0.55; font-weight: 400;">(logging only)</span><input id="cfg-sag-cd" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;"></label>
+            <label style="grid-column: 1 / -1;">Swell cooldown ms <span id="ref-swell-cd" style="opacity: 0.55; font-weight: 400;">(logging only)</span><input id="cfg-swell-cd" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;"></label>
+        </div>
+        <div id="events-settings-status" style="font-size: 11px; margin-top: 10px; min-height: 16px; color: #888;"></div>
+        <div class="popover-actions" style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap;">
+            <button type="button" onclick="resetEventsSettingsToReview()" title="Fill fields from professional-review references"
+                style="margin-right: auto; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 10px 14px; cursor: pointer; font-size: 12px; font-weight: 500; min-height: 44px;">Reset to review</button>
+            <button type="button" onclick="hideEventsSettings()"
+                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 10px 14px; cursor: pointer; font-size: 12px; min-height: 44px;">Cancel</button>
+            <button type="button" onclick="saveEventsSettings()"
+                style="background: var(--primary); color: #000; border: none; border-radius: 4px; padding: 10px 16px; cursor: pointer; font-size: 12px; font-weight: 600; min-height: 44px;">Save &amp; Restart</button>
+        </div>
+    </div>
+
+    <div id="clear-data-popover" class="popover popover-danger" style="--popover-width: 320px;">
+        <div style="font-size: 14px; font-weight: 500; color: #F44336; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Clear stored data</div>
+        <div style="font-size: 12px; opacity: 0.85; margin-bottom: 12px; line-height: 1.5;">
+            Permanently delete trend and event files
+            <code style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;">decimated.bin</code>,
+            <code style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;">events.bin</code>,
+            rotations, and rollups).
+            The datalogger restarts briefly so the space is actually freed.
+        </div>
+        <div id="clear-data-summary" style="font-size: 12px; margin-bottom: 16px; color: var(--primary);">Using --</div>
+        <div id="clear-data-status" style="font-size: 11px; min-height: 14px; color: #888; margin-bottom: 8px;"></div>
+        <div class="popover-actions" style="display: flex; gap: 8px; justify-content: flex-end;">
+            <button type="button" onclick="hideClearDataConfirm()"
+                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 10px 14px; cursor: pointer; font-size: 12px; font-weight: 500; min-height: 44px;">Cancel</button>
+            <button type="button" onclick="confirmClearStoredData()"
+                style="background: #F44336; color: white; border: none; border-radius: 4px; padding: 10px 16px; cursor: pointer; font-size: 12px; font-weight: 500; min-height: 44px;">Clear data</button>
+        </div>
+    </div>
+
+    <div id="delete-confirm-popover" class="popover popover-danger" style="--popover-width: 300px;">
+        <div style="font-size: 14px; font-weight: 500; color: #F44336; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;"
+            id="delete-confirm-title">Confirm Deletion</div>
+        <div style="font-size: 12px; opacity: 0.8; margin-bottom: 16px; line-height: 1.5;">
+            This will permanently delete all event data from <code style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;">pika/datalogger/data/events.bin</code>.
+            <br><br>
+            Are you sure you want to proceed?
+        </div>
+        <div class="popover-actions" style="display: flex; gap: 8px; justify-content: flex-end;">
+            <button onclick="hideDeleteConfirm()"
+                style="background: var(--surface); color: #888; border: 1px solid #888; border-radius: 4px; padding: 10px 14px; cursor: pointer; font-size: 12px; font-weight: 500; min-height: 44px;">Cancel</button>
+            <button onclick="confirmDeleteEvents()"
+                style="background: #F44336; color: white; border: none; border-radius: 4px; padding: 10px 16px; cursor: pointer; font-size: 12px; font-weight: 500; min-height: 44px;">Delete</button>
+        </div>
+    </div>
+
+    <div id="event-popover" class="popover popover-accent popover-preview" style="--popover-width: 220px;">
+        <div style="font-size: 12px; font-weight: 500; color: var(--primary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;"
+            id="popover-title">Event Preview</div>
+        <div style="height: 100px;">
+            <canvas id="popoverChart"></canvas>
+        </div>
+        <div style="font-size: 11px; opacity: 0.6; margin-top: 8px; line-height: 1.4;" id="popover-desc">
+            Visual representation of this anomaly type.
+        </div>
+    </div>
+
+    <div id="event-modal" class="event-modal-scrim" onclick="if(event.target === this) closeEventModal()">
+        <div class="event-modal-panel">
+            <div class="event-modal-header">
+                <div style="flex: 1;">
+                    <h2 id="modal-title" style="margin: 0 0 12px 0; font-size: 24px; color: var(--primary); font-weight: 500;">Event Details</h2>
+                    <div id="modal-stats" class="event-modal-stats"></div>
+                </div>
+                <button onclick="closeEventModal()" class="popover-close" style="color: var(--primary); width: 44px; height: 44px; border-radius: 50%;">
+                    <span class="material-icons-outlined">close</span>
+                </button>
+            </div>
+            <div class="event-modal-body">
+                <div class="event-modal-chart">
+                    <div style="font-size: 12px; color: #888; text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.5px;">Waveform</div>
+                    <canvas id="eventDetailChart" style="width: 100%; height: 100%;"></canvas>
+                </div>
+                <div class="event-modal-chart">
+                    <div style="font-size: 12px; color: #888; text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.5px;">Frequency Spectrum (FFT)</div>
+                    <canvas id="eventFftChart" style="width: 100%; height: 100%;"></canvas>
+                </div>
             </div>
         </div>
     </div>
 </div>
-
 {% endblock %}
