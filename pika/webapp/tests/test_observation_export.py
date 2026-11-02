@@ -15,16 +15,18 @@ WEBAPP_ROOT = Path(__file__).resolve().parents[1]
 if str(WEBAPP_ROOT) not in sys.path:
     sys.path.insert(0, str(WEBAPP_ROOT))
 
-from app.services.observation_service import ObservationService, _ns_to_iso  # noqa: E402
+from app.services.observation_service import ObservationService, WINDOW_S, _ns_to_iso  # noqa: E402
 
 
 class FakeHistory:
     def __init__(self, observed_ns: int):
-        half = 120 * 1_000_000_000
-        start = observed_ns - half
-        # ~1 Hz for a compact fixture (still multi-point)
-        self.timestamps = [start + i * 1_000_000_000 for i in range(241)]
-        self.samples = [120.0 - (5.0 if i == 120 else 0.0) for i in range(241)]
+        # Cover the prior-WINDOW_S lookback at ~1 Hz.
+        start = observed_ns - WINDOW_S * 1_000_000_000
+        n = WINDOW_S + 1
+        self.timestamps = [start + i * 1_000_000_000 for i in range(n)]
+        # Dip a few seconds before the note time.
+        dip_i = n - 6
+        self.samples = [120.0 - (5.0 if i == dip_i else 0.0) for i in range(n)]
         self.mins = [s - 0.5 for s in self.samples]
         self.maxs = [s + 0.5 for s in self.samples]
 
@@ -80,7 +82,7 @@ class ObservationExportTest(unittest.TestCase):
             "id": "abc123deadbeef",
             "created_at_ns": self.observed_ns + 60_000_000_000,
             "observed_at_ns": self.observed_ns,
-            "window_s": 120,
+            "window_s": WINDOW_S,
             "kind": "lights",
             "note": "kitchen",
             "summary": "cached",
@@ -106,6 +108,22 @@ class ObservationExportTest(unittest.TestCase):
         self.assertTrue(_ns_to_iso(self.observed_ns).endswith("Z"))
         self.assertEqual(_ns_to_iso(None), "")
 
+    def test_correlate_lookback_only(self):
+        note = {
+            "observed_at_ns": self.observed_ns,
+            "kind": "lights",
+            "note": "kitchen",
+        }
+        stats = self.service.correlate(note)
+        self.assertEqual(stats["window_s"], WINDOW_S)
+        self.assertEqual(stats["window_end_ns"], self.observed_ns)
+        self.assertEqual(
+            stats["window_start_ns"],
+            self.observed_ns - WINDOW_S * 1_000_000_000,
+        )
+        self.assertEqual(stats["coverage"], "full")
+        self.assertEqual(len(stats["events"]), 1)
+
     def test_export_zip_contents(self):
         blob = self.service.export_zip()
         self.assertGreater(len(blob), 100)
@@ -130,7 +148,7 @@ class ObservationExportTest(unittest.TestCase):
 
             windows_text = zf.read("windows.csv").decode("utf-8")
             windows_reader = list(csv.DictReader(io.StringIO(windows_text)))
-            self.assertGreaterEqual(len(windows_reader), 200)
+            self.assertGreaterEqual(len(windows_reader), WINDOW_S)
             self.assertEqual(windows_reader[0]["note_id"], "abc123deadbeef")
             self.assertTrue(windows_reader[0]["timestamp_iso"].endswith("Z"))
 
@@ -150,7 +168,7 @@ class ObservationExportTest(unittest.TestCase):
             chart_note = payload["notes"][0]
             self.assertEqual(chart_note["id"], "abc123deadbeef")
             self.assertEqual(chart_note["observed_at_ms"], self.observed_ns / 1_000_000.0)
-            self.assertGreater(len(chart_note["series"]["t_ms"]), 100)
+            self.assertGreater(len(chart_note["series"]["t_ms"]), 50)
             self.assertEqual(len(chart_note["series"]["t_ms"]), len(chart_note["series"]["vrms"]))
             self.assertEqual(len(chart_note["events"]), 1)
 

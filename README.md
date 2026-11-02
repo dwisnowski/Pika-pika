@@ -26,7 +26,7 @@ The datalogger writes three kinds of records:
 
 - **Events.** One-cycle RMS sags below 90% of site nominal (default 120 V) and swells above 110%, held for at least about half a cycle. High-rate waveform snapshots are kept only around those events. See [ADR-0003](docs/adrs/0003-ieee-1159-sag-swell-detection.md).
 - **Trend.** Continuous ~5 Hz points. Each point is about 12 cycles (~200 ms) of calibrated Vrms plus the waveform envelope. A 10-minute min/avg/max rollup gives longer ANSI C84.1 context. See [ADR-0004](docs/adrs/0004-iec-aligned-trend-decimation.md).
-- **Flicker notes.** A later “the lights blinked” or “the TV dropped out” note is searched against ±2 minutes of the trend and the event index. Notes live in `observations.jsonl`, separate from event files. See [ADR-0007](docs/adrs/0007-flicker-observations.md).
+- **Flicker notes.** A “the lights blinked” or “the TV dropped out” note is searched against the prior 60 seconds of the trend and the event index. Notes live in `observations.jsonl`, separate from event files. See [ADR-0007](docs/adrs/0007-flicker-observations.md).
 
 Spike and dip event types, and IEC 61000-4-30 Class A certification, are out of scope.
 

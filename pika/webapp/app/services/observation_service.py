@@ -1,4 +1,4 @@
-"""Manual flicker notes and a ±2 minute search of the voltage already on disk."""
+"""Manual flicker notes and a prior-60s search of the voltage already on disk."""
 
 from __future__ import annotations
 
@@ -26,7 +26,8 @@ from app.services.history_service import history_service
 
 _CHART_TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "templates" / "flicker_export_chart.html"
 
-WINDOW_S = 120
+# Lookback-only window: notes are entered near the moment of the flicker.
+WINDOW_S = 60
 AWAY_FRACTION = 0.01
 NOTCH_FRACTION = 0.85
 MAX_NOTE_CHARS = 500
@@ -176,7 +177,7 @@ def _notch(vrms: List[float], mins: List[float], maxs: List[float], timestamps: 
 
 
 def build_summary(note: Dict[str, Any], stats: Dict[str, Any]) -> str:
-    """Plain-language reading of one ±2 minute window."""
+    """Plain-language reading of the prior-60s lookback window."""
     kind = note.get("kind") or "both"
     tv_count = note.get("tv_count")
     blank_s = note.get("blank_s")
@@ -195,10 +196,10 @@ def build_summary(note: Dict[str, Any], stats: Dict[str, Any]) -> str:
         if len(events) > 4:
             extra = f" and {len(events) - 4} more"
         sentences.append(
-            "Logged in this ±2 minutes: " + ", ".join(bits) + extra + "."
+            "Logged in this prior minute: " + ", ".join(bits) + extra + "."
         )
     else:
-        sentences.append("No sag or swell was logged in this ±2 minutes.")
+        sentences.append("No sag or swell was logged in this prior minute.")
 
     if not stats.get("interval_count"):
         sentences.append(
@@ -378,9 +379,9 @@ class ObservationService:
 
     def correlate(self, note: dict, *, full_intervals: bool = False) -> dict:
         observed = int(note["observed_at_ns"])
-        half = WINDOW_S * 1_000_000_000
-        start_ns = observed - half
-        end_ns = observed + half
+        lookback_ns = WINDOW_S * 1_000_000_000
+        start_ns = observed - lookback_ns
+        end_ns = observed
 
         nominal = float(self.config.get_target_mains_vrms())
         sag_pct = float(self.config.get_sag_threshold_pct())

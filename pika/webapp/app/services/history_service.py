@@ -400,24 +400,31 @@ class HistoryService:
                 file_size = f.tell()
                 if file_size < HEADER_SIZE:
                     return []
-                offset = self._seek_chunk_at_or_before(f, file_size, start_ns)
-                f.seek(offset)
-                while f.tell() + HEADER_SIZE <= file_size:
+                pos = self._seek_chunk_at_or_before(f, file_size, start_ns)
+                while pos + HEADER_SIZE <= file_size:
+                    f.seek(pos)
                     hdr_data = f.read(HEADER_SIZE)
                     if len(hdr_data) < HEADER_SIZE:
                         break
                     ts, rate, count, channels, vps = struct.unpack(
                         HEADER_FORMAT, hdr_data
                     )
-                    if not self._valid_header(ts, rate, count, channels, vps):
-                        break
                     nbytes = count * channels * vps * 2
-                    if f.tell() + nbytes > file_size:
-                        break
+                    chunk_ok = (
+                        self._valid_header(ts, rate, count, channels, vps)
+                        and nbytes > 0
+                        and pos + HEADER_SIZE + nbytes <= file_size
+                    )
+                    if not chunk_ok:
+                        nxt = self._find_next_valid_chunk(f, file_size, pos + 1)
+                        if nxt is None:
+                            break
+                        pos = nxt
+                        continue
                     bucket_ns = int(1_000_000_000 / rate) if rate else 0
                     chunk_end = ts + max(count - 1, 0) * bucket_ns
                     if chunk_end < start_ns:
-                        f.seek(nbytes, os.SEEK_CUR)
+                        pos += HEADER_SIZE + nbytes
                         continue
                     if ts > end_ns:
                         break
@@ -436,15 +443,55 @@ class HistoryService:
                     for v, mn, mx, stamp in zip(vrms, mins, maxs, timestamps):
                         if start_ns <= stamp <= end_ns:
                             rows.append((v, mn, mx, stamp))
+                    pos += HEADER_SIZE + nbytes
         except Exception as e:
             print(f"[HistoryService] Error reading {path}: {e}")
         return rows
 
-    def _seek_chunk_at_or_before(self, f, file_size: int, start_ns: int) -> int:
-        """Binary-search an aligned IEC file for the chunk covering start_ns."""
+    def _find_next_valid_chunk(
+        self, f, file_size: int, start_pos: int
+    ) -> Optional[int]:
+        """Resync after corruption: skip holes and find the next parseable chunk."""
+        pos = max(0, start_pos)
         chunk = TYPICAL_IEC_CHUNK_BYTES
-        if file_size < chunk or file_size % chunk != 0:
+        while pos + HEADER_SIZE <= file_size:
+            f.seek(pos)
+            # Fast-skip zero runs common after a torn write / hole.
+            probe = f.read(min(4096, file_size - pos))
+            if not probe:
+                return None
+            nonzero = next((i for i, b in enumerate(probe) if b != 0), None)
+            if nonzero is None:
+                pos += len(probe)
+                continue
+            pos += nonzero
+            f.seek(pos)
+            hdr = f.read(HEADER_SIZE)
+            if len(hdr) < HEADER_SIZE:
+                return None
+            ts, rate, count, channels, vps = struct.unpack(HEADER_FORMAT, hdr)
+            nbytes = count * channels * vps * 2
+            if (
+                self._valid_header(ts, rate, count, channels, vps)
+                and nbytes > 0
+                and pos + HEADER_SIZE + nbytes <= file_size
+                # Prefer the standard IEC flush size; still accept other valid sizes.
+                and (
+                    HEADER_SIZE + nbytes == chunk
+                    or self._chunk_bytes(count, channels, vps) == HEADER_SIZE + nbytes
+                )
+            ):
+                return pos
+            pos += 1
+        return None
+
+    def _seek_chunk_at_or_before(self, f, file_size: int, start_ns: int) -> int:
+        """Locate a chunk at or before start_ns (binary search if aligned)."""
+        chunk = TYPICAL_IEC_CHUNK_BYTES
+        if file_size < chunk:
             return 0
+        if file_size % chunk != 0:
+            return self._seek_unaligned_near(f, file_size, start_ns)
         n = file_size // chunk
         lo, hi = 0, n
         while lo < hi:
@@ -465,6 +512,29 @@ class HistoryService:
             else:
                 hi = mid
         return max(0, lo - 1) * chunk
+
+    def _seek_unaligned_near(self, f, file_size: int, start_ns: int) -> int:
+        """Coarse seek across holey/unaligned files, then resync from that point."""
+        step = TYPICAL_IEC_CHUNK_BYTES * 2048
+        best = 0
+        pos = 0
+        while pos < file_size:
+            synced = self._find_next_valid_chunk(f, file_size, pos)
+            if synced is None:
+                break
+            f.seek(synced)
+            hdr = f.read(HEADER_SIZE)
+            if len(hdr) < HEADER_SIZE:
+                break
+            ts, rate, count, channels, vps = struct.unpack(HEADER_FORMAT, hdr)
+            if not self._valid_header(ts, rate, count, channels, vps):
+                pos = synced + 1
+                continue
+            if ts > start_ns:
+                return best
+            best = synced
+            pos = synced + step
+        return best
 
     def get_vrms_10min_rollup(self, limit: int = 24) -> List[Dict[str, Any]]:
         path = os.path.join(self.data_dir, "vrms_10min.jsonl")

@@ -210,7 +210,7 @@
         <div id="flicker-panel" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08);">
             <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
                 <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: var(--primary);">Flicker notes</span>
-                <span style="font-size: 11px; opacity: 0.6;">Searches ±2 minutes of the stored voltage. A note can be entered up to a day later.</span>
+                <span style="font-size: 11px; opacity: 0.6;">Searches the prior 60 seconds of stored voltage ending at the note time.</span>
                 <a href="/api/v1/observations/export" download="flicker-export.zip"
                     title="Download notes.csv, windows.csv, and chart.html"
                     style="margin-left: auto; font-size: 11px; font-weight: 600; color: var(--primary); text-decoration: none; border: 1px solid rgba(255,214,0,0.35); border-radius: 4px; padding: 8px 12px; background: rgba(255,214,0,0.08); min-height: 44px; display: inline-flex; align-items: center; box-sizing: border-box;">Export</a>
@@ -1398,7 +1398,7 @@
                                     const raw = context.raw || {};
                                     const kind = flickerKindLabel(raw.kind);
                                     const y = (typeof raw.y === 'number') ? raw.y.toFixed(1) : '—';
-                                    return `${kind} note · ${y} V (click for ±2 min)`;
+                                    return `${kind} note · ${y} V (click for prior minute)`;
                                 }
                                 const value = typeof context.raw === 'object'
                                     ? context.raw.y
@@ -1457,7 +1457,7 @@
         }
         const live = document.getElementById('trend-live-btn');
         if (live) live.style.display = '';
-        setTrendStatus('Flicker note · ±2 min');
+        setTrendStatus('Flicker note · prior minute');
         hideTrendOverlay();
     }
 
@@ -1506,7 +1506,7 @@
     function datetimeLocalValue(ms) {
         const d = new Date(ms);
         const pad = (n) => String(n).padStart(2, '0');
-        // Minute precision — friendlier for iOS datetime-local; search still ±2 minutes.
+        // Minute precision — friendlier for iOS datetime-local; search is the prior 60 seconds.
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
@@ -1641,7 +1641,7 @@
             if (skewMs > 30000) {
                 const skewS = Math.round(skewMs / 1000);
                 warn.style.display = 'block';
-                warn.innerText = `This browser and the board clock differ by about ${skewS} s. The ±2 minute search has to cover that as well as the time you remember.`;
+                warn.innerText = `This browser and the board clock differ by about ${skewS} s. Match the board clock when you enter the note time so the prior-minute search lines up.`;
             }
         } catch (err) {
             warn.style.display = 'block';
@@ -1794,7 +1794,7 @@
             return `<button type="button" onclick="showEventModal(${Number(item.id)})" style="margin: 0 6px 6px 0; background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 3px 8px; cursor: pointer; font-size: 11px;">${escapeFlickerText(item.type)} ${rms} ${dur}</button>`;
         }).join('');
         document.getElementById('flicker-detail-events').innerHTML = events
-            || '<div style="font-size: 11px; opacity: 0.6;">No sag/swell logged in this ±2 minutes.</div>';
+            || '<div style="font-size: 11px; opacity: 0.6;">No sag/swell logged in this prior minute.</div>';
         document.getElementById('flicker-detail-summary').innerText = corr.summary || '';
 
         if (clickEvent && clickEvent.clientX != null) {
@@ -1817,8 +1817,8 @@
         const low = (typeof corr.lowest_vrms_v === 'number') ? corr.lowest_vrms_v.toFixed(1) + ' V' : '—';
         const run = (typeof corr.low_run_s === 'number') ? corr.low_run_s.toFixed(2) + ' s low' : '';
         box.innerHTML = jumped
-            ? `<div>Opened ±2 min around this note · lowest ${escapeFlickerText(low)}${run ? ' · ' + escapeFlickerText(run) : ''}.</div>`
-            : '<div>No stored intervals in this ±2 minutes; trend stayed on the live window.</div>';
+            ? `<div>Opened the prior minute for this note · lowest ${escapeFlickerText(low)}${run ? ' · ' + escapeFlickerText(run) : ''}.</div>`
+            : '<div>No stored intervals in this prior minute; trend stayed on the live window.</div>';
         box.style.display = 'block';
         showFlickerDetailPopover(payload, clickEvent);
     }
@@ -1851,7 +1851,7 @@
                 const clipped = raw.length > 140 ? raw.slice(0, 140) + '…' : raw;
                 const detail = bits
                     ? escapeFlickerText(bits) + (clipped ? ' — ' + escapeFlickerText(clipped) : '')
-                    : (clipped ? escapeFlickerText(clipped) : 'Open for ±2 min voltage.');
+                    : (clipped ? escapeFlickerText(clipped) : 'Open for prior-minute voltage.');
                 return `<button type="button" onclick="openFlickerNote('${note.id}', event)" style="display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 8px 10px; background: rgba(0,0,0,0.2); color: inherit; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; cursor: pointer;">
                     <div style="font-weight: 600; color: var(--primary);">${escapeFlickerText(flickerKindLabel(note.kind))} · ${escapeFlickerText(when)}</div>
                     <div style="opacity: 0.8; margin-top: 2px;">${detail}</div>
@@ -2636,7 +2636,7 @@
 
     <div id="flicker-detail-popover" class="popover popover-accent popover-sheet" style="--popover-width: 440px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-            <div style="font-size: 14px; font-weight: 500; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Flicker · ±2 min</div>
+            <div style="font-size: 14px; font-weight: 500; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px;">Flicker · prior minute</div>
             <button type="button" class="popover-close" onclick="hideFlickerDetail()">
                 <span class="material-icons-outlined" style="font-size: 18px;">close</span>
             </button>
@@ -2659,7 +2659,7 @@
             </button>
         </div>
         <p style="font-size: 11px; opacity: 0.7; margin: 0 0 12px; line-height: 1.4;">
-            The search looks ±2 minutes around the time you enter. That covers a memory that is a couple of minutes off.
+            The search looks at the prior 60 seconds ending at the time you enter, for notes logged as the flicker happens.
         </p>
         <div id="flicker-clock-warn" style="display: none; font-size: 12px; color: #FFB74D; margin-bottom: 10px; line-height: 1.4;"></div>
         <div style="margin-bottom: 12px;">
