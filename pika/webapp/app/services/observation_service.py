@@ -31,6 +31,7 @@ WINDOW_S = 60
 AWAY_FRACTION = 0.01
 NOTCH_FRACTION = 0.85
 MAX_NOTE_CHARS = 500
+MAX_LOCATION_CHARS = 80
 MAX_AGE_S = 7 * 24 * 3600
 MAX_FUTURE_S = 5 * 60
 LIST_LIMIT = 30
@@ -200,6 +201,10 @@ def build_summary(note: Dict[str, Any], stats: Dict[str, Any]) -> str:
         )
     else:
         sentences.append("No sag or swell was logged in this prior minute.")
+
+    location = (note.get("pika_location") or "").strip()
+    if location:
+        sentences.append(f"Pika was plugged in at {location}.")
 
     if not stats.get("interval_count"):
         sentences.append(
@@ -480,7 +485,8 @@ class ObservationService:
         notes_csv = self._csv_bytes(
             note_rows,
             [
-                "id", "kind", "note", "tv_count", "same_moment", "tv_source", "blank_s", "recovery",
+                "id", "kind", "pika_location", "note", "tv_count", "same_moment", "tv_source",
+                "blank_s", "recovery",
                 "created_at_iso", "observed_at_iso", "observed_at_ns",
                 "window_start_iso", "window_end_iso",
                 "nominal_v", "median_vrms_v",
@@ -521,6 +527,7 @@ class ObservationService:
         return {
             "id": note.get("id") or "",
             "kind": note.get("kind") or "",
+            "pika_location": note.get("pika_location") or "",
             "note": note.get("note") or "",
             "tv_count": note.get("tv_count") if note.get("tv_count") is not None else "",
             "same_moment": note.get("same_moment") if note.get("same_moment") is not None else "",
@@ -596,6 +603,7 @@ class ObservationService:
         return {
             "id": note.get("id") or "",
             "kind": note.get("kind") or "",
+            "pika_location": note.get("pika_location") or "",
             "note": note.get("note") or "",
             "observed_at_ms": observed_ns / 1_000_000.0,
             "observed_at_iso": _ns_to_iso(observed_ns),
@@ -631,6 +639,7 @@ class ObservationService:
             "observed_at_ns": note.get("observed_at_ns"),
             "window_s": WINDOW_S,
             "kind": note.get("kind"),
+            "pika_location": note.get("pika_location") or "",
             "note": note.get("note") or "",
             "tv_count": note.get("tv_count"),
             "same_moment": note.get("same_moment"),
@@ -668,10 +677,19 @@ class ObservationService:
         if len(text) > MAX_NOTE_CHARS:
             raise ValueError(f"Note must be {MAX_NOTE_CHARS} characters or fewer")
 
+        location = str(body.get("pika_location") or "").strip()
+        if not location:
+            raise ValueError("pika_location is required (where Pika is plugged in)")
+        if len(location) > MAX_LOCATION_CHARS:
+            raise ValueError(
+                f"pika_location must be {MAX_LOCATION_CHARS} characters or fewer"
+            )
+
         note: Dict[str, Any] = {
             "observed_at_ns": observed_ns,
             "window_s": WINDOW_S,
             "kind": kind,
+            "pika_location": location,
             "note": text,
         }
         if kind == "lights":

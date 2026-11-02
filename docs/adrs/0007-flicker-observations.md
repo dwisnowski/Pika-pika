@@ -41,10 +41,11 @@ log.
    (about ±Vpeak), not a lowest RMS. The dip and the low run use **interval
    Vrms**. The envelope is used only to notice a one-sided notch inside a
    single ~200 ms bucket.
-5. The note records what was seen (lights, television, or both) and, for a
-   television, how many sets, whether they seemed simultaneous, the source,
-   how long the picture was gone, and whether the set rebooted. Those answers
-   shape the sentence. They do not change the voltage search.
+5. The note records where Pika was plugged in (`pika_location`), what was seen
+   (lights, television, or both) and, for a television, how many sets, whether
+   they seemed simultaneous, the source, how long the picture was gone, and
+   whether the set rebooted. Location and symptom answers shape the sentence.
+   They do not change the voltage search.
 6. Do not add an on-device model and do not change sag/swell log thresholds for
    the sake of flicker notes alone (operators may still restore IEEE log
    defaults so short deep dips can capture waveforms).

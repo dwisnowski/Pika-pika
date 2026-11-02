@@ -1548,6 +1548,7 @@
         positionCardPopover(popover, null);
     }
 
+    const FLICKER_LOCATION_KEY = 'pikaFlickerLocation';
     const FLICKER_QUICK_FILLS = {
         office: {
             kind: 'tv',
@@ -1574,6 +1575,25 @@
             note: 'Master bedroom · built-in apps',
         },
     };
+
+    function loadSavedFlickerLocation() {
+        try {
+            const saved = (localStorage.getItem(FLICKER_LOCATION_KEY) || '').trim();
+            return saved || 'Office';
+        } catch (err) {
+            return 'Office';
+        }
+    }
+
+    function rememberFlickerLocation(value) {
+        const cleaned = (value || '').trim();
+        if (!cleaned) return;
+        try {
+            localStorage.setItem(FLICKER_LOCATION_KEY, cleaned);
+        } catch (err) {
+            /* ignore quota / private mode */
+        }
+    }
 
     function setFlickerQuickFillActive(scenario) {
         document.querySelectorAll('.flicker-quick-btn').forEach((btn) => {
@@ -1625,6 +1645,7 @@
         when.min = datetimeLocalValue(now - 7 * 24 * 3600 * 1000);
         when.max = datetimeLocalValue(now + 5 * 60 * 1000);
         document.getElementById('flicker-form-status').innerText = '';
+        document.getElementById('flicker-pika-location').value = loadSavedFlickerLocation();
         document.getElementById('flicker-note').value = '';
         document.getElementById('flicker-blank').value = '0.8';
         setFlickerQuickFillActive(null);
@@ -1771,8 +1792,11 @@
             ? new Date(payload.observed_at_ns / 1e6).toLocaleString()
             : '';
         const noteText = payload.note ? ` · ${payload.note}` : '';
+        const locationText = payload.pika_location
+            ? ` · Pika @ ${payload.pika_location}`
+            : '';
         document.getElementById('flicker-detail-meta').innerHTML =
-            `<b style="color: var(--primary);">${escapeFlickerText(flickerKindLabel(payload.kind))}</b> · ${escapeFlickerText(when)}${escapeFlickerText(noteText)}`;
+            `<b style="color: var(--primary);">${escapeFlickerText(flickerKindLabel(payload.kind))}</b> · ${escapeFlickerText(when)}${escapeFlickerText(locationText)}${escapeFlickerText(noteText)}`;
 
         const low = (typeof corr.lowest_vrms_v === 'number') ? `${corr.lowest_vrms_v.toFixed(1)} V` : '—';
         const vsMed = (typeof corr.lowest_vs_median_pct === 'number')
@@ -1852,8 +1876,11 @@
                 const detail = bits
                     ? escapeFlickerText(bits) + (clipped ? ' — ' + escapeFlickerText(clipped) : '')
                     : (clipped ? escapeFlickerText(clipped) : 'Open for prior-minute voltage.');
+                const location = note.pika_location
+                    ? ` · Pika @ ${note.pika_location}`
+                    : '';
                 return `<button type="button" onclick="openFlickerNote('${note.id}', event)" style="display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 8px 10px; background: rgba(0,0,0,0.2); color: inherit; border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; cursor: pointer;">
-                    <div style="font-weight: 600; color: var(--primary);">${escapeFlickerText(flickerKindLabel(note.kind))} · ${escapeFlickerText(when)}</div>
+                    <div style="font-weight: 600; color: var(--primary);">${escapeFlickerText(flickerKindLabel(note.kind))} · ${escapeFlickerText(when)}${escapeFlickerText(location)}</div>
                     <div style="opacity: 0.8; margin-top: 2px;">${detail}</div>
                 </button>`;
             }).join('');
@@ -1891,9 +1918,17 @@
             return;
         }
         const kind = document.getElementById('flicker-kind').value;
+        const pikaLocation = document.getElementById('flicker-pika-location').value.trim();
+        if (!pikaLocation) {
+            status.style.color = '#F44336';
+            status.innerText = 'Enter where Pika is plugged in.';
+            document.getElementById('flicker-pika-location').focus();
+            return;
+        }
         const payload = {
             kind,
             observed_at_ms: observedMs,
+            pika_location: pikaLocation,
             note: document.getElementById('flicker-note').value,
         };
         if (kind !== 'lights') {
@@ -1923,6 +1958,7 @@
                 status.innerText = body.error || 'Could not save the note.';
                 return;
             }
+            rememberFlickerLocation(pikaLocation);
             hideFlickerForm();
             renderFlickerResult(body);
             loadFlickerNotes();
@@ -2676,6 +2712,17 @@
             </div>
         </div>
         <div style="display: grid; gap: 10px; font-size: 12px;">
+            <label>Pika plugged in
+                <input id="flicker-pika-location" type="text" maxlength="80" list="flicker-pika-location-suggestions"
+                    placeholder="e.g. Office" autocomplete="off"
+                    style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;">
+                <datalist id="flicker-pika-location-suggestions">
+                    <option value="Office"></option>
+                    <option value="Basement"></option>
+                    <option value="Living room"></option>
+                    <option value="Master bedroom"></option>
+                </datalist>
+            </label>
             <label>What flickered
                 <select id="flicker-kind" onchange="toggleFlickerTvFields()" style="width: 100%; margin-top: 4px; min-height: 44px;">
                     <option value="lights">Lights</option>

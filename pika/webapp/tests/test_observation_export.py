@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 import zipfile
 from pathlib import Path
@@ -84,6 +85,7 @@ class ObservationExportTest(unittest.TestCase):
             "observed_at_ns": self.observed_ns,
             "window_s": WINDOW_S,
             "kind": "lights",
+            "pika_location": "Office",
             "note": "kitchen",
             "summary": "cached",
             "lowest_vrms_v": 115.0,
@@ -112,6 +114,7 @@ class ObservationExportTest(unittest.TestCase):
         note = {
             "observed_at_ns": self.observed_ns,
             "kind": "lights",
+            "pika_location": "Office",
             "note": "kitchen",
         }
         stats = self.service.correlate(note)
@@ -123,6 +126,24 @@ class ObservationExportTest(unittest.TestCase):
         )
         self.assertEqual(stats["coverage"], "full")
         self.assertEqual(len(stats["events"]), 1)
+        self.assertIn("Pika was plugged in at Office", stats["summary"])
+
+    def test_create_requires_pika_location(self):
+        observed_ms = time.time_ns() // 1_000_000
+        with self.assertRaises(ValueError):
+            self.service.create_note({
+                "kind": "lights",
+                "observed_at_ms": observed_ms,
+                "note": "kitchen",
+            })
+        created = self.service.create_note({
+            "kind": "lights",
+            "observed_at_ms": observed_ms,
+            "pika_location": "Basement",
+            "note": "kitchen",
+        })
+        self.assertEqual(created["pika_location"], "Basement")
+        self.assertIn("Pika was plugged in at Basement", created["correlation"]["summary"])
 
     def test_export_zip_contents(self):
         blob = self.service.export_zip()
@@ -138,6 +159,7 @@ class ObservationExportTest(unittest.TestCase):
             row = notes_reader[0]
             self.assertEqual(row["id"], "abc123deadbeef")
             self.assertEqual(row["kind"], "lights")
+            self.assertEqual(row["pika_location"], "Office")
             self.assertEqual(row["note"], "kitchen")
             self.assertEqual(row["observed_at_ns"], str(self.observed_ns))
             self.assertTrue(row["observed_at_iso"].endswith("Z"))
