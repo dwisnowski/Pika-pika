@@ -11,8 +11,14 @@
 
     .scope-grid {
         display: grid;
-        grid-template-columns: 1fr 300px;
+        grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
         gap: 16px;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .scope-grid > * {
+        min-width: 0;
     }
 
     .scope-screen {
@@ -21,6 +27,7 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
+        min-width: 0;
     }
 
     .scope-well {
@@ -29,15 +36,22 @@
         border-radius: 8px;
         position: relative;
         min-height: 400px;
+        min-width: 0;
+        width: 100%;
+        overflow: hidden;
     }
 
     @media (max-width: 1023px) {
         .scope-grid {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .scope-panel {
+            padding: 12px;
         }
 
         .scope-well {
-            min-height: min(50dvh, 320px);
+            min-height: min(45dvh, 300px);
         }
 
         .control-btn {
@@ -49,6 +63,23 @@
         .control-row {
             flex-wrap: wrap;
             gap: 8px;
+        }
+
+        .measure-overlay {
+            font-size: 11px;
+            padding: 6px 8px;
+            top: 8px;
+            right: 8px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .scope-well {
+            min-height: min(40dvh, 260px);
+        }
+
+        .knob-group {
+            padding: 10px;
         }
     }
 

@@ -62,7 +62,7 @@
                 style="background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 12px; min-height: 44px;">Trim ZMPT</button>
             </div>
         </div>
-        <div id="live-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
+        <div id="live-stats" class="live-stats">
             <div>Avg: <strong id="stat-avg">--</strong></div>
             <div>RMS: <strong id="stat-rms">--</strong></div>
             <div style="display: flex; flex-direction: column; gap: 4px;">
@@ -179,7 +179,7 @@
                 Now</button>
             </div>
         </div>
-        <div style="height: 200px;">
+        <div class="fft-plot">
             <canvas id="fftChart"></canvas>
         </div>
     </div>
@@ -203,7 +203,7 @@
             </div>
         </div>
         <div class="table-scroll">
-        <table style="width: 100%; border-collapse: collapse; text-align: left; min-width: 480px;">
+        <table class="events-table">
             <thead>
                 <tr style="opacity: 0.6; font-size: 12px;">
                     <th style="padding: 8px; width: 36px;" title="Professional review"> </th>
@@ -247,6 +247,24 @@
 
     function isNarrowViewport() {
         return window.matchMedia('(max-width: 1023px)').matches;
+    }
+
+    let _chartResizeTimer = null;
+    function resizeDashboardCharts() {
+        try {
+            if (trendChart) trendChart.resize();
+            if (fftChart) fftChart.resize();
+            if (flickerDetailChart) flickerDetailChart.resize();
+        } catch (e) { /* charts may not be declared yet during early boot */ }
+    }
+    function scheduleChartResize() {
+        clearTimeout(_chartResizeTimer);
+        _chartResizeTimer = setTimeout(resizeDashboardCharts, 120);
+    }
+    window.addEventListener('resize', scheduleChartResize);
+    window.addEventListener('orientationchange', scheduleChartResize);
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', scheduleChartResize);
     }
 
     function isSheetPopover(popover) {
@@ -1465,7 +1483,15 @@
                 animation: false,
                 onClick: onTrendChartClick,
                 plugins: {
-                    legend: { display: true, labels: { color: '#aaa', boxWidth: 12, font: { size: 10 } } },
+                    legend: {
+                        display: true,
+                        labels: {
+                            color: '#aaa',
+                            boxWidth: 12,
+                            font: { size: 10 },
+                            padding: isNarrowViewport() ? 8 : 10
+                        }
+                    },
                     zoom: {
                         zoom: {
                             wheel: { enabled: true },
@@ -2742,7 +2768,7 @@
         <p style="font-size: 11px; opacity: 0.7; margin: 0 0 12px; line-height: 1.4;">
             These control what the <b>browser chart</b> loads. Disk still stores full-rate IEC Vrms intervals.
         </p>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+        <div class="popover-form-grid">
             <label>Lookback (minutes)
                 <input id="cfg-trend-window" type="number" min="1" max="720" step="1"
                     oninput="updateTrendSettingsPreview()"
@@ -2772,9 +2798,8 @@
             </button>
         </div>
         <div id="flicker-detail-meta" style="font-size: 12px; opacity: 0.85; margin-bottom: 10px; line-height: 1.4;"></div>
-        <div id="flicker-detail-stats"
-            style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; margin-bottom: 12px;"></div>
-        <div style="height: 160px; margin-bottom: 10px; position: relative;">
+        <div id="flicker-detail-stats" class="popover-form-grid" style="margin-bottom: 12px;"></div>
+        <div style="height: min(160px, 28dvh); margin-bottom: 10px; position: relative; width: 100%; min-width: 0;">
             <canvas id="flickerDetailChart"></canvas>
         </div>
         <div id="flicker-detail-events" style="margin-bottom: 10px;"></div>
@@ -2894,7 +2919,7 @@
         <p style="font-size: 11px; opacity: 0.7; margin: 0 0 12px; line-height: 1.4;">
             These control what gets <b>logged</b>. Values in parentheses are the fixed professional-review references (not editable here).
         </p>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+        <div class="popover-form-grid">
             <label>Sag % <span id="ref-sag-pct" style="opacity: 0.55; font-weight: 400;">(review ≤70% / ≤10%)</span><input id="cfg-sag-pct" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;"></label>
             <label>Swell % <span id="ref-swell-pct" style="opacity: 0.55; font-weight: 400;">(review ≥120%)</span><input id="cfg-swell-pct" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;"></label>
             <label>Sag min ms <span id="ref-sag-ms" style="opacity: 0.55; font-weight: 400;">(review ≥60000 ms)</span><input id="cfg-sag-ms" type="number" step="1" style="width: 100%; margin-top: 4px; box-sizing: border-box; min-height: 44px;"></label>

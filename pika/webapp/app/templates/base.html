@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Pika Power Monitor</title>
     <link rel="icon" href="/static/favicon.svg?v=1" type="image/svg+xml">
     <link rel="icon" href="/static/favicon-32.png?v=1" type="image/png" sizes="32x32">
@@ -27,6 +27,12 @@
             --error: #CF6679;
         }
 
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
         body {
             background-color: var(--background);
             color: var(--on-surface);
@@ -36,6 +42,9 @@
             flex-direction: column;
             min-height: 100vh;
             min-height: 100dvh;
+            overflow-x: hidden;
+            overflow-x: clip;
+            width: 100%;
         }
 
         header {
@@ -50,6 +59,19 @@
             gap: 8px 16px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
             z-index: 100;
+            width: 100%;
+        }
+
+        .header-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .header-brand .material-icons-outlined {
+            margin-right: 8px;
+            flex-shrink: 0;
         }
 
         header h1 {
@@ -57,12 +79,15 @@
             font-size: 20px;
             font-weight: 500;
             color: var(--primary);
+            white-space: nowrap;
         }
 
         .nav {
             display: flex;
             gap: 24px;
             margin-left: auto;
+            flex-wrap: wrap;
+            min-width: 0;
         }
 
         .nav a {
@@ -94,7 +119,7 @@
             max-width: 1200px;
             align-self: center;
             width: 100%;
-            box-sizing: border-box;
+            min-width: 0;
         }
 
         /* Material Card */
@@ -104,6 +129,8 @@
             padding: 20px;
             margin-bottom: 16px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            min-width: 0;
+            max-width: 100%;
         }
 
         .card-header {
@@ -111,6 +138,7 @@
             align-items: center;
             margin-bottom: 16px;
             gap: 8px;
+            min-width: 0;
         }
 
         .card-header-actions {
@@ -119,6 +147,13 @@
             align-items: center;
             gap: 6px;
             flex-wrap: wrap;
+            min-width: 0;
+        }
+
+        .card-header > .material-icons-outlined {
+            color: var(--primary);
+            margin-right: 4px;
+            flex-shrink: 0;
         }
 
         .card-header span {
@@ -130,24 +165,34 @@
             font-size: 18px;
             font-weight: 500;
             margin: 0;
+            min-width: 0;
+            flex: 1 1 auto;
+            line-height: 1.3;
+            overflow-wrap: anywhere;
         }
 
-        /* Mobile First Grid */
+        /* Mobile First Grid — minmax(0,1fr) lets charts/tables shrink */
         .grid {
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 1fr);
             gap: 16px;
+            width: 100%;
+            min-width: 0;
         }
 
-        @media (min-width: 768px) {
+        .grid > * {
+            min-width: 0;
+        }
+
+        @media (min-width: 900px) {
             .grid {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
         @media (min-width: 1024px) {
             .grid {
-                grid-template-columns: repeat(3, 1fr);
+                grid-template-columns: repeat(3, minmax(0, 1fr));
             }
 
             .grid-wide {
@@ -161,7 +206,7 @@
             }
 
             .grid {
-                grid-template-columns: 1fr 1fr 420px;
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 420px);
                 grid-template-areas:
                     "health stats events"
                     "trend trend events"
@@ -270,8 +315,45 @@
 
         .table-scroll {
             width: 100%;
+            max-width: 100%;
+            min-width: 0;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
+        }
+
+        .live-stats {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            font-size: 14px;
+            min-width: 0;
+        }
+
+        .fft-plot {
+            height: 200px;
+            width: 100%;
+            min-width: 0;
+            position: relative;
+        }
+
+        .fft-plot canvas,
+        .trend-plot canvas {
+            max-width: 100%;
+        }
+
+        .events-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            min-width: 480px;
+        }
+
+        .popover-form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+            font-size: 12px;
+            min-width: 0;
         }
 
         .icon-btn {
@@ -347,13 +429,67 @@
             position: relative;
         }
 
+        .card-header .trend-status {
+            margin-left: 12px;
+            margin-right: 0;
+            font-size: 11px;
+            color: #888;
+            font-weight: 400;
+            white-space: nowrap;
+        }
+
+        .trend-plot {
+            position: relative;
+            height: 250px;
+            width: 100%;
+            min-width: 0;
+            overflow: hidden;
+        }
+
         @media (max-width: 1023px) {
+            header {
+                padding: 12px;
+                padding-left: max(12px, env(safe-area-inset-left));
+                padding-right: max(12px, env(safe-area-inset-right));
+                padding-top: max(12px, env(safe-area-inset-top));
+                gap: 4px 12px;
+            }
+
+            header h1 {
+                font-size: 18px;
+            }
+
+            .nav {
+                margin-left: 0;
+                width: 100%;
+                gap: 8px 16px;
+            }
+
+            main {
+                padding: 12px;
+                padding-left: max(12px, env(safe-area-inset-left));
+                padding-right: max(12px, env(safe-area-inset-right));
+            }
+
+            .card {
+                padding: 14px;
+                margin-bottom: 12px;
+            }
+
+            .card-title {
+                font-size: 16px;
+                flex: 1 1 auto;
+            }
+
             .card-header {
                 flex-wrap: wrap;
-                align-items: flex-start;
+                align-items: center;
+                margin-bottom: 12px;
+                row-gap: 6px;
             }
 
             .card-header-actions {
+                flex: 1 1 100%;
                 width: 100%;
                 margin-left: 0;
                 justify-content: flex-start;
@@ -361,6 +497,7 @@
 
             .card-header .trend-status {
                 white-space: normal;
+                flex: 1 1 100%;
                 width: 100%;
                 margin-left: 0;
             }
@@ -369,6 +506,19 @@
                 min-width: 44px;
                 min-height: 44px;
                 padding: 8px;
+            }
+
+            .trend-plot {
+                height: min(220px, 38dvh);
+            }
+
+            .fft-plot {
+                height: min(180px, 32dvh);
+            }
+
+            .events-table {
+                min-width: 420px;
+                font-size: 13px;
             }
 
             .popover.popover-sheet {
@@ -407,7 +557,7 @@
             }
 
             .event-modal-stats {
-                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
                 gap: 10px;
             }
 
@@ -421,18 +571,59 @@
             }
         }
 
-        .card-header .trend-status {
-            margin-left: 12px;
-            margin-right: 0;
-            font-size: 11px;
-            color: #888;
-            font-weight: 400;
-            white-space: nowrap;
-        }
+        @media (max-width: 480px) {
+            header h1 {
+                font-size: 17px;
+            }
 
-        .trend-plot {
-            position: relative;
-            height: 250px;
+            .nav {
+                gap: 4px 12px;
+            }
+
+            .nav a {
+                font-size: 13px;
+                letter-spacing: 0.6px;
+                padding: 0 2px;
+            }
+
+            main {
+                padding: 10px;
+                padding-left: max(10px, env(safe-area-inset-left));
+                padding-right: max(10px, env(safe-area-inset-right));
+            }
+
+            .card {
+                padding: 12px;
+                border-radius: 10px;
+            }
+
+            .card-title {
+                font-size: 15px;
+            }
+
+            .live-stats {
+                font-size: 13px;
+                gap: 6px;
+            }
+
+            .grid {
+                gap: 12px;
+            }
+
+            .events-table {
+                min-width: 360px;
+                font-size: 12px;
+            }
+
+            .popover-form-grid {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 8px;
+            }
+
+            footer {
+                padding: 12px;
+                font-size: 11px;
+            }
         }
 
         .trend-overlay {
@@ -473,8 +664,10 @@
 
 <body>
     <header>
-        <span class="material-icons-outlined" style="color: var(--primary); margin-right: 12px;">bolt</span>
-        <h1>PIKA MONITOR</h1>
+        <div class="header-brand">
+            <span class="material-icons-outlined" style="color: var(--primary);">bolt</span>
+            <h1>PIKA MONITOR</h1>
+        </div>
         <div class="nav">
             <a href="/" id="nav-dashboard">Dashboard</a>
             <a href="/oscilloscope" id="nav-scope">Scope</a>
