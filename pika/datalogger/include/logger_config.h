@@ -18,6 +18,10 @@ typedef struct {
 
   int32_t dip_threshold_pct;
   uint32_t dip_max_duration_ms;
+
+  /* Interruption log threshold: RMS <= pct% of nominal (default 10). */
+  uint32_t interruption_pct;
+  uint32_t interruption_min_duration_ms;
 } anomaly_config_t;
 
 typedef struct {
@@ -32,14 +36,21 @@ typedef struct {
 } events_config_t;
 
 typedef struct {
+  uint32_t max_mb; /* Rotate harmonics.jsonl when it exceeds this */
+  uint32_t emit_every_intervals; /* IEC windows between harmonic records */
+} harmonics_config_t;
+
+typedef struct {
   decimation_config_t decimation;
   events_config_t events;
+  harmonics_config_t harmonics;
 } storage_config_t;
 
 typedef struct {
   uint32_t sag_cooldown_ms;
   uint32_t swell_cooldown_ms;
   uint32_t spike_cooldown_ms;
+  uint32_t interruption_cooldown_ms;
 } debounce_config_t;
 
 typedef struct {

@@ -52,17 +52,22 @@ int anomaly_detector_init(anomaly_detector_t *ad, anomaly_config_t config,
   ad->sag_cooldown_ns = ms_to_ns(debounce.sag_cooldown_ms);
   ad->swell_cooldown_ns = ms_to_ns(debounce.swell_cooldown_ms);
   ad->spike_cooldown_ns = ms_to_ns(debounce.spike_cooldown_ms);
+  ad->interruption_cooldown_ns = ms_to_ns(debounce.interruption_cooldown_ms);
 
   ad->sag_min_duration_samples =
       ms_to_samples(config.sag_min_duration_ms, nominal_rate_hz);
   ad->swell_min_duration_samples =
       ms_to_samples(config.swell_min_duration_ms, nominal_rate_hz);
+  ad->interruption_min_duration_samples =
+      ms_to_samples(config.interruption_min_duration_ms, nominal_rate_hz);
 
   printf("[Detector] Init: rate=%u Hz, rms_window=%u samples (%u cycles), "
-         "learn=%u samples (%u cycles), sag_min=%u swell_min=%u samples\n",
+         "learn=%u samples (%u cycles), sag_min=%u swell_min=%u "
+         "interruption_min=%u samples (≤%u%%)\n",
          nominal_rate_hz, ad->rms_window_samples, detection.rms_window_cycles,
          ad->learn_samples_total, detection.learn_cycles,
-         ad->sag_min_duration_samples, ad->swell_min_duration_samples);
+         ad->sag_min_duration_samples, ad->swell_min_duration_samples,
+         ad->interruption_min_duration_samples, config.interruption_pct);
 
   return 0;
 }
@@ -100,6 +105,8 @@ static uint64_t cooldown_for_type(anomaly_detector_t *ad, event_type_t t) {
     return ad->swell_cooldown_ns;
   case EVENT_TYPE_SPIKE:
     return ad->spike_cooldown_ns;
+  case EVENT_TYPE_INTERRUPTION:
+    return ad->interruption_cooldown_ns;
   default:
     return ad->sag_cooldown_ns;
   }
@@ -111,13 +118,16 @@ static uint32_t min_duration_for_type(anomaly_detector_t *ad, event_type_t t) {
     return ad->sag_min_duration_samples;
   case EVENT_TYPE_SWELL:
     return ad->swell_min_duration_samples;
+  case EVENT_TYPE_INTERRUPTION:
+    return ad->interruption_min_duration_samples;
   default:
     return 1;
   }
 }
 
 static void update_extreme_rms(anomaly_detector_t *ad, float vrms_mains) {
-  if (ad->current_type == EVENT_TYPE_SAG) {
+  if (ad->current_type == EVENT_TYPE_SAG ||
+      ad->current_type == EVENT_TYPE_INTERRUPTION) {
     if (vrms_mains < ad->extreme_rms_v)
       ad->extreme_rms_v = vrms_mains;
   } else if (ad->current_type == EVENT_TYPE_SWELL) {
@@ -252,9 +262,14 @@ int anomaly_detector_process_sample(anomaly_detector_t *ad, int16_t raw,
       ad->nominal_vrms * (1.0f + ad->config.sag_threshold_pct / 100.0f);
   float swell_threshold_vrms =
       ad->nominal_vrms * (1.0f + ad->config.swell_threshold_pct / 100.0f);
+  float interruption_threshold_vrms =
+      ad->nominal_vrms * ((float)ad->config.interruption_pct / 100.0f);
 
+  /* Interruption before sag so deep drops are not logged only as SAG. */
   event_type_t cur_type = EVENT_TYPE_NONE;
-  if (vrms_mains < sag_threshold_vrms)
+  if (vrms_mains <= interruption_threshold_vrms)
+    cur_type = EVENT_TYPE_INTERRUPTION;
+  else if (vrms_mains < sag_threshold_vrms)
     cur_type = EVENT_TYPE_SAG;
   else if (vrms_mains > swell_threshold_vrms)
     cur_type = EVENT_TYPE_SWELL;

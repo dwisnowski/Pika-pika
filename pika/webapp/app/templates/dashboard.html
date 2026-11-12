@@ -86,10 +86,20 @@
                 </div>
             </div>
             <div style="grid-column: span 2; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px;">
-                Frequency: <strong id="stat-freq">--</strong>
+                Frequency (live): <strong id="stat-freq">--</strong>
+            </div>
+            <div style="grid-column: span 2;">
+                Frequency (logged): <strong id="stat-freq-logged">--</strong>
+            </div>
+            <div style="grid-column: span 2;" title="IEC-inspired; accuracy limited by sensor front-end">
+                THD (logged): <strong id="stat-thd-logged">--</strong>
             </div>
             <div style="grid-column: span 2;">
                 Window: <strong id="stat-window">--</strong>
+            </div>
+            <div style="grid-column: span 2;">
+                <a href="/api/v1/pq/export" download="pika-pq-summary.zip"
+                    style="font-size: 12px; font-weight: 600; color: var(--primary); text-decoration: none;">Download PQ summary</a>
             </div>
             <div style="grid-column: span 2; opacity: 0.7; font-size: 12px;">
                 Crest factor: <strong id="stat-crest">--</strong>
@@ -1166,6 +1176,37 @@
         hideTrendOverlay();
         if (trendData && trendData.rate) trendIecRate = trendData.rate;
         setTrendStatus(formatTrendWindow(trendData.window_seconds, trendData.display_points));
+        const freqs = (trendData && trendData.frequency_hz) ? trendData.frequency_hz.filter(f => f > 0) : [];
+        const freqEl = document.getElementById('stat-freq-logged');
+        if (freqEl) {
+            if (freqs.length) {
+                const avg = freqs.reduce((a, b) => a + b, 0) / freqs.length;
+                freqEl.innerText = avg.toFixed(2) + ' Hz';
+            } else {
+                freqEl.innerText = '--';
+            }
+        }
+        refreshLoggedThd();
+    }
+
+    async function refreshLoggedThd() {
+        const el = document.getElementById('stat-thd-logged');
+        if (!el) return;
+        try {
+            const res = await fetch('/api/v1/history/harmonics');
+            if (!res.ok) throw new Error('harmonics ' + res.status);
+            const data = await res.json();
+            const rows = data.harmonics || [];
+            if (!rows.length) {
+                el.innerText = '--';
+                return;
+            }
+            const last = rows[rows.length - 1];
+            el.innerText = (Number(last.thd_pct) || 0).toFixed(2) + '%';
+            el.title = data.note || '';
+        } catch (e) {
+            el.innerText = '--';
+        }
     }
 
     function setTrendEmpty() {
@@ -1972,6 +2013,7 @@
     const eventDescriptions = {
         'SAG': 'A temporary reduction in the RMS voltage, typically lasting from 0.5 cycles to 1 minute.',
         'SWELL': 'A temporary increase in the RMS voltage, often caused by shutting off large loads.',
+        'INTERRUPTION': 'RMS voltage at or below 10% of nominal — a near or total loss of supply.',
         'SPIKE': 'A very brief, high-magnitude voltage surge, usually lasting less than a millisecond.',
         'DIP': 'A short-duration drop in voltage, often used interchangeably with a brief SAG.'
     };

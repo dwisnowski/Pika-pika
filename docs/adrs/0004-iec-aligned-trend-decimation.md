@@ -26,14 +26,17 @@ then longer aggregations (≈3 s, 10 min, 2 h).
    Range A/B context (not Class A UTC-tick synchronized).
 5. Raise default history depth to ~1 hour of 5 Hz points (`history_max_points: 20000`).
 
-Explicit non-goals: Class A certification, harmonics/THD trends, flicker, CIC
-anti-alias before the envelope.
+Explicit non-goals (original): Class A certification, flicker, CIC anti-alias
+before the envelope. Harmonics/THD trends and ¼-cycle extrema / frequency in the
+trend payload are added by [ADR-0009](0009-software-vr1710-gap-closure.md)
+(still not Class A).
 
 ## Consequences
 
 - Trend language matches what utilities expect for **sustained voltage** vs
   event captures for **sags/swells**.
-- Old `vps==2` chunks remain readable (legacy max→approx Vrms).
-- After upgrade, rotate/clear `decimated.bin` for a clean v2 stream.
+- Old `vps==2` and `vps==3` chunks remain readable; ADR-0009 adds `vps==6`.
+- After upgrade, rotate/clear `decimated.bin` for a clean stream if desired.
 - Related: [ADR-0001](0001-pru-timing-accuracy.md), [ADR-0003](0003-ieee-1159-sag-swell-detection.md),
-  [ADR-0006](0006-trend-pane-display-decimation.md) (display-only buckets + settings).
+  [ADR-0006](0006-trend-pane-display-decimation.md) (display-only buckets + settings),
+  [ADR-0009](0009-software-vr1710-gap-closure.md).

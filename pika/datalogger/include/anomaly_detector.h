@@ -44,19 +44,21 @@ typedef struct {
 
   uint32_t sag_min_duration_samples;
   uint32_t swell_min_duration_samples;
+  uint32_t interruption_min_duration_samples;
 
   int in_event;
   event_type_t current_type;
   uint32_t current_duration;
   uint64_t start_time_ns;
   int16_t peak_raw;
-  float extreme_rms_v; /* min sag / max swell RMS while in_event */
+  float extreme_rms_v; /* min sag/interruption / max swell RMS while in_event */
 
-  uint64_t last_event_end_ns[5];
+  uint64_t last_event_end_ns[EVENT_TYPE_COUNT];
 
   uint64_t sag_cooldown_ns;
   uint64_t swell_cooldown_ns;
   uint64_t spike_cooldown_ns;
+  uint64_t interruption_cooldown_ns;
 } anomaly_detector_t;
 
 int anomaly_detector_init(anomaly_detector_t *ad, anomaly_config_t config,

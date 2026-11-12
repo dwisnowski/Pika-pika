@@ -70,4 +70,6 @@ log.
 
 - [ADR-0003](0003-ieee-1159-sag-swell-detection.md) — sag/swell logging
 - [ADR-0004](0004-iec-aligned-trend-decimation.md) — 12-cycle Vrms trend
+- [ADR-0009](0009-software-vr1710-gap-closure.md) — logged harmonics/frequency;
+  Pst/Plt still deferred (notes remain the flicker path)
 - Notes and search: `pika/webapp/app/services/observation_service.py`

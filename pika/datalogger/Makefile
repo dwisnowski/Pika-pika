@@ -28,9 +28,10 @@ $(OBJ_DIR)/main.o: main.c
 
 # Header edits must rebuild consumers (decimator_t layout, etc.)
 $(OBJ_DIR)/decimator.o: include/decimator.h
-$(OBJ_DIR)/main.o: include/decimator.h include/vrms_rollup.h include/storage_format.h
+$(OBJ_DIR)/harmonic_analyzer.o: include/harmonic_analyzer.h
+$(OBJ_DIR)/main.o: include/decimator.h include/vrms_rollup.h include/storage_format.h include/harmonic_analyzer.h
 $(OBJ_DIR)/vrms_rollup.o: include/vrms_rollup.h
-$(OBJ_DIR)/anomaly_detector.o: include/anomaly_detector.h include/storage_format.h
+$(OBJ_DIR)/anomaly_detector.o: include/anomaly_detector.h include/storage_format.h include/event_types.h
 $(OBJ_DIR)/event_window.o: include/event_window.h include/storage_format.h
 $(OBJ_DIR)/writer.o: include/writer.h include/storage_format.h
 

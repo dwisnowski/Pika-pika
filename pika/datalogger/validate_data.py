@@ -363,7 +363,14 @@ def validate_event_index(index_path: str, events_path: str, verbose: bool = Fals
     else:
         print(f"  [{FAIL}] Event waveform alignment / epoch checks failed")
 
-    event_type_names = {0: "NONE", 1: "SAG", 2: "SWELL", 3: "SPIKE", 4: "DIP"}
+    event_type_names = {
+        0: "NONE",
+        1: "SAG",
+        2: "SWELL",
+        3: "SPIKE",
+        4: "DIP",
+        5: "INTERRUPTION",
+    }
     for r in records[:5]:
         tname = event_type_names.get(r["type"], f"UNKNOWN({r['type']})")
         print(f"  Event id={r['id']} ts={_fmt_ns(r['ts'])} wf_start={_fmt_ns(r['wf_start'])} "

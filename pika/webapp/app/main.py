@@ -243,7 +243,11 @@ def get_storage_snapshot() -> dict:
             total += size
             name = path.name
             files.append({"name": name, "bytes": size, "human": _format_bytes(size)})
-            if name.startswith("decimated") or name.startswith("vrms_"):
+            if (
+                name.startswith("decimated")
+                or name.startswith("vrms_")
+                or name.startswith("harmonics")
+            ):
                 trend += size
             elif name.startswith("events") or name.startswith("index"):
                 events += size
@@ -498,6 +502,37 @@ async def get_history_rollup_api():
     """Best-effort 10-minute Vrms min/avg/max for ANSI C84.1 context."""
     from app.services.history_service import history_service
     return {"rollup_10min": history_service.get_vrms_10min_rollup(limit=144)}
+
+
+@app.get("/api/v1/history/harmonics")
+async def get_history_harmonics_api():
+    """Logged THD / harmonic trends (IEC-inspired; front-end limited)."""
+    from app.services.history_service import history_service
+    return {
+        "harmonics": history_service.get_harmonics_trend(limit=500),
+        "note": (
+            "IEC-inspired harmonic trends; accuracy limited by sensor front-end."
+        ),
+    }
+
+
+@app.get("/api/v1/pq/export")
+async def export_pq_summary_api():
+    """Zip of voltage trend, events, frequency, and harmonics CSVs."""
+    from app.services.pq_export_service import pq_export_service
+    try:
+        payload = pq_export_service.export_zip()
+    except Exception as exc:
+        logger.exception("Failed to export PQ summary")
+        return {"success": False, "error": str(exc)}
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": 'attachment; filename="pika-pq-summary.zip"',
+        },
+    )
+
 
 @app.get("/api/v1/history/debug")
 async def get_history_debug():

@@ -53,11 +53,16 @@ def evaluate_event_review(
     range_b_low = 100.0 + policy["range_b_low_pct"]
     range_b_high = 100.0 + policy["range_b_high_pct"]
 
-    if pct_of_nominal <= interruption_pct:
+    if et == "INTERRUPTION" or pct_of_nominal <= interruption_pct:
+        reason_label = (
+            "Interruption"
+            if et == "INTERRUPTION"
+            else "Interruption-class (legacy sag)"
+        )
         return {
             "needs_review": True,
             "review_reason": (
-                f"Interruption-class: extreme RMS {extreme_rms_v:.1f} V "
+                f"{reason_label}: extreme RMS {extreme_rms_v:.1f} V "
                 f"({pct_of_nominal:.0f}% of {nominal_vrms:.0f} V nominal)"
             ),
             "review_guidance": (

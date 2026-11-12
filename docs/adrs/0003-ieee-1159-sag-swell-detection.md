@@ -61,11 +61,13 @@ explains both layers and contact guidance (utility vs electrician).
 - Review criteria cannot be “configured away” in the settings gear.
 - Old v2 index files remain readable; peak display falls back to crest≈RMS/√2
   approximation until new events are recorded.
-- Still not a certified PQ meter; spike/transient and dedicated interruption /
-  sustained event *types* remain future work.
+- Still not a certified PQ meter; spike/transient and dedicated sustained event
+  *types* remain future work. First-class interruptions are covered by
+  [ADR-0009](0009-software-vr1710-gap-closure.md).
 
 ## Related
 
 - [ADR-0001](0001-pru-timing-accuracy.md) — timing accuracy for sag/swell review
+- [ADR-0009](0009-software-vr1710-gap-closure.md) — interruption type + PQ trends
 - Detector: `pika/datalogger/src/anomaly_detector.c`
 - Review policy: `pika/webapp/app/services/review_policy.py`

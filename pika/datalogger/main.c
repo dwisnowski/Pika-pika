@@ -10,12 +10,14 @@
 #include "anomaly_detector.h"
 #include "decimator.h"
 #include "event_window.h"
+#include "harmonic_analyzer.h"
 #include "log.h"
 #include "vrms_rollup.h"
 #include "logger_config.h"
 #include "ring_buffer.h"
 #include "scope_buffer.h"
 #include "shm_reader.h"
+#include "storage_format.h"
 #include "time_utils.h"
 #include "writer.h"
 
@@ -212,6 +214,19 @@ void *processor_thread_func(void *arg) {
   vrms_rollup_t rollup;
   vrms_rollup_init(&rollup, "data", 600);
 
+  harmonic_analyzer_t harmonics;
+  if (harmonic_analyzer_init(
+          &harmonics, "data", global_config.nominal_rate_hz, ac_freq_hz,
+          iec_cycles, global_config.storage.harmonics.emit_every_intervals,
+          global_config.storage.harmonics.max_mb) != 0) {
+    fprintf(stderr, "[Processor] Failed to init harmonic analyzer\n");
+    anomaly_detector_free(&ad);
+    return NULL;
+  }
+  harmonic_analyzer_set_calibration(&harmonics, global_config.sensor.adc_vref,
+                                    global_config.sensor.adc_bits,
+                                    global_config.sensor.transformer_ratio);
+
   time_sync_t t_sync;
   time_sync_init(&t_sync, 0, 200000000U);
 
@@ -220,6 +235,7 @@ void *processor_thread_func(void *arg) {
                         global_config.storage.events.post_sec,
                         global_config.nominal_rate_hz, 30.0) != 0) {
     fprintf(stderr, "[Processor] Failed to init event window\n");
+    harmonic_analyzer_free(&harmonics);
     anomaly_detector_free(&ad);
     return NULL;
   }
@@ -228,7 +244,7 @@ void *processor_thread_func(void *arg) {
   int16_t decimated_samples[128 * 8];
   uint32_t decimated_count = 0;
   uint64_t decimated_chunk_start_ns = 0;
-  const uint32_t decimated_vps = DECIMATED_VPS_IEC_VRMS;
+  const uint32_t decimated_vps = DECIMATED_VPS_IEC_VRMS_FREQ;
 
   uint32_t pru_clock_hz = 200000000U;
   if (shm_reader.header && shm_reader.header->pru_clock_hz) {
@@ -326,10 +342,16 @@ void *processor_thread_func(void *arg) {
         if (dec.samples_in_bucket == 0)
           current_bucket_start_ns = sample_time_ns;
 
-        /* Keep decimator scale in sync with live auto-calibration. */
-        if (ad.sensor.transformer_ratio > 0.0f)
+        /* Keep scales in sync with live auto-calibration. */
+        if (ad.sensor.transformer_ratio > 0.0f) {
           decimator_set_calibration(&dec, ad.sensor.adc_vref, ad.sensor.adc_bits,
                                     ad.sensor.transformer_ratio);
+          harmonic_analyzer_set_calibration(
+              &harmonics, ad.sensor.adc_vref, ad.sensor.adc_bits,
+              ad.sensor.transformer_ratio);
+        }
+
+        harmonic_analyzer_process(&harmonics, ch0_sample, sample_time_ns);
 
         decimated_interval_t interval;
         if (decimator_process(&dec, ch0_sample, &interval)) {
@@ -340,6 +362,9 @@ void *processor_thread_func(void *arg) {
           decimated_samples[base + 0] = interval.vrms_centivolts;
           decimated_samples[base + 1] = interval.min_centivolts;
           decimated_samples[base + 2] = interval.max_centivolts;
+          decimated_samples[base + 3] = interval.qtr_min_rms_centivolts;
+          decimated_samples[base + 4] = interval.qtr_max_rms_centivolts;
+          decimated_samples[base + 5] = interval.freq_centihertz;
           decimated_count++;
 
           vrms_rollup_add(&rollup, interval.vrms_centivolts / 100.0f,
@@ -383,6 +408,7 @@ void *processor_thread_func(void *arg) {
 
   printf("[Processor] Stopped\n");
   free(ch0_scratch);
+  harmonic_analyzer_free(&harmonics);
   anomaly_detector_free(&ad);
   event_window_free(&ew);
   return NULL;

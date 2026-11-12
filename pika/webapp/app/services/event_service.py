@@ -69,7 +69,7 @@ class EventService:
         return peak_raw
 
     def _type_name(self, etype: int) -> str:
-        names = ["NONE", "SAG", "SWELL", "SPIKE", "DIP"]
+        names = ["NONE", "SAG", "SWELL", "SPIKE", "DIP", "INTERRUPTION"]
         return names[etype] if 0 <= etype < len(names) else "UNKNOWN"
 
     def _annotate_review(

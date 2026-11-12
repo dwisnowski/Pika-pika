@@ -53,10 +53,11 @@ static int config_load_file(const char *path, logger_config_t *config) {
       if (!expect_val) {
         free(last_key);
         last_key = strdup(val);
-        if (strcmp(val, "sampling") == 0 || strcmp(val, "anomalies") == 0 || 
-            strcmp(val, "sag") == 0 || strcmp(val, "swell") == 0 || 
-            strcmp(val, "spike") == 0 || strcmp(val, "storage") == 0 || 
-            strcmp(val, "decimation") == 0 || strcmp(val, "events") == 0 ||
+        if (strcmp(val, "sampling") == 0 || strcmp(val, "anomalies") == 0 ||
+            strcmp(val, "sag") == 0 || strcmp(val, "swell") == 0 ||
+            strcmp(val, "spike") == 0 || strcmp(val, "interruption") == 0 ||
+            strcmp(val, "storage") == 0 || strcmp(val, "decimation") == 0 ||
+            strcmp(val, "events") == 0 || strcmp(val, "harmonics") == 0 ||
             strcmp(val, "debounce") == 0 || strcmp(val, "detection") == 0 ||
             strcmp(val, "sensor") == 0 || strcmp(val, "buffers") == 0) {
           strncpy(section, val, sizeof(section) - 1);
@@ -83,6 +84,12 @@ static int config_load_file(const char *path, logger_config_t *config) {
           config->storage.events.post_sec = atof(val);
         else if (strcmp(section, "events") == 0 && strcmp(last_key, "max_mb") == 0)
           config->storage.events.max_mb = (uint32_t)atoi(val);
+        else if (strcmp(section, "harmonics") == 0 &&
+                 strcmp(last_key, "max_mb") == 0)
+          config->storage.harmonics.max_mb = (uint32_t)atoi(val);
+        else if (strcmp(section, "harmonics") == 0 &&
+                 strcmp(last_key, "emit_every_intervals") == 0)
+          config->storage.harmonics.emit_every_intervals = (uint32_t)atoi(val);
         /* debounce (datalogger config) */
         else if (strcmp(last_key, "sag_cooldown_ms") == 0)
           config->debounce.sag_cooldown_ms = (uint32_t)atoi(val);
@@ -90,6 +97,8 @@ static int config_load_file(const char *path, logger_config_t *config) {
           config->debounce.swell_cooldown_ms = (uint32_t)atoi(val);
         else if (strcmp(last_key, "spike_cooldown_ms") == 0)
           config->debounce.spike_cooldown_ms = (uint32_t)atoi(val);
+        else if (strcmp(last_key, "interruption_cooldown_ms") == 0)
+          config->debounce.interruption_cooldown_ms = (uint32_t)atoi(val);
         /* detection (shared config) */
         else if (strcmp(last_key, "rms_window_cycles") == 0)
           config->detection.rms_window_cycles = (uint32_t)atoi(val);
@@ -132,11 +141,16 @@ static int config_load_file(const char *path, logger_config_t *config) {
             config->anomalies.swell_threshold_pct = atoi(val);
           else if (strcmp(section, "spike") == 0)
             config->anomalies.spike_threshold_pct = atoi(val);
+          else if (strcmp(section, "interruption") == 0)
+            config->anomalies.interruption_pct = (uint32_t)atoi(val);
         } else if (strcmp(last_key, "min_duration_ms") == 0) {
           if (strcmp(section, "sag") == 0)
             config->anomalies.sag_min_duration_ms = (uint32_t)atoi(val);
           else if (strcmp(section, "swell") == 0)
             config->anomalies.swell_min_duration_ms = (uint32_t)atoi(val);
+          else if (strcmp(section, "interruption") == 0)
+            config->anomalies.interruption_min_duration_ms =
+                (uint32_t)atoi(val);
         } else if (strcmp(last_key, "max_duration_ms") == 0) {
           if (strcmp(section, "spike") == 0)
             config->anomalies.spike_max_duration_ms = (uint32_t)atoi(val);
@@ -172,11 +186,14 @@ int config_load(const char *path, logger_config_t *config) {
   config->storage.events.pre_sec = 0.5;
   config->storage.events.post_sec = 0.5;
   config->storage.events.max_mb = 250;
+  config->storage.harmonics.max_mb = 50;
+  config->storage.harmonics.emit_every_intervals = 15;
 
   /* debounce */
   config->debounce.sag_cooldown_ms = 1000;
   config->debounce.swell_cooldown_ms = 1000;
   config->debounce.spike_cooldown_ms = 1000;
+  config->debounce.interruption_cooldown_ms = 1000;
 
   /* detection */
   config->detection.rms_window_cycles = 30;
@@ -200,6 +217,8 @@ int config_load(const char *path, logger_config_t *config) {
   config->anomalies.swell_min_duration_ms = 9;
   config->anomalies.spike_threshold_pct = 20;
   config->anomalies.spike_max_duration_ms = 100;
+  config->anomalies.interruption_pct = 10;
+  config->anomalies.interruption_min_duration_ms = 9;
 
   /* Load pika.yaml (single source of truth) */
   if (config_load_file(path, config) != 0) {

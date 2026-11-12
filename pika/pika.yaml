@@ -10,17 +10,21 @@ storage:
   decimation:
     target_output_rate_hz: 5   # IEC 61000-4-30 base ≈ 12 cycles @ 60 Hz (informational;
                                # datalogger derives rate from detection.ac_freq_hz)
-    max_mb: 20                 # Rotate decimated.bin when it exceeds this
+    max_mb: 200                # Weeks-class 5 Hz trend retention on BBB SD
   events:
     pre_sec: 0.5              # Seconds of data before event
     post_sec: 0.5             # Seconds of data after event
-    max_mb: 20                # Rotate events.bin when it exceeds this
+    max_mb: 100               # Rotate events.bin when it exceeds this
+  harmonics:
+    max_mb: 50                # Rotate harmonics.jsonl when it exceeds this
+    emit_every_intervals: 15  # ~3 s @ 5 Hz IEC windows between records
 
 # Debounce Configuration
 debounce:
   sag_cooldown_ms: 1000
   swell_cooldown_ms: 1000
   spike_cooldown_ms: 1000
+  interruption_cooldown_ms: 1000
 
 # Buffer Configuration
 buffers:
@@ -72,11 +76,14 @@ anomalies:
   spike:
     threshold_pct: 20
     max_duration_ms: 100
+  interruption:
+    threshold_pct: 10         # Log INTERRUPTION when RMS <= 10% of nominal
+    min_duration_ms: 9        # ~0.5 cycle @ 60 Hz
 
 # Fixed professional-review policy (not user-editable via settings gear).
 # Evaluated at read time from extreme RMS + duration; independent of log thresholds.
 review:
-  interruption_pct: 10        # extreme RMS <= 10% of nominal
+  interruption_pct: 10        # extreme RMS <= 10% of nominal (legacy SAG records)
   deep_sag_pct: 70            # extreme RMS <= 70% of nominal
   damaging_swell_pct: 120     # extreme RMS >= 120% of nominal
   sustained_duration_ms: 60000

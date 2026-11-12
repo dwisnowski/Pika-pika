@@ -10,9 +10,12 @@
  * Decimated chunk payload versions (values_per_sample):
  *   v1 (legacy): 2 × int16 — waveform min, max (ADC counts)
  *   v2 (IEC):    3 × int16 — vrms_centivolts, min_centivolts, max_centivolts
+ *   v3 (ADR-0009): 6 × int16 — vrms, env_min, env_max, qtr_rms_min,
+ *                               qtr_rms_max, freq_centihertz
  */
 #define DECIMATED_VPS_LEGACY_MINMAX 2U
 #define DECIMATED_VPS_IEC_VRMS 3U
+#define DECIMATED_VPS_IEC_VRMS_FREQ 6U
 
 /**
  * Decimated Data Chunk Header

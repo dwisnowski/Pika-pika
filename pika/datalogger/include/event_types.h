@@ -7,8 +7,10 @@ typedef enum {
   EVENT_TYPE_NONE = 0,
   EVENT_TYPE_SAG,
   EVENT_TYPE_SWELL,
-  EVENT_TYPE_SPIKE,
-  EVENT_TYPE_DIP
+  EVENT_TYPE_SPIKE,  /* reserved — not emitted */
+  EVENT_TYPE_DIP,    /* reserved — not emitted */
+  EVENT_TYPE_INTERRUPTION,
+  EVENT_TYPE_COUNT
 } event_type_t;
 
 typedef struct {

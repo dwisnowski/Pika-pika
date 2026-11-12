@@ -14,6 +14,7 @@ Notable recent decisions:
 - [ADR-0006](adrs/0006-trend-pane-display-decimation.md) — Trend-pane display decimation and settings
 - [ADR-0007](adrs/0007-flicker-observations.md) — Flicker notes searched against the existing trend
 - [ADR-0008](adrs/0008-production-log-verbosity.md) — Production log verbosity (quiet by default)
+- [ADR-0009](adrs/0009-software-vr1710-gap-closure.md) — Software-first VR1710 gap closure
 
 ## Guides
 
