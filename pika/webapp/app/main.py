@@ -485,6 +485,33 @@ async def restart_system_component(request: Request):
         logger.exception("Failed to schedule system restart")
         return {"success": False, "error": str(e)}
 
+
+@app.post("/api/v1/calibration/relearn")
+async def relearn_adc_vrms_api():
+    """Clear learned calibration and restart the datalogger so auto-cal runs again."""
+    from app.services.calibration_service import calibration_service
+
+    try:
+        cleared = calibration_service.clear_learned_status()
+        learn_cycles = config_service.get_learn_cycles()
+        ac_freq = max(1, config_service.get_ac_freq_hz())
+        learn_seconds = max(1, round(learn_cycles / float(ac_freq)))
+        asyncio.create_task(_restart_system_component("datalogger"))
+        return {
+            "success": True,
+            "cleared_status": cleared,
+            "restarting": True,
+            "learn_cycles": learn_cycles,
+            "learn_seconds": learn_seconds,
+            "note": (
+                f"Restarting datalogger to re-learn ADC VRMS "
+                f"(~{learn_seconds}s learn window)"
+            ),
+        }
+    except Exception as e:
+        logger.exception("Failed to schedule ADC VRMS re-learn")
+        return {"success": False, "error": str(e)}
+
 # --- REST APIs ---
 
 @app.get("/api/v1/history")

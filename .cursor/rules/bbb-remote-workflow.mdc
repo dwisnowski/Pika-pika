@@ -23,14 +23,16 @@ alwaysApply: true
 
 ## Change and deploy
 
-When the user requests a BBB code change:
+After finishing a code change for this project, **always** commit, push, and deploy without waiting to be asked:
 
 1. Make and test source changes locally.
-2. Commit them and push `beagleboneblack` to `origin`.
+2. Commit them (concise why-focused message) and push `beagleboneblack` to `origin`.
 3. Check the remote working tree and preserve unrelated user changes.
 4. Deploy with `cd /home/debian/pika && git pull --ff-only origin beagleboneblack`.
 5. Restart runtime changes with `make daemon-restart`.
 6. Allow for the BBB's slow startup, then verify `pika-run-all.service`, its restart count, relevant logs/endpoints, and the actual requested behavior.
+
+Do not leave finished work only on the local machine.
 
 Expected generated remote files such as `pika/datalogger/bin/datalogger` and
 `pika/webapp/webapp.log` may be dirty; do not discard them or use destructive

@@ -109,12 +109,15 @@
                 Waveform P–P: <strong id="stat-p2p">--</strong>
                 <span style="opacity: 0.75;">· ideal sine ≈ <strong id="stat-p2p-ideal">--</strong></span>
             </div>
-            <div style="grid-column: span 2; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px; opacity: 0.8; font-size: 12px;">
-                Learned ADC VRMS: <strong id="stat-learned-adc-vrms" style="color: var(--primary);">--</strong>
+            <div style="grid-column: span 2; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px; opacity: 0.8; font-size: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                <span>Learned ADC VRMS: <strong id="stat-learned-adc-vrms" style="color: var(--primary);">--</strong></span>
+                <button type="button" onclick="relearnAdcVrms()" title="Restart datalogger and re-run startup ADC VRMS auto-cal"
+                    style="background: var(--surface); color: var(--primary); border: 1px solid var(--primary); border-radius: 4px; padding: 8px 12px; cursor: pointer; font-size: 12px; font-weight: 600; min-height: 44px; white-space: nowrap;">Re-learn</button>
             </div>
             <div style="grid-column: span 2; opacity: 0.8; font-size: 12px;">
                 Transformer Ratio: <strong id="stat-learned-transformer-ratio" style="color: var(--primary);">--</strong>
             </div>
+            <div id="relearn-adc-status" style="grid-column: span 2; font-size: 11px; min-height: 14px; color: #888;"></div>
         </div>
     </div>
 
@@ -680,6 +683,55 @@
             if (disconnects) {
                 startWebserverHealthCheck();
             }
+        } catch (e) {
+            if (status) {
+                status.style.color = '#F44336';
+                status.innerText = e.message || String(e);
+            }
+        }
+    }
+
+    async function relearnAdcVrms() {
+        if (!confirm('Re-learn ADC VRMS? This restarts the datalogger and runs startup auto-cal again.')) {
+            return;
+        }
+        const status = document.getElementById('relearn-adc-status');
+        const learnedEl = document.getElementById('stat-learned-adc-vrms');
+        const ratioEl = document.getElementById('stat-learned-transformer-ratio');
+        if (status) {
+            status.style.color = '#FFC107';
+            status.innerText = 'Scheduling re-learn…';
+        }
+        try {
+            const res = await fetch('/api/v1/calibration/relearn', { method: 'POST' });
+            const data = await res.json();
+            if (!data.success) {
+                throw new Error(data.error || 'Re-learn failed');
+            }
+            if (learnedEl) learnedEl.innerText = 'learning…';
+            if (ratioEl) ratioEl.innerText = '—';
+            const secs = Number.isFinite(data.learn_seconds) ? data.learn_seconds : 5;
+            if (status) {
+                status.style.color = '#FFC107';
+                status.innerText = data.note || `Re-learning (~${secs}s)…`;
+            }
+            // Give the datalogger time to restart + finish the learn window, then refresh health.
+            setTimeout(async () => {
+                try {
+                    const healthRes = await fetch('/health');
+                    const health = await healthRes.json();
+                    applyHealth(health);
+                    if (status) {
+                        status.style.color = '#4CAF50';
+                        status.innerText = 'ADC VRMS re-learned';
+                    }
+                } catch (err) {
+                    if (status) {
+                        status.style.color = '#FFC107';
+                        status.innerText = 'Waiting for new calibration…';
+                    }
+                }
+            }, (secs + 3) * 1000);
         } catch (e) {
             if (status) {
                 status.style.color = '#F44336';

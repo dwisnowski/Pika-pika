@@ -46,4 +46,15 @@ class CalibrationService:
             "transformer_ratio": transformer_ratio
         }
 
+    def clear_learned_status(self) -> bool:
+        """Remove calibration_status.txt so the next learn pass is not masked by stale values."""
+        try:
+            if os.path.exists(self.status_file):
+                os.remove(self.status_file)
+                return True
+        except Exception as e:
+            print(f"[CalibrationService] Error clearing calibration status: {e}")
+            raise
+        return False
+
 calibration_service = CalibrationService(settings.data_dir)

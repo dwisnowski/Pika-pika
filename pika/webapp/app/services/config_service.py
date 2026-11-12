@@ -105,6 +105,10 @@ class ConfigService:
     def get_ac_freq_hz(self) -> int:
         """Get AC frequency"""
         return self.config.get('detection', {}).get('ac_freq_hz', 60)
+
+    def get_learn_cycles(self) -> int:
+        """Startup auto-cal cycle count for ADC VRMS / transformer ratio."""
+        return int(self.config.get('detection', {}).get('learn_cycles', 300))
     
     def get_sag_threshold_pct(self) -> int:
         """Get SAG threshold percentage"""
